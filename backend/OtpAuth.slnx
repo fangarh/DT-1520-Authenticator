@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="OtpAuth.Api/OtpAuth.Api.csproj" />
+  <Project Path="OtpAuth.Application/OtpAuth.Application.csproj" />
+  <Project Path="OtpAuth.Domain/OtpAuth.Domain.csproj" />
+  <Project Path="OtpAuth.Infrastructure/OtpAuth.Infrastructure.csproj" />
+  <Project Path="OtpAuth.Worker/OtpAuth.Worker.csproj" />
+</Solution>

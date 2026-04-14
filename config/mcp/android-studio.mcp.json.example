@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "otpauth-local": {
+      "httpUrl": "http://127.0.0.1:8080/mcp"
+    },
+    "github": {
+      "httpUrl": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer <GITHUB_TOKEN>"
+      }
+    }
+  }
+}

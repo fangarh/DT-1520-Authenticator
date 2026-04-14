@@ -1,0 +1,1026 @@
+openapi: 3.1.0
+info:
+  title: OTPAuth 2FA API
+  version: 1.0.0-draft
+  summary: Draft REST API for the first release of the OTPAuth 2FA platform.
+  description: |
+    API for second-factor challenge orchestration, TOTP enrollment, and mobile device activation.
+    This contract is a draft for the MVP release and is expected to evolve before implementation.
+  license:
+    name: Proprietary
+    url: https://otpauth.test/license
+servers:
+  - url: https://api.otpauth.test
+    description: Production placeholder
+  - url: https://sandbox.otpauth.test
+    description: Sandbox placeholder
+tags:
+  - name: Auth
+    description: Token issuance and refresh flows
+  - name: Challenges
+    description: Runtime second-factor verification flows
+  - name: Enrollments
+    description: TOTP and factor enrollment flows
+  - name: Devices
+    description: Mobile device activation and revocation
+paths:
+  /oauth2/token:
+    post:
+      tags: [Auth]
+      summary: Issue an integration access token using OAuth 2.0 client credentials
+      operationId: issueIntegrationToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClientCredentialsTokenRequest'
+            examples:
+              clientCredentials:
+                summary: Integration client credentials grant
+                value:
+                  grant_type: client_credentials
+                  client_id: otpauth-crm
+                  client_secret: secret-value
+                  scope: challenges:write challenges:read enrollments:write devices:write
+      responses:
+        '200':
+          description: Access token issued
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessTokenResponse'
+              examples:
+                success:
+                  value:
+                    access_token: "<jwt>"
+                    token_type: Bearer
+                    expires_in: 3600
+                    scope: "challenges:write challenges:read enrollments:write devices:write"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/device-tokens/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh a mobile device bearer token
+      operationId: refreshDeviceToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshDeviceTokenRequest'
+            examples:
+              refresh:
+                value:
+                  refreshToken: "<refresh-token>"
+      responses:
+        '200':
+          description: Device token refreshed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/challenges:
+    post:
+      tags: [Challenges]
+      summary: Create a second-factor challenge
+      operationId: createChallenge
+      security:
+        - IntegrationOAuth2:
+            - challenges:write
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChallengeRequest'
+            examples:
+              pushLogin:
+                summary: Login challenge preferring push
+                value:
+                  tenantId: "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb"
+                  applicationClientId: "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4"
+                  subject:
+                    externalUserId: "user-123"
+                    username: "ivan.petrov"
+                  operation:
+                    type: "login"
+                    displayName: "Sign in to CRM"
+                  preferredFactors:
+                    - push
+                    - totp
+                  callback:
+                    url: "https://crm.example.com/webhooks/otpauth"
+                  correlationId: "auth-req-2026-04-14-001"
+      callbacks:
+        challengeStatus:
+          '{$request.body#/callback/url}':
+            post:
+              operationId: deliverChallengeStatusCallback
+              summary: Deliver challenge state changes to the client callback URL
+              security: []
+              parameters:
+                - $ref: '#/components/parameters/WebhookSignature'
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/ChallengeWebhookEvent'
+              responses:
+                '200':
+                  description: Callback accepted by client
+                '400':
+                  description: Callback rejected by client due to malformed payload
+                '401':
+                  description: Callback rejected by client due to signature validation failure
+      responses:
+        '201':
+          description: Challenge created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+            Location:
+              $ref: '#/components/headers/Location'
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+              examples:
+                pendingPush:
+                  value:
+                    id: "52c7b0a4-bc5a-4a3c-86ec-1dd260f264d5"
+                    tenantId: "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb"
+                    applicationClientId: "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4"
+                    factorType: push
+                    status: pending
+                    expiresAt: "2026-04-14T11:30:00Z"
+                    correlationId: "auth-req-2026-04-14-001"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /api/v1/challenges/{challengeId}:
+    get:
+      tags: [Challenges]
+      summary: Get challenge status
+      operationId: getChallenge
+      security:
+        - IntegrationOAuth2:
+            - challenges:read
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+      responses:
+        '200':
+          description: Challenge state
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+              examples:
+                approved:
+                  value:
+                    id: "52c7b0a4-bc5a-4a3c-86ec-1dd260f264d5"
+                    tenantId: "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb"
+                    applicationClientId: "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4"
+                    factorType: push
+                    status: approved
+                    expiresAt: "2026-04-14T11:30:00Z"
+                    approvedAt: "2026-04-14T11:25:07Z"
+                    correlationId: "auth-req-2026-04-14-001"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/challenges/{challengeId}/verify-totp:
+    post:
+      tags: [Challenges]
+      summary: Verify TOTP against an active challenge
+      operationId: verifyChallengeTotp
+      security:
+        - IntegrationOAuth2:
+            - challenges:write
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyTotpRequest'
+      responses:
+        '200':
+          description: Challenge updated
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/challenges/{challengeId}/approve:
+    post:
+      tags: [Challenges]
+      summary: Approve an active challenge from a trusted mobile device
+      operationId: approveChallenge
+      security:
+        - DeviceBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveChallengeRequest'
+      responses:
+        '200':
+          description: Challenge approved
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/challenges/{challengeId}/deny:
+    post:
+      tags: [Challenges]
+      summary: Deny an active challenge from a trusted mobile device
+      operationId: denyChallenge
+      security:
+        - DeviceBearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChallengeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DenyChallengeRequest'
+      responses:
+        '200':
+          description: Challenge denied
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/enrollments/totp:
+    post:
+      tags: [Enrollments]
+      summary: Start TOTP enrollment
+      operationId: startTotpEnrollment
+      security:
+        - IntegrationOAuth2:
+            - enrollments:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartTotpEnrollmentRequest'
+      responses:
+        '201':
+          description: Enrollment started
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollment'
+              examples:
+                pending:
+                  value:
+                    enrollmentId: "a75bf0b8-3a40-418e-a336-0cb7b18ff22a"
+                    status: pending
+                    secretUri: "otpauth://totp/OTPAuth:ivan.petrov?secret=BASE32SECRET&issuer=OTPAuth"
+                    qrCodePayload: "otpauth://totp/OTPAuth:ivan.petrov?secret=BASE32SECRET&issuer=OTPAuth"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/enrollments/totp/{enrollmentId}/confirm:
+    post:
+      tags: [Enrollments]
+      summary: Confirm TOTP enrollment with a code from the authenticator
+      operationId: confirmTotpEnrollment
+      security:
+        - IntegrationOAuth2:
+            - enrollments:write
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmTotpEnrollmentRequest'
+      responses:
+        '200':
+          description: Enrollment confirmed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/devices/activate:
+    post:
+      tags: [Devices]
+      summary: Activate a mobile device and issue its first token pair
+      operationId: activateDevice
+      security:
+        - IntegrationOAuth2:
+            - devices:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateDeviceRequest'
+      responses:
+        '201':
+          description: Device activated
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActivation'
+              examples:
+                activated:
+                  value:
+                    device:
+                      id: "fe6fe82c-3e7c-4f7b-bb63-84ce32cadcb8"
+                      platform: android
+                      status: active
+                      deviceName: "Pixel 9"
+                    tokens:
+                      access_token: "<jwt>"
+                      refresh_token: "<refresh-token>"
+                      token_type: Bearer
+                      expires_in: 3600
+                      scope: "device:challenge"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/devices/{deviceId}/revoke:
+    post:
+      tags: [Devices]
+      summary: Revoke a mobile device
+      operationId: revokeDevice
+      security:
+        - IntegrationOAuth2:
+            - devices:write
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device revoked
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+webhooks:
+  challenge.approved:
+    post:
+      operationId: webhookChallengeApproved
+      summary: Challenge approved webhook
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeWebhookEvent'
+      responses:
+        '200':
+          description: Webhook processed
+        '401':
+          description: Signature validation failed
+  challenge.denied:
+    post:
+      operationId: webhookChallengeDenied
+      summary: Challenge denied webhook
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeWebhookEvent'
+      responses:
+        '200':
+          description: Webhook processed
+        '401':
+          description: Signature validation failed
+  challenge.expired:
+    post:
+      operationId: webhookChallengeExpired
+      summary: Challenge expired webhook
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeWebhookEvent'
+      responses:
+        '200':
+          description: Webhook processed
+        '401':
+          description: Signature validation failed
+  device.enrolled:
+    post:
+      operationId: webhookDeviceEnrolled
+      summary: Device enrolled webhook
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceWebhookEvent'
+      responses:
+        '200':
+          description: Webhook processed
+        '401':
+          description: Signature validation failed
+  factor.revoked:
+    post:
+      operationId: webhookFactorRevoked
+      summary: Factor revoked webhook
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactorWebhookEvent'
+      responses:
+        '200':
+          description: Webhook processed
+        '401':
+          description: Signature validation failed
+components:
+  securitySchemes:
+    IntegrationOAuth2:
+      type: oauth2
+      description: OAuth 2.0 client credentials flow for integration clients.
+      flows:
+        clientCredentials:
+          tokenUrl: https://api.otpauth.test/oauth2/token
+          scopes:
+            challenges:write: Create challenges and submit second-factor data.
+            challenges:read: Read challenge status.
+            enrollments:write: Start and confirm factor enrollments.
+            devices:write: Activate and revoke mobile devices.
+    DeviceBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token issued to a registered mobile device.
+  parameters:
+    ChallengeId:
+      name: challengeId
+      in: path
+      required: true
+      description: Challenge identifier.
+      schema:
+        type: string
+        format: uuid
+    EnrollmentId:
+      name: enrollmentId
+      in: path
+      required: true
+      description: Enrollment identifier.
+      schema:
+        type: string
+        format: uuid
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      description: Device identifier.
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Idempotency key for safe retries of challenge creation.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    WebhookSignature:
+      name: X-OTPAuth-Signature
+      in: header
+      required: true
+      description: HMAC signature for callback and webhook verification.
+      schema:
+        type: string
+  headers:
+    X-Request-Id:
+      description: Server-generated request identifier.
+      schema:
+        type: string
+    X-Correlation-Id:
+      description: Correlation identifier associated with the business operation.
+      schema:
+        type: string
+    X-RateLimit-Limit:
+      description: Maximum number of requests allowed in the current window.
+      schema:
+        type: integer
+    X-RateLimit-Remaining:
+      description: Remaining number of requests in the current window.
+      schema:
+        type: integer
+    X-RateLimit-Reset:
+      description: Seconds until the rate-limit window resets.
+      schema:
+        type: integer
+    Location:
+      description: Location of the created resource.
+      schema:
+        type: string
+        format: uri-reference
+  responses:
+    BadRequest:
+      description: Bad request
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            invalidPayload:
+              value:
+                type: "/errors/validation"
+                title: "Validation failed"
+                status: 400
+                detail: "preferredFactors must not be empty"
+                traceId: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"
+    Unauthorized:
+      description: Authentication failed
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Resource state conflict
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Semantic validation failed
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    CallbackRegistration:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        secretId:
+          type: string
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        traceId:
+          type: string
+    SubjectRef:
+      type: object
+      required: [externalUserId]
+      properties:
+        externalUserId:
+          type: string
+          minLength: 1
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+    OperationRef:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          minLength: 1
+        displayName:
+          type: string
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+    ClientCredentialsTokenRequest:
+      type: object
+      required: [grant_type, client_id, client_secret]
+      properties:
+        grant_type:
+          type: string
+          const: client_credentials
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        scope:
+          type: string
+    CreateChallengeRequest:
+      type: object
+      required:
+        - tenantId
+        - applicationClientId
+        - subject
+        - operation
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        applicationClientId:
+          type: string
+          format: uuid
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
+        operation:
+          $ref: '#/components/schemas/OperationRef'
+        preferredFactors:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/FactorType'
+        callback:
+          $ref: '#/components/schemas/CallbackRegistration'
+        correlationId:
+          type: string
+          minLength: 1
+    FactorType:
+      type: string
+      enum: [totp, push, backup_code]
+    ChallengeStatus:
+      type: string
+      enum: [pending, approved, denied, expired, failed]
+    EnrollmentStatus:
+      type: string
+      enum: [pending, confirmed, revoked]
+    DeviceStatus:
+      type: string
+      enum: [active, revoked]
+    AccessTokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+        scope:
+          type: string
+    Challenge:
+      type: object
+      required:
+        - id
+        - tenantId
+        - applicationClientId
+        - factorType
+        - status
+        - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        applicationClientId:
+          type: string
+          format: uuid
+        factorType:
+          $ref: '#/components/schemas/FactorType'
+        status:
+          $ref: '#/components/schemas/ChallengeStatus'
+        expiresAt:
+          type: string
+          format: date-time
+        approvedAt:
+          type: string
+          format: date-time
+        deniedAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+    VerifyTotpRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: '^[0-9]{6,8}$'
+    ApproveChallengeRequest:
+      type: object
+      required: [deviceId]
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        biometricVerified:
+          type: boolean
+          default: false
+    DenyChallengeRequest:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 256
+    RefreshDeviceTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    StartTotpEnrollmentRequest:
+      type: object
+      required: [tenantId, externalUserId]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        externalUserId:
+          type: string
+          minLength: 1
+        issuer:
+          type: string
+        label:
+          type: string
+    ConfirmTotpEnrollmentRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: '^[0-9]{6,8}$'
+    TotpEnrollment:
+      type: object
+      required: [enrollmentId, status]
+      properties:
+        enrollmentId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/EnrollmentStatus'
+        secretUri:
+          type: string
+        qrCodePayload:
+          type: string
+    ActivateDeviceRequest:
+      type: object
+      required: [tenantId, externalUserId, platform, activationCode]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        externalUserId:
+          type: string
+          minLength: 1
+        platform:
+          type: string
+          enum: [ios, android]
+        activationCode:
+          type: string
+          minLength: 6
+          maxLength: 128
+        pushToken:
+          type: string
+        publicKey:
+          type: string
+        deviceName:
+          type: string
+    Device:
+      type: object
+      required: [id, platform, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [ios, android]
+        status:
+          $ref: '#/components/schemas/DeviceStatus'
+        deviceName:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+    DeviceActivation:
+      type: object
+      required: [device, tokens]
+      properties:
+        device:
+          $ref: '#/components/schemas/Device'
+        tokens:
+          $ref: '#/components/schemas/AccessTokenResponse'
+    ChallengeWebhookEvent:
+      type: object
+      required: [eventId, eventType, occurredAt, challenge]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum:
+            - challenge.approved
+            - challenge.denied
+            - challenge.expired
+        occurredAt:
+          type: string
+          format: date-time
+        challenge:
+          $ref: '#/components/schemas/Challenge'
+    DeviceWebhookEvent:
+      type: object
+      required: [eventId, eventType, occurredAt, device]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [device.enrolled]
+        occurredAt:
+          type: string
+          format: date-time
+        device:
+          $ref: '#/components/schemas/Device'
+    FactorWebhookEvent:
+      type: object
+      required: [eventId, eventType, occurredAt, factorType, subject]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [factor.revoked]
+        occurredAt:
+          type: string
+          format: date-time
+        factorType:
+          $ref: '#/components/schemas/FactorType'
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
