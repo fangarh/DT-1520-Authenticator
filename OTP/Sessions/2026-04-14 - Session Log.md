@@ -27,3 +27,67 @@
 - Для `backend` добавлен `Directory.Solution.props` с отключением параллельной solution-сборки, чтобы убрать нестабильные file locks в `artifacts/obj`.
 - Обновлены `README` в корне и в рабочих корнях `admin/backend/mobile` с актуальными командами для этой папки.
 - После проверки удалены локальные verification/build артефакты из `admin`, `backend` и `mobile`, чтобы не оставлять generated хвосты в workspace.
+- Добавлена каноническая ветка `OTP/Security/` и индекс для security-заметок.
+- Подготовлены draft-документы `Backend Module Design`, `Security Model MVP`, `Testing Strategy`, `Documentation Backlog` и `Week 1 Execution Plan`.
+- В `Current State`, `Start Here`, `Implementation Map`, `Architecture Index` и `Delivery Index` добавлены ссылки на новый пакет planning/security заметок.
+- Приняты `ADR-011`, `ADR-012` и `ADR-013`: `single-tenant deployment` при tenant-aware модели, `admin-led enrollment` для `MVP`, trust lifecycle устройства без mandatory attestation в `v1`.
+- Приняты `ADR-014` и `ADR-015`: `2FA Server` остается `MVP`, но продукт стратегически идет к `IdP`; `push` не является обязательной опорой для `on-prem` и future air-gapped профилей.
+- Принят `ADR-016`: `Policy` обязателен уже в `MVP`, но реализуется как внутренний модуль монолита с code-first правилами и `deny by default`.
+- Добавлен `Policy Design` как канонический draft-контракт для `PolicyContext`, `PolicyDecision`, `MVP` ruleset и backend mapping.
+- В backend добавлены `Policy` enums, contracts, `DefaultPolicyEvaluator`, регистрация в `Api` и unit tests в `OtpAuth.Infrastructure.Tests`.
+- Проверка после фиксов: `OtpAuth.Infrastructure.Tests` проходит `dotnet test`, `OtpAuth.Api` проходит `dotnet build`; для этого понадобился запуск вне sandbox из-за file-lock проблемы в `artifacts/obj`.
+- Добавлен `backend/scripts/verify-backend.ps1` и обновлены инструкции: backend-проверку нужно запускать последовательно, без параллельного `build/test`.
+- Реализован первый `CreateChallenge` slice: domain `Challenge`, application handler, in-memory repository, `POST /api/v1/challenges`, mapper/response model и unit tests для handler.
+- Первый `Challenge` slice доведен до read path: добавлены `GetChallengeHandler`, `GET /api/v1/challenges/{id}` и unit tests для кейсов `found/not found/invalid id`.
+- Последовательная backend-проверка через `backend/scripts/verify-backend.ps1` после добавления retrieval-path проходит успешно: `12/12` тестов, solution build без ошибок.
+- Добавлен `VerifyTotp` flow: `VerifyTotpHandler`, `POST /api/v1/challenges/{id}/verify-totp`, bootstrap `TOTP` verifier и state transitions `pending -> approved/failed/expired`.
+- По security для bootstrap flow зафиксировано: невалидный код закрывает challenge в `failed`, verifier использует process-local master secret и не считается production-ready заменой enrollment-backed secret storage.
+- Последовательная backend-проверка после добавления `VerifyTotp` проходит успешно: `18/18` тестов, solution build без ошибок.
+- Принят `ADR-017`: перед добавлением нового `enum` в проекте нужно проверять, не лучше ли выражать поведение через отдельные типы, стратегии или иерархию объектов.
+- Проведена ревизия текущих `enum` в backend: немедленного рефакторинга не требуется; `FactorType` отмечен как зона наблюдения, если factor-specific behavior начнет расползаться за пределы `Policy` и `Factor Engine`.
+- Для `Challenges` реализован bootstrap integration auth layer: bearer token аутентифицирует integration client context, а handlers требуют `challenges:read/write` и проводят tenant/application scoping.
+- В `InMemoryChallengeRepository` добавлен scoped lookup, чтобы чтение и verify чужого `challengeId` возвращали `404` вместо утечки информации о ресурсе.
+- `backend/scripts/verify-backend.ps1` после добавления auth/scoping проходит успешно: `26/26` тестов, solution build без ошибок.
+- Dev-only bearer auth заменен на bootstrap `OAuth 2.0 client_credentials`: добавлены `/oauth2/token`, bootstrap in-memory client store, `client_secret` hash verification, JWT issuance и `JwtBearer` validation.
+- `Challenges` endpoints переведены на standard auth pipeline с claims-based integration client context и policy-level scope checks.
+- По security зафиксировано bootstrap-ограничение: client registry пока in-memory, token revocation/introspection отсутствуют, а без `BootstrapOAuth__SigningKey` используется process-local signing key.
+- Последовательная backend-проверка после добавления OAuth проходит успешно: `33/33` тестов, solution build без ошибок.
+- Принят `ADR-018`: в backend не использовать `Entity Framework`; persistence baseline проекта фиксируется как `Dapper + free mapper`.
+- Для коммерческого использования как конкретный mapper зафиксирован `Mapperly` (`Apache-2.0`, source generator, без runtime reflection).
+- Принят `ADR-019`: схемой `PostgreSQL` управляет отдельный `FluentMigrator` runner, а не `Api` и не `EF`.
+- В backend добавлены `OtpAuth.Migrations`, initial migration для `auth.integration_clients` и `auth.integration_client_scopes`, helper для `ensure-database` и bootstrap script `backend/scripts/initialize-postgres.ps1`.
+- Bootstrap `OAuth` переведен с in-memory client registry на `PostgreSQL`-backed `PostgresIntegrationClientStore` на `Dapper + Mapperly`.
+- На предоставленном сервере `PostgreSQL` создана база `dt-auth` и применена начальная схема без создания новых DB users.
+- Unit test suite расширен до `38/38`, включая покрытие connection string helper и bootstrap seed material factory.
+- Bootstrap integration client seeded в `dt-auth` через explicit seed-команду без сохранения секрета в репозитории.
+- `/oauth2/token` успешно проверен end-to-end против локально поднятого `Api`, подключенного к реальному `dt-auth`.
+- `Challenges` переведены с `InMemoryChallengeRepository` на `PostgreSQL`-backed `PostgresChallengeRepository` на `Dapper + Mapperly`.
+- Добавлена миграция `auth.challenges`, unit tests расширены до `44/44`, включая `ChallengeDataMapper` и bootstrap `TOTP` secret provider.
+- Для dev/bootstrap добавлен env-based `BootstrapTotp__MasterSecret`, чтобы внешний `verify-totp` flow можно было воспроизводимо проверить без записи секрета в repo.
+- Flow `CreateChallenge -> GetChallenge -> VerifyTotp` успешно проверен end-to-end через локально поднятый `Api`, bootstrap OAuth и реальный `dt-auth`.
+- Добавлены миграции `auth.totp_enrollments` и `auth.challenge_attempts`.
+- `VerifyTotpHandler` теперь пишет append-only `challenge_attempts` и использует enrollment-backed `PostgresTotpVerifier`.
+- Добавлены `TotpSecretProtector`, `PostgresTotpEnrollmentStore`, `PostgresTotpEnrollmentSeeder` и bootstrap seed-команда для `TOTP` enrollment.
+- `TOTP` secret теперь хранится в `PostgreSQL` только в зашифрованном виде через env-managed protection key; это зафиксировано как bootstrap-stage до `Vault/KMS`.
+- Backend-проверка после этого шага проходит с `52/52`, а enrollment-backed flow `CreateChallenge -> GetChallenge -> VerifyTotp -> GetChallenge` успешно подтвержден end-to-end против `dt-auth`.
+- Для `VerifyTotp` добавлены persistent anti-replay reservations в `auth.totp_used_time_steps` и runtime rate limiting на основе `auth.challenge_attempts`.
+- `VerifyTotp` теперь возвращает `429` с `Retry-After`, а replay маскируется наружу как generic invalid one-time password без раскрытия внутренних счетчиков и статусов.
+- Unit tests переписаны под новый verifier contract и расширены до `59/59`, включая `rate limited`, `replay detected` и threshold decision tests.
+- `initialize-postgres.ps1` стабилизирован: сначала делает последовательную сборку migration runner-а, затем выполняет команды через `--no-build`.
+- В runtime хосте `OtpAuth.Api` отключена зависимость от Windows `EventLog`; локальный bootstrap API больше не падает на первом запросе из-за logging permissions.
+- Против реального `dt-auth` подтвержден end-to-end сценарий: первый `TOTP` approve успешен, повтор на том же time step получает `422`, серия неверных verify-операций приводит к `429`.
+- Добавлены bootstrap `OAuth` endpoints `POST /oauth2/introspect` и `POST /oauth2/revoke`.
+- Добавлен persistent store `auth.revoked_integration_access_tokens` и runtime-проверка revoked access token на auth boundary через `JwtBearer` events.
+- Introspection и revoke требуют `client_id + client_secret`; чужой токен не раскрывается, а revoke для него превращается в безопасный no-op.
+- Unit tests расширены до `71/71`, включая credential validation reuse, JWT introspection, token revocation handlers и runtime validation revoked tokens.
+- Против реального `dt-auth` подтвержден сценарий `token -> introspect(active=true) -> revoke -> introspect(active=false) -> protected endpoint returns 401`.
+- `TotpSecretProtector` переведен на rotation-ready key ring: current key используется для новых writes, legacy keys доступны для decrypt по `key_version`.
+- Bootstrap JWT issuer переведен на current + legacy signing keys; новые токены получают `kid`, а introspection/validation умеют принимать токены, подписанные legacy key.
+- Unit tests расширены до `75/75`, включая legacy `TOTP` key decrypt, JWT `kid` emission и validation legacy-signed token после ротации.
+- Runtime against real `dt-auth` подтвержден: existing enrollment, зашифрованный ключом `v1`, успешно проходит `VerifyTotp` при current key `v2` и подключенном legacy key `v1`.
+- Добавлены maintenance workflow для security-данных: `reencrypt-totp-secrets` и `cleanup-security-data` в `OtpAuth.Migrations`, плюс wrapper `backend/scripts/maintain-security-data.ps1`.
+- Реализованы `TotpSecretsReEncryptionService` и `SecurityDataCleanupService`; cleanup охватывает `challenge_attempts`, `totp_used_time_steps` и `revoked_integration_access_tokens`.
+- Unit tests расширены до `79/79`, включая re-encryption и cleanup/retention сценарии.
+- Против реального `dt-auth` выполнен `TOTP` re-encryption workflow: `Scanned=1, ReEncrypted=1, Skipped=0`.
+- Против реального `dt-auth` выполнен cleanup security-данных: удалены `2` истекшие anti-replay reservations, остальные категории на момент запуска не требовали очистки.
+- Runtime verify после re-encryption повторно подтвержден уже без legacy `TOTP` key в конфигурации: enrollment, ранее зашифрованный ключом `v1`, успешно проходит `VerifyTotp` только с current key `v2`.

@@ -23,6 +23,7 @@
 - [[02 - Decision Index]]
 - [[03 - Open Questions]]
 - [[Architecture/00 - Index]]
+- [[Security/00 - Index]]
 - [[Data/00 - Index]]
 - [[Integrations/00 - Index]]
 - [[Product/00 - Index]]

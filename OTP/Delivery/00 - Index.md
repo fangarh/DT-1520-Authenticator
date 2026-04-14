@@ -8,6 +8,9 @@
 
 - [[On-Prem Delivery]]
 - [[Implementation Plan 8-12 Weeks]]
+- [[Documentation Backlog]]
+- [[Week 1 Execution Plan]]
+- [[Testing Strategy]]
 - [[../Architecture/Deployment Topology MVP]]
 - [[Repository Layout]]
 - [[Workspace Bootstrap]]

@@ -15,6 +15,8 @@ Accepted
 - backend: `ASP.NET Core`
 - primary store: `PostgreSQL`
 - fast runtime state: `Redis`
+- persistence access: `Dapper`
+- object mapping: `Mapperly`
 - async execution: `Outbox + Background Worker`
 - message broker: не использовать `RabbitMQ` в первой версии
 - admin ui: `React + Vite`
@@ -25,6 +27,8 @@ Accepted
 
 - инфраструктура `MVP` остается относительно простой
 - коробочная версия проще во внедрении
+- SQL и persistence слой остаются под явным контролем без `Entity Framework`
+- mapping остается compile-time и прозрачно генерируемым через `Mapperly`
 - мобильный клиент будет нативным на `Android`
-- расширение на `iPhone` остается отдельным треком
+- расширение на `iPhone` остается поздним отдельным треком
 - `RabbitMQ` можно добавить позже без смены базовой доменной модели

@@ -21,7 +21,7 @@ flowchart LR
     Client[Existing System / Client App] --> Gateway[Integration API]
     Gateway --> Core[2FA Core]
     Gateway --> Admin[Admin API]
-    Core --> Policy[Policy Engine]
+    Core --> Policy[Policy Module]
     Core --> Factors[Factor Engine]
     Factors --> Totp[TOTP]
     Factors --> Push[Push Approval]
@@ -63,7 +63,9 @@ flowchart LR
 
 - выбор обязательности второго фактора
 - step-up правила
-- ограничения по типу клиента, пользователю, операции и риску
+- ограничения по типу клиента, пользователю, операции и deployment profile
+- запрет небезопасных сценариев по `deny by default`
+- проверка допустимости `push` и device trust state
 
 ### Device Registry
 
@@ -92,3 +94,9 @@ flowchart LR
 - быстрее собрать `MVP`
 - меньше стоимость изменений в доменной модели
 - сохраняется возможность позже вынести `push`, `audit` или интеграционные адаптеры в отдельные сервисы
+
+## Почему не внешний `Policy Engine` в `MVP`
+
+- policy нужен уже сейчас, но как внутренний модуль, а не как отдельная платформа правил
+- это упрощает debugging, explainability и security review
+- для первой версии достаточно code-first правил с ограниченной конфигурацией

@@ -38,7 +38,7 @@
 Недели `8-10`.
 
 - админка
-- self-service flows
+- операторские enrollment и support flows
 - `Docker Compose`
 - webhook-события
 - метрики и алерты
@@ -58,5 +58,6 @@
 - `SAML`
 - `RADIUS`
 - полный `OIDC provider`
+- обязательный self-service enrollment
 - сложный risk engine
 - преждевременный переход к микросервисам

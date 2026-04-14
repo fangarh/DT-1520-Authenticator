@@ -1,6 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="Npgsql" Version="10.0.2" />
+    <PackageReference Include="Riok.Mapperly" Version="4.3.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\OtpAuth.Application\OtpAuth.Application.csproj" />
     <ProjectReference Include="..\OtpAuth.Domain\OtpAuth.Domain.csproj" />
   </ItemGroup>

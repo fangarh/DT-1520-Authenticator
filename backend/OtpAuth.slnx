@@ -3,5 +3,7 @@
   <Project Path="OtpAuth.Application/OtpAuth.Application.csproj" />
   <Project Path="OtpAuth.Domain/OtpAuth.Domain.csproj" />
   <Project Path="OtpAuth.Infrastructure/OtpAuth.Infrastructure.csproj" />
+  <Project Path="OtpAuth.Infrastructure.Tests/OtpAuth.Infrastructure.Tests.csproj" />
+  <Project Path="OtpAuth.Migrations/OtpAuth.Migrations.csproj" />
   <Project Path="OtpAuth.Worker/OtpAuth.Worker.csproj" />
 </Solution>

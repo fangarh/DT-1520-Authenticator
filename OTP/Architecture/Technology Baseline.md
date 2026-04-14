@@ -7,6 +7,9 @@
 - `ASP.NET Core`
 - `PostgreSQL`
 - `Redis`
+- `Dapper`
+- `Mapperly`
+- `FluentMigrator`
 - `Outbox + Background Worker`
 - без `RabbitMQ` в первой версии
 
@@ -19,7 +22,7 @@
 
 - `Kotlin` для `Android`
 - `iPhone` не входит в первый обязательный контур
-- поддержка `iPhone` рассматривается как точка роста
+- поддержка `iPhone` рассматривается как поздний отдельный трек после стабилизации `Android` и backend
 
 ### Observability
 
@@ -34,6 +37,10 @@
 - backend остается `modular monolith`
 - `PostgreSQL` является источником истины
 - `Redis` используется только как быстрый runtime-слой
+- `Entity Framework` не используется
+- persistence слой проектируется вокруг явного SQL через `Dapper`
+- object mapping проектируется вокруг `Mapperly` source generation
+- schema evolution проектируется вокруг отдельного `FluentMigrator` runner
 - асинхронность в `MVP` строится через `outbox`, worker и retry-механику
 - `RabbitMQ` не вводится до появления реальной необходимости
 

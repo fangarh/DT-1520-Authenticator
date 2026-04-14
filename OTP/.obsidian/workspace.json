@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Integrations/Integration Strategy.md",
+                "file": "Product/Mobile App.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Integration Strategy"
+              "title": "Mobile App"
             }
           }
         ]
@@ -185,33 +185,34 @@
   },
   "active": "37fc70b40cd646e5",
   "lastOpenFiles": [
-    "Delivery/Repository Layout.md",
-    "Decisions/ADR-010 - Monorepo Root Layout Without Top-Level Src.md",
     "Delivery/Workspace Bootstrap.md",
-    "Decisions/ADR-009 - Android Project Bootstrap Parameters.md",
-    "Product/Android App Bootstrap.md",
-    "Decisions/ADR-008 - Android First Mobile Factor.md",
-    "Decisions/ADR-007 - MVP Technology Baseline.md",
-    "Architecture/Deployment Topology MVP.md",
-    "Architecture/Technology Baseline.md",
-    "2FA/07 - MVP и Roadmap.md",
-    "Decisions/ADR-006 - OAuth2 for Integrations and Device Tokens for Mobile.md",
+    "Delivery/Week 1 Execution Plan.md",
+    "Agent/Implementation Map.md",
+    "2FA/01 - Видение продукта.md",
+    "2FA/00 - Индекс.md",
     "Integrations/Auth and Token Flows.md",
-    "Delivery/Implementation Plan 8-12 Weeks.md",
-    "Delivery/On-Prem Delivery.md",
-    "Delivery/00 - Index.md",
-    "Product/Mobile App.md",
-    "Product/Product Vision.md",
-    "Product/00 - Index.md",
-    "Integrations/openapi-v1.yaml",
-    "Integrations/OpenAPI v1 Outline.md",
-    "Integrations/Integration Strategy.md",
+    "Data/Persistence and Migrations Plan.md",
+    "Decisions/ADR-019 - FluentMigrator for PostgreSQL Schema Management.md",
+    "Decisions/ADR-018 - No Entity Framework Use Dapper and Free Mapper.md",
+    "Decisions/ADR-017 - Prefer Types with Behavior over Enums for Extensible Domain Concepts.md",
+    "Architecture/Policy Design.md",
+    "Decisions/ADR-016 - Policy Module Inside Modular Monolith.md",
+    "Decisions/ADR-015 - Push Optional for On-Prem and Future Air-Gapped Profiles.md",
+    "Decisions/ADR-014 - 2FA Server as MVP and IdP as Strategic Target.md",
     "Integrations/00 - Index.md",
-    "Data/ERD.md",
-    "Data/Logical Data Model.md",
-    "Data/00 - Index.md",
-    "Architecture/Service Architecture.md",
-    "Architecture/2FA Platform Overview.md",
+    "Sessions/2026-04-14 - Session Log.md",
+    "Architecture/00 - Index.md",
+    "03 - Open Questions.md",
+    "Decisions/ADR-013 - Device Trust Lifecycle Without Mandatory Attestation in MVP.md",
+    "Decisions/ADR-012 - Admin-Led Enrollment for MVP.md",
+    "Decisions/ADR-011 - MVP Tenancy Model.md",
+    "Добро пожаловать.md",
+    "Delivery/Documentation Backlog.md",
+    "Delivery/00 - Index.md",
+    "Integrations/Integration Strategy.md",
+    "Delivery/Testing Strategy.md",
+    "Security",
+    "Integrations/openapi-v1.yaml",
     "Architecture/2FA",
     "Sessions",
     "Agent",
@@ -219,7 +220,6 @@
     "Delivery",
     "Product",
     "Integrations",
-    "Data",
-    "Architecture"
+    "Data"
   ]
 }

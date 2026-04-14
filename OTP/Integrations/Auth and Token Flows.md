@@ -17,6 +17,40 @@ Scope-ы текущего draft:
 - `enrollments:write`
 - `devices:write`
 
+## Текущий bootstrap implementation status
+
+В коде backend уже есть рабочий bootstrap `client_credentials` flow:
+
+- `POST /oauth2/token` выпускает short-lived bearer token для bootstrap integration client registry
+- JWT содержит `client_id`, `tenant_id`, `application_client_id` и `scope`
+- `CreateChallenge` проверяет совпадение request scope с аутентифицированным `tenant/application client`
+- `GetChallenge` и `VerifyTotp` делают scoped lookup, чтобы чужой `challengeId` не раскрывал существование ресурса
+- bootstrap client registry хранится в `PostgreSQL`
+- `Challenge` state теперь тоже хранится в `PostgreSQL`, а не в process-local memory
+- `VerifyTotp` использует активный `TOTP` enrollment из `PostgreSQL`, а не process-local derived secret
+- bootstrap client seed выполняется явно через migration runner и env secret
+- на рабочем сервере `dt-auth` bootstrap token issuance уже проверен end-to-end через `/oauth2/token`
+- flow `CreateChallenge -> GetChallenge -> VerifyTotp` уже проверен end-to-end через тот же bootstrap auth слой и реальный `PostgreSQL`
+
+Это все еще bootstrap-уровень, потому что revocation, introspection, secret rotation workflow и production token lifecycle пока не реализованы как полноценный auth subsystem.
+
+## Текущий bootstrap auth subsystem
+
+В коде backend теперь дополнительно есть:
+
+- `POST /oauth2/introspect` для scope-limited introspection access token
+- `POST /oauth2/revoke` для отзыва конкретного access token
+- persistent store `auth.revoked_integration_access_tokens`
+- runtime-проверка revoked token на входе через `JwtBearer` validation events
+- JWT access token выпускается с `kid`, а validation идет по current + legacy signing keys
+
+Security behavior:
+
+- introspection и revoke требуют `client_id + client_secret`
+- чужой токен не раскрывается: introspection возвращает `active=false`, revoke делает no-op
+- revoked token перестает проходить на защищенные endpoint-ы
+- bootstrap flow по-прежнему не заменяет полноценный auth subsystem: нет refresh token model, нет signing key rotation UI/API, нет token introspection caching, нет management API для client lifecycle
+
 ## Mobile device tokens
 
 Для мобильного устройства в `v1` выбран отдельный bearer token flow:

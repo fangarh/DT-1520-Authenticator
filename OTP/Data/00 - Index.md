@@ -8,6 +8,7 @@
 
 - [[Logical Data Model]]
 - [[ERD]]
+- [[Persistence and Migrations Plan]]
 
 ## Связанные заметки
 
