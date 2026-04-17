@@ -1,0 +1,28 @@
+.notice {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+}
+
+.notice strong {
+  font-size: 0.96rem;
+}
+
+.notice span,
+.notice small {
+  color: var(--muted);
+}
+
+.neutral {
+  background: rgba(15, 94, 91, 0.08);
+}
+
+.success {
+  background: rgba(43, 109, 64, 0.1);
+}
+
+.danger {
+  background: rgba(138, 47, 61, 0.1);
+}

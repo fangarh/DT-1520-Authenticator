@@ -24,3 +24,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "DT 1520 Authenticator"
 include(":app")
+include(":core:ui")
+include(":feature:provisioning")
+include(":feature:totp-codes")
+include(":security:storage")
+include(":totp-domain")

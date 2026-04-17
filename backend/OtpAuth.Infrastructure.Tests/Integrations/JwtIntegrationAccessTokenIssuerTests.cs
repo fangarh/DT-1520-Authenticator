@@ -11,7 +11,7 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
     public async Task IntrospectAsync_ReturnsActiveForFreshToken()
     {
         var client = CreateClient();
-        var issuer = CreateIssuer(new InMemoryRevocationStore());
+        var issuer = CreateIssuer(new InMemoryClientStore(client), new InMemoryRevocationStore());
         var token = await issuer.IssueAsync(
             client,
             [IntegrationClientScopes.ChallengesRead],
@@ -33,7 +33,7 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
     {
         var revocationStore = new InMemoryRevocationStore();
         var client = CreateClient();
-        var issuer = CreateIssuer(revocationStore);
+        var issuer = CreateIssuer(new InMemoryClientStore(client), revocationStore);
         var token = await issuer.IssueAsync(
             client,
             [IntegrationClientScopes.ChallengesRead],
@@ -59,7 +59,7 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
     [Fact]
     public async Task IntrospectAsync_ReturnsUnrecognizedForInvalidToken()
     {
-        var issuer = CreateIssuer(new InMemoryRevocationStore());
+        var issuer = CreateIssuer(new InMemoryClientStore(CreateClient()), new InMemoryRevocationStore());
 
         var introspection = await issuer.IntrospectAsync("not-a-jwt", CancellationToken.None);
 
@@ -80,6 +80,7 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
                 CurrentSigningKey = "integration-tests-signing-key-1234567890",
                 AccessTokenLifetimeMinutes = 60,
             },
+            new InMemoryClientStore(client),
             new InMemoryRevocationStore());
         var token = await oldIssuer.IssueAsync(
             client,
@@ -103,6 +104,7 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
                 ],
                 AccessTokenLifetimeMinutes = 60,
             },
+            new InMemoryClientStore(client),
             new InMemoryRevocationStore());
 
         var introspection = await rotatedIssuer.IntrospectAsync(token.AccessToken, CancellationToken.None);
@@ -110,6 +112,53 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
         Assert.True(introspection.IsRecognizedToken);
         Assert.True(introspection.IsActive);
         Assert.Equal(client.ClientId, introspection.ClientId);
+    }
+
+    [Fact]
+    public async Task IntrospectAsync_ReturnsUnrecognized_WhenLegacyKeyIsRetired()
+    {
+        var client = CreateClient();
+        var oldIssuer = new JwtIntegrationAccessTokenIssuer(
+            new BootstrapOAuthOptions
+            {
+                Issuer = "otpauth-tests",
+                Audience = "otpauth-api-tests",
+                CurrentSigningKeyId = "key-v1",
+                CurrentSigningKey = "integration-tests-signing-key-1234567890",
+                AccessTokenLifetimeMinutes = 60,
+            },
+            new InMemoryClientStore(client),
+            new InMemoryRevocationStore());
+        var token = await oldIssuer.IssueAsync(
+            client,
+            [IntegrationClientScopes.ChallengesRead],
+            CancellationToken.None);
+
+        var rotatedIssuer = new JwtIntegrationAccessTokenIssuer(
+            new BootstrapOAuthOptions
+            {
+                Issuer = "otpauth-tests",
+                Audience = "otpauth-api-tests",
+                CurrentSigningKeyId = "key-v2",
+                CurrentSigningKey = "integration-tests-signing-key-0987654321",
+                AdditionalSigningKeys =
+                [
+                    new BootstrapOAuthSigningKeyOptions
+                    {
+                        KeyId = "key-v1",
+                        Key = "integration-tests-signing-key-1234567890",
+                        RetireAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+                    },
+                ],
+                AccessTokenLifetimeMinutes = 60,
+            },
+            new InMemoryClientStore(client),
+            new InMemoryRevocationStore());
+
+        var introspection = await rotatedIssuer.IntrospectAsync(token.AccessToken, CancellationToken.None);
+
+        Assert.False(introspection.IsRecognizedToken);
+        Assert.False(introspection.IsActive);
     }
 
     [Fact]
@@ -125,6 +174,7 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
                 CurrentSigningKey = "integration-tests-signing-key-0987654321",
                 AccessTokenLifetimeMinutes = 60,
             },
+            new InMemoryClientStore(client),
             new InMemoryRevocationStore());
 
         var token = await issuer.IssueAsync(
@@ -148,7 +198,45 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
         };
     }
 
-    private static JwtIntegrationAccessTokenIssuer CreateIssuer(IIntegrationAccessTokenRevocationStore revocationStore)
+    [Fact]
+    public async Task IntrospectAsync_ReturnsInactive_WhenClientAuthStateChangedAfterTokenIssuance()
+    {
+        var client = CreateClient();
+        var issuer = CreateIssuer(new InMemoryClientStore(client), new InMemoryRevocationStore());
+        var token = await issuer.IssueAsync(
+            client,
+            [IntegrationClientScopes.ChallengesRead],
+            CancellationToken.None);
+        var rotatedClient = client with
+        {
+            LastAuthStateChangedUtc = DateTimeOffset.UtcNow.AddMinutes(1),
+        };
+        var rotatedIssuer = CreateIssuer(new InMemoryClientStore(rotatedClient), new InMemoryRevocationStore());
+
+        var introspection = await rotatedIssuer.IntrospectAsync(token.AccessToken, CancellationToken.None);
+
+        Assert.True(introspection.IsRecognizedToken);
+        Assert.False(introspection.IsActive);
+    }
+
+    [Fact]
+    public async Task IssueAsync_WritesIssuedAtClaim()
+    {
+        var client = CreateClient();
+        var issuer = CreateIssuer(new InMemoryClientStore(client), new InMemoryRevocationStore());
+
+        var token = await issuer.IssueAsync(
+            client,
+            [IntegrationClientScopes.ChallengesRead],
+            CancellationToken.None);
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token.AccessToken);
+
+        Assert.Contains(jwt.Claims, claim => claim.Type == JwtRegisteredClaimNames.Iat);
+    }
+
+    private static JwtIntegrationAccessTokenIssuer CreateIssuer(
+        IIntegrationClientStore clientStore,
+        IIntegrationAccessTokenRevocationStore revocationStore)
     {
         return new JwtIntegrationAccessTokenIssuer(
             new BootstrapOAuthOptions
@@ -159,7 +247,34 @@ public sealed class JwtIntegrationAccessTokenIssuerTests
                 CurrentSigningKeyId = "key-v1",
                 AccessTokenLifetimeMinutes = 60,
             },
+            clientStore,
             revocationStore);
+    }
+
+    private sealed class InMemoryClientStore : IIntegrationClientStore
+    {
+        private readonly IntegrationClient? _client;
+
+        public InMemoryClientStore(IntegrationClient? client)
+        {
+            _client = client;
+        }
+
+        public Task<IntegrationClient?> GetByClientIdAsync(string clientId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                _client is not null && string.Equals(_client.ClientId, clientId, StringComparison.Ordinal)
+                    ? _client
+                    : null);
+        }
+
+        public Task<IReadOnlyCollection<IntegrationClient>> ListActiveByTenantAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<IntegrationClient> clients = _client is not null && _client.TenantId == tenantId
+                ? [_client]
+                : [];
+            return Task.FromResult(clients);
+        }
     }
 
     private sealed class InMemoryRevocationStore : IIntegrationAccessTokenRevocationStore

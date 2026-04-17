@@ -1,0 +1,30 @@
+.badge {
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.7rem;
+  text-transform: uppercase;
+}
+
+.success {
+  background: rgba(111, 191, 145, 0.18);
+  color: #89d3a5;
+}
+
+.warning {
+  background: rgba(255, 183, 71, 0.18);
+  color: #ffc76e;
+}
+
+.danger {
+  background: rgba(216, 107, 107, 0.18);
+  color: #ffb5b5;
+}
+
+.neutral {
+  background: rgba(142, 161, 178, 0.18);
+  color: #c9d3df;
+}

@@ -40,13 +40,15 @@ public sealed class PostgresIntegrationClientSeeder
                     is_active,
                     created_utc,
                     updated_utc,
-                    last_secret_rotated_utc
+                    last_secret_rotated_utc,
+                    last_auth_state_changed_utc
                 ) values (
                     @ClientId,
                     @TenantId,
                     @ApplicationClientId,
                     @ClientSecretHash,
                     true,
+                    timezone('utc', now()),
                     timezone('utc', now()),
                     timezone('utc', now()),
                     timezone('utc', now())
@@ -61,6 +63,14 @@ public sealed class PostgresIntegrationClientSeeder
                         when auth.integration_clients.client_secret_hash <> excluded.client_secret_hash
                             then timezone('utc', now())
                         else auth.integration_clients.last_secret_rotated_utc
+                    end,
+                    last_auth_state_changed_utc = case
+                        when auth.integration_clients.tenant_id <> excluded.tenant_id
+                            or auth.integration_clients.application_client_id <> excluded.application_client_id
+                            or auth.integration_clients.client_secret_hash <> excluded.client_secret_hash
+                            or auth.integration_clients.is_active <> true
+                            then timezone('utc', now())
+                        else auth.integration_clients.last_auth_state_changed_utc
                     end;
                 """,
                 new

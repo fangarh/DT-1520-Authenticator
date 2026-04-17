@@ -41,6 +41,24 @@ public sealed class PostgresTotpEnrollmentMaintenanceStore : ITotpEnrollmentMain
         return records.ToArray();
     }
 
+    public async Task<IReadOnlyCollection<TotpEnrollmentKeyVersionUsage>> GetKeyVersionUsageAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        var records = await connection.QueryAsync<TotpEnrollmentKeyVersionUsage>(new CommandDefinition(
+            """
+            select
+                key_version as KeyVersion,
+                count(*)::integer as EnrollmentCount
+            from auth.totp_enrollments
+            group by key_version
+            order by key_version;
+            """,
+            cancellationToken: cancellationToken));
+
+        return records.ToArray();
+    }
+
     public async Task<bool> UpdateProtectedSecretAsync(
         Guid enrollmentId,
         int expectedKeyVersion,

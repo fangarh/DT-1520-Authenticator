@@ -8,6 +8,7 @@
 
 - [[Integration Strategy]]
 - [[Auth and Token Flows]]
+- [[TOTP Provisioning Contract]]
 - [[OpenAPI v1 Outline]]
 - [[openapi-v1.yaml]]
 

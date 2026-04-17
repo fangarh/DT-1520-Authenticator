@@ -16,6 +16,7 @@ Draft
 - `Device Registry`
 - `Policy`
 - `Audit`
+- `Admin`
 
 ## Принципы границ
 
@@ -166,6 +167,21 @@ Draft
 - не хранить секреты и токены в payload
 - события должны быть append-only на уровне application flow
 
+## Модуль `Admin`
+
+### Ответственность
+
+- human-operator authentication
+- operator-facing enrollment management API
+- read models для operator UX
+- role/permission checks для административных операций
+
+### Не должен делать
+
+- не переиспользует browser-facing доступ через integration `client_credentials`
+- не превращается в installer или runtime lifecycle manager
+- не раскрывает provisioning secrets через read models
+
 ## Вертикальный срез `MVP`
 
 ### Slice 1
@@ -205,4 +221,5 @@ Draft
 - `Challenge` persistence переведена на `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeRepository.cs`
 - `Factor Engine` уже использует enrollment-backed `TOTP` verifier через `backend/OtpAuth.Infrastructure/Factors/PostgresTotpVerifier.cs`
 - `VerifyTotp` пишет append-only записи в `challenge_attempts`
-- следующий практический шаг для этого slice: добавить rate limit/anti-replay persistence и полноценный enrollment API
+- `TOTP` enrollment slice уже реализован через `backend/OtpAuth.Application/Enrollments/*`, `backend/OtpAuth.Api/Endpoints/EnrollmentsEndpoints.cs` и `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentProvisioningStore.cs`
+- следующий практический шаг для enrollment/domain management: добавить отдельный admin auth contour и current-enrollment read model для operator-facing management API/UI

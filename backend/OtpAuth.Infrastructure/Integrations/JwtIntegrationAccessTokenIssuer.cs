@@ -1,7 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using OtpAuth.Application.Integrations;
 
@@ -12,55 +10,20 @@ public sealed class JwtIntegrationAccessTokenIssuer :
     IIntegrationAccessTokenIntrospector
 {
     private readonly BootstrapOAuthOptions _options;
+    private readonly IIntegrationClientStore _clientStore;
     private readonly IIntegrationAccessTokenRevocationStore _revocationStore;
-    private readonly string _currentSigningKeyId;
-    private readonly SigningCredentials _currentSigningCredentials;
-    private readonly IReadOnlyDictionary<string, SecurityKey> _signingKeysById;
+    private readonly BootstrapSigningKeyRing _signingKeyRing;
     private readonly JwtSecurityTokenHandler _tokenHandler = new();
 
     public JwtIntegrationAccessTokenIssuer(
         BootstrapOAuthOptions options,
+        IIntegrationClientStore clientStore,
         IIntegrationAccessTokenRevocationStore revocationStore)
     {
         _options = options;
+        _clientStore = clientStore;
         _revocationStore = revocationStore;
-
-        var currentSigningKeyId = string.IsNullOrWhiteSpace(options.CurrentSigningKeyId)
-            ? "bootstrap-current"
-            : options.CurrentSigningKeyId.Trim();
-        var currentSigningKeyMaterial = string.IsNullOrWhiteSpace(options.CurrentSigningKey)
-            ? options.SigningKey
-            : options.CurrentSigningKey;
-        var resolvedCurrentSigningKeyMaterial = string.IsNullOrWhiteSpace(currentSigningKeyMaterial)
-            ? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            : currentSigningKeyMaterial;
-
-        var signingKeys = new Dictionary<string, SecurityKey>(StringComparer.Ordinal)
-        {
-            [currentSigningKeyId] = CreateSigningKey(resolvedCurrentSigningKeyMaterial, currentSigningKeyId),
-        };
-
-        foreach (var additionalKey in options.AdditionalSigningKeys)
-        {
-            if (string.IsNullOrWhiteSpace(additionalKey.KeyId))
-            {
-                throw new InvalidOperationException("BootstrapOAuth additional signing key id must be configured.");
-            }
-
-            if (signingKeys.ContainsKey(additionalKey.KeyId))
-            {
-                throw new InvalidOperationException(
-                    $"BootstrapOAuth signing key id '{additionalKey.KeyId}' is configured more than once.");
-            }
-
-            signingKeys[additionalKey.KeyId] = CreateSigningKey(additionalKey.Key, additionalKey.KeyId);
-        }
-
-        _currentSigningKeyId = currentSigningKeyId;
-        _signingKeysById = signingKeys;
-        _currentSigningCredentials = new SigningCredentials(
-            _signingKeysById[currentSigningKeyId],
-            SecurityAlgorithms.HmacSha256);
+        _signingKeyRing = new BootstrapSigningKeyRing(options);
     }
 
     public Task<IssuedAccessToken> IssueAsync(
@@ -82,6 +45,7 @@ public sealed class JwtIntegrationAccessTokenIssuer :
             new("application_client_id", client.ApplicationClientId.ToString()),
             new("scope", scopeValue),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(), ClaimValueTypes.Integer64),
         };
 
         var token = new JwtSecurityToken(
@@ -90,8 +54,8 @@ public sealed class JwtIntegrationAccessTokenIssuer :
             claims: claims,
             notBefore: now.UtcDateTime,
             expires: expiresAt.UtcDateTime,
-            signingCredentials: _currentSigningCredentials);
-        token.Header["kid"] = _currentSigningKeyId;
+            signingCredentials: _signingKeyRing.CurrentSigningCredentials);
+        token.Header["kid"] = _signingKeyRing.CurrentSigningKeyId;
 
         var serializedToken = _tokenHandler.WriteToken(token);
         return Task.FromResult(new IssuedAccessToken
@@ -133,9 +97,11 @@ public sealed class JwtIntegrationAccessTokenIssuer :
         var applicationClientId = principal.FindFirst("application_client_id")?.Value;
         var scope = principal.FindFirst("scope")?.Value;
         var jwtId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+        var issuedAtUtc = TryGetIssuedAtUtc(principal);
 
         if (string.IsNullOrWhiteSpace(clientId) ||
             string.IsNullOrWhiteSpace(jwtId) ||
+            issuedAtUtc is null ||
             !Guid.TryParse(tenantId, out var parsedTenantId) ||
             !Guid.TryParse(applicationClientId, out var parsedApplicationClientId))
         {
@@ -144,7 +110,16 @@ public sealed class JwtIntegrationAccessTokenIssuer :
 
         var expiresAtUtc = new DateTimeOffset(jwtToken.ValidTo, TimeSpan.Zero);
         var revoked = await _revocationStore.IsRevokedAsync(jwtId, cancellationToken);
-        var isActive = expiresAtUtc > DateTimeOffset.UtcNow && !revoked;
+        var client = await _clientStore.GetByClientIdAsync(clientId, cancellationToken);
+        var claimsMatchActiveClient = client is not null &&
+            client.TenantId == parsedTenantId &&
+            client.ApplicationClientId == parsedApplicationClientId;
+        var tokenIssuedAfterLastAuthStateChange = client is not null &&
+            issuedAtUtc.Value >= client.LastAuthStateChangedUtc;
+        var isActive = expiresAtUtc > DateTimeOffset.UtcNow &&
+            !revoked &&
+            claimsMatchActiveClient &&
+            tokenIssuedAfterLastAuthStateChange;
 
         return new IntegrationAccessTokenIntrospectionResult
         {
@@ -182,21 +157,17 @@ public sealed class JwtIntegrationAccessTokenIssuer :
         string kid,
         TokenValidationParameters validationParameters)
     {
-        if (!string.IsNullOrWhiteSpace(kid) && _signingKeysById.TryGetValue(kid, out var keyedSigningKey))
-        {
-            return [keyedSigningKey];
-        }
-
-        return _signingKeysById.Values;
+        return _signingKeyRing.ResolveValidationKeys(kid);
     }
 
-    private static SecurityKey CreateSigningKey(string signingKeyMaterial, string keyId)
+    private static DateTimeOffset? TryGetIssuedAtUtc(ClaimsPrincipal principal)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKeyMaterial))
+        var rawIssuedAt = principal.FindFirst(JwtRegisteredClaimNames.Iat)?.Value;
+        if (!long.TryParse(rawIssuedAt, out var secondsSinceEpoch))
         {
-            KeyId = keyId,
-        };
+            return null;
+        }
 
-        return key;
+        return DateTimeOffset.FromUnixTimeSeconds(secondsSinceEpoch);
     }
 }

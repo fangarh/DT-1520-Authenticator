@@ -11,6 +11,10 @@ internal sealed record IntegrationClientRecord
     public required Guid ApplicationClientId { get; init; }
 
     public required string ClientSecretHash { get; init; }
+
+    public DateTimeOffset? LastSecretRotatedUtc { get; init; }
+
+    public DateTimeOffset LastAuthStateChangedUtc { get; init; }
 }
 
 internal sealed record IntegrationClientMaterial
@@ -22,6 +26,10 @@ internal sealed record IntegrationClientMaterial
     public required Guid ApplicationClientId { get; init; }
 
     public required string ClientSecretHash { get; init; }
+
+    public DateTimeOffset? LastSecretRotatedUtc { get; init; }
+
+    public DateTimeOffset LastAuthStateChangedUtc { get; init; }
 }
 
 [Mapper]

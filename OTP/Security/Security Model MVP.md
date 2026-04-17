@@ -64,6 +64,7 @@ Draft
 - refresh token устройства должен быть revocable
 - токены не логируются и не возвращаются повторно в telemetry
 - integration access token должен поддерживать revocation и introspection до перехода к полноценному auth subsystem
+- lifecycle integration client должен инвалидировать уже выданные access token-ы после rotate/deactivate/reactivate
 
 ### Transport security
 
@@ -80,6 +81,7 @@ Draft
 - ошибки наружу не раскрывают внутренние детали модели, хранилища или ключей
 - resource access для `Challenges` ограничивается не только по bearer token, но и по `tenant/application client` scope
 - revoked bearer token должен отбрасываться на auth boundary до входа в handler
+- integration access token должен считаться невалидным, если `iat` старше persisted `client auth state`
 
 ### Replay and brute-force protection
 
@@ -113,17 +115,27 @@ Draft
 - verify-attempts пишутся append-only в `auth.challenge_attempts`
 - anti-replay reservations пишутся в `auth.totp_used_time_steps`
 - revoked integration access tokens пишутся в `auth.revoked_integration_access_tokens`
+- `TOTP` enrollment start/confirm теперь доступны через bootstrap integration API и пишут sanitized lifecycle events в `auth.security_audit_events`
+- `TOTP` enrollment read-path теперь возвращает только scoped lifecycle status и не повторяет provisioning artifacts
+- `TOTP` enrollment revoke-path теперь выполняет фактическую серверную деактивацию фактора, а не UI-only действие
+- `TOTP` enrollment replace-path теперь не уничтожает текущий активный фактор до успешного confirm replacement; pending replacement хранится отдельно от active secret material
+- brute-force на `TOTP` enrollment confirm-path ограничивается persisted `failed_confirm_attempts`; после лимита нужен новый enrollment start
+- brute-force на replacement confirm-path ограничивается отдельным persisted `replacement_failed_confirm_attempts`, чтобы replacement не ломал текущий active verify-path
 - bootstrap client seed и bootstrap `TOTP` enrollment seed вынесены в явные операции migration runner-а и не выполняются автоматически на старте `Api`
 - если signing key не задан конфигурацией, bootstrap OAuth использует process-local ephemeral signing key; это допустимо только для локального dev/bootstrap режима
 - `TOTP` protection key пока задается через env-managed `TotpProtection__CurrentKey`; это допустимо только как bootstrap stage до интеграции с `Vault/KMS`
 - `TOTP` protector уже поддерживает current + legacy keys по `key version`
 - bootstrap JWT issuer уже поддерживает current + legacy signing keys и validation по `kid`
+- legacy signing key теперь может иметь `RetireAtUtc`; после retirement runtime/introspection fail-closed отклоняют токены с retired `kid`
 - tenant/application scoping уже проводится в `Application` и persistence слое
 - bootstrap host явно использует console logging provider и не зависит от Windows `EventLog`, чтобы security-flow не падал из-за инфраструктурных прав
 - token revocation и introspection уже реализованы в bootstrap-слое
 - automated re-encryption для `TOTP` secrets уже реализован как отдельная maintenance-операция migration runner-а
 - cleanup/retention для `challenge_attempts`, `totp_used_time_steps` и `revoked_integration_access_tokens` уже реализован как отдельная maintenance-операция migration runner-а
-- полноценный signing key rotation workflow и client lifecycle management все еще не реализованы
+- integration client lifecycle уже реализован как отдельные operational команды; rotate/deactivate/reactivate обновляют persisted `last_auth_state_changed_utc`, а runtime/introspection отбрасывают JWT с устаревшим `iat`
+- signing key lifecycle и `TOTP` protection key lifecycle уже пишут sanitized snapshot-ы через unified append-only trail `auth.security_audit_events`
+- integration client lifecycle (`rotate/deactivate/reactivate`) теперь тоже пишет sanitized append-only events в `auth.security_audit_events`
+- audit payload для lifecycle-событий не содержит signing material, `TOTP` key bytes, ciphertext, `client_secret` или `client_secret_hash`
 
 ## MVP security gates для backend
 
@@ -145,6 +157,10 @@ Draft
 - админские операции должны иметь явную модель ролей и прав
 - UI не должен показывать чувствительные значения повторно после создания
 - destructive actions требуют подтверждения и аудита
+- `Admin UI MVP` использует отдельный admin auth contour, а не integration `client_credentials`
+- `Admin UI` не должен хранить provisioning artifacts в постоянном клиентском кэше или показывать их повторно через read path
+- operator lookup/read model не должен повторно раскрывать provisioning artifacts и должен строиться по user-facing идентичности, а не по случайному `enrollmentId`
+- канонический artifact contract для `secretUri` и `qrCodePayload` зафиксирован в [[../Integrations/TOTP Provisioning Contract]]
 
 ## Решения, уже зафиксированные в ADR
 
@@ -159,5 +175,6 @@ Draft
 
 1. Зафиксировать storage policy для `backup codes`, refresh tokens и будущих device tokens.
 2. Описать security profile для future air-gapped enterprise режима.
-3. Реализовать operational rotation workflow для signing keys, включая rollout и retirement legacy keys.
-4. Добавить lifecycle management для integration clients: secret rotation, deactivate/reactivate, audit.
+3. Расширить unified audit trail с key/client/enrollment lifecycle на token issuance, device activation и admin policy changes.
+4. Добавить admin/API contour для integration client lifecycle поверх уже существующего operational workflow.
+5. Реализовать admin auth contour и admin read model для enrollment management поверх уже принятых решений.

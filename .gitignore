@@ -83,6 +83,8 @@ temp/
 /img/
 
 # Android Studio
+**/build/
+**/.kotlin/
 **/local.properties
 **/captures/
 **/.cxx/
@@ -94,6 +96,16 @@ temp/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.tsbuildinfo
+*.tsbuildinfo
+
+# Playwright and local browser automation artifacts
+.playwright-mcp/
+playwright-report/
+blob-report/
+
+# Obsidian local workspace state
+OTP/.obsidian/workspace.json
 
 # StyleCop
 StyleCopReport.xml

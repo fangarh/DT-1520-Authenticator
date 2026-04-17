@@ -1,0 +1,152 @@
+services:
+  postgres:
+    image: postgres:${OTPAUTH_POSTGRES_IMAGE_TAG:-17-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${OTPAUTH_POSTGRES_DB:-otpauth}
+      POSTGRES_USER: ${OTPAUTH_POSTGRES_USER:-otpauth}
+      POSTGRES_PASSWORD: ${OTPAUTH_POSTGRES_PASSWORD:?Set OTPAUTH_POSTGRES_PASSWORD in your runtime env file.}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - runtime
+
+  redis:
+    image: redis:${OTPAUTH_REDIS_IMAGE_TAG:-8-alpine}
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --save 60 1 --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    environment:
+      REDIS_PASSWORD: ${OTPAUTH_REDIS_PASSWORD:?Set OTPAUTH_REDIS_PASSWORD in your runtime env file.}
+    networks:
+      - runtime
+
+  bootstrap:
+    build:
+      context: ..
+      dockerfile: infra/docker/bootstrap.Dockerfile
+    profiles:
+      - bootstrap
+    environment:
+      ConnectionStrings__Postgres: ${ConnectionStrings__Postgres:?Set ConnectionStrings__Postgres in your runtime env file.}
+      BootstrapOAuth__CurrentSigningKeyId: ${BootstrapOAuth__CurrentSigningKeyId:-}
+      BootstrapOAuth__CurrentSigningKey: ${BootstrapOAuth__CurrentSigningKey:-}
+      TotpProtection__CurrentKeyVersion: ${TotpProtection__CurrentKeyVersion:-}
+      TotpProtection__CurrentKey: ${TotpProtection__CurrentKey:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - runtime
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: ${ConnectionStrings__Postgres:?Set ConnectionStrings__Postgres in your runtime env file.}
+      BootstrapOAuth__CurrentSigningKeyId: ${BootstrapOAuth__CurrentSigningKeyId:?Set BootstrapOAuth__CurrentSigningKeyId in your runtime env file.}
+      BootstrapOAuth__CurrentSigningKey: ${BootstrapOAuth__CurrentSigningKey:?Set BootstrapOAuth__CurrentSigningKey in your runtime env file.}
+      TotpProtection__CurrentKeyVersion: ${TotpProtection__CurrentKeyVersion:?Set TotpProtection__CurrentKeyVersion in your runtime env file.}
+      TotpProtection__CurrentKey: ${TotpProtection__CurrentKey:?Set TotpProtection__CurrentKey in your runtime env file.}
+      Redis__ConnectionString: redis:6379,password=${OTPAUTH_REDIS_PASSWORD:?Set OTPAUTH_REDIS_PASSWORD in your runtime env file.}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8080"
+    networks:
+      - runtime
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: ${ConnectionStrings__Postgres:?Set ConnectionStrings__Postgres in your runtime env file.}
+      Redis__ConnectionString: redis:6379,password=${OTPAUTH_REDIS_PASSWORD:?Set OTPAUTH_REDIS_PASSWORD in your runtime env file.}
+      WorkerDiagnostics__HeartbeatFilePath: /tmp/otpauth-worker/heartbeat.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /tmp/otpauth-worker/heartbeat.json && find /tmp/otpauth-worker/heartbeat.json -mmin -2 | grep -q heartbeat.json",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - runtime
+
+  admin:
+    build:
+      context: ..
+      dockerfile: infra/docker/admin.Dockerfile
+      args:
+        VITE_ADMIN_API_BASE_URL: ""
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - ${OTPAUTH_ADMIN_HTTPS_PORT:-8443}:8443
+    volumes:
+      - ${OTPAUTH_TLS_CERT_PATH:?Set OTPAUTH_TLS_CERT_PATH in your runtime env file.}:/etc/nginx/tls/tls.crt:ro
+      - ${OTPAUTH_TLS_KEY_PATH:?Set OTPAUTH_TLS_KEY_PATH in your runtime env file.}:/etc/nginx/tls/tls.key:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-check-certificate --quiet --output-document=- https://127.0.0.1:8443/health/api > /dev/null",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - runtime
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  runtime:
+    driver: bridge

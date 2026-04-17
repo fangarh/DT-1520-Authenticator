@@ -6,4 +6,5 @@
   <Project Path="OtpAuth.Infrastructure.Tests/OtpAuth.Infrastructure.Tests.csproj" />
   <Project Path="OtpAuth.Migrations/OtpAuth.Migrations.csproj" />
   <Project Path="OtpAuth.Worker/OtpAuth.Worker.csproj" />
+  <Project Path="OtpAuth.Worker.Tests/OtpAuth.Worker.Tests.csproj" />
 </Solution>

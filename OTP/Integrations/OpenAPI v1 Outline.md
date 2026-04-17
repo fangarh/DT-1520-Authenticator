@@ -21,8 +21,11 @@
 
 ### Enrollments
 
+- `GET /api/v1/enrollments/totp/{enrollmentId}`
 - `POST /api/v1/enrollments/totp`
 - `POST /api/v1/enrollments/totp/{enrollmentId}/confirm`
+- `POST /api/v1/enrollments/totp/{enrollmentId}/replace`
+- `POST /api/v1/enrollments/totp/{enrollmentId}/revoke`
 
 ### Devices
 
@@ -69,3 +72,5 @@
 ## Следующий шаг
 
 Канонический machine-readable черновик лежит в [[openapi-v1.yaml]].
+
+Для `TOTP-first` enrollment artifact visibility и семантика `secretUri`/`qrCodePayload` отдельно зафиксированы в [[TOTP Provisioning Contract]].

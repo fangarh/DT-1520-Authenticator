@@ -41,6 +41,7 @@ Draft
 - rate limiting
 - anti-replay
 - token revocation and introspection
+- invalidation issued tokens after integration client lifecycle change
 - отсутствие секретов в response payload
 
 ## Admin
@@ -122,5 +123,9 @@ Draft
 - `PostgresTotpVerifier` покрыт unit tests для `valid`, `invalid`, `missing enrollment`, `replay detected`
 - runtime limit threshold покрыт unit tests на decision layer
 - bootstrap OAuth покрыт unit tests для `token issuance`, `introspection`, `revocation` и runtime rejected revoked token
-- key rotation покрыта unit tests для `legacy TOTP key decrypt`, JWT `kid` emission и validation token-а, подписанного legacy key
+- integration client lifecycle покрыт unit tests для `rotate secret`, `deactivate/reactivate`, `iat` claim emission и invalidation токена после `last_auth_state_changed_utc`
+- key rotation покрыта unit tests для `legacy TOTP key decrypt`, JWT `kid` emission, validation token-а, подписанного legacy key, и retirement legacy signing key по `RetireAtUtc`
+- signing key audit/reporting покрыт unit tests для sanitized lifecycle report и append-only audit snapshot serialization без key material
+- `TOTP` protection key audit/reporting покрыт unit tests для sanitized lifecycle report по `key_version` usage и append-only audit snapshot serialization без key bytes
 - maintenance workflow покрыт unit tests для `TOTP` re-encryption и cleanup/retention security-данных
+- `TOTP` enrollment management теперь покрыт endpoint-level tests для `start/get/confirm/replace/revoke`, включая `401/403/409`, scope enforcement, `Location` header и отсутствие provisioning artifacts в read/revoke/confirm responses

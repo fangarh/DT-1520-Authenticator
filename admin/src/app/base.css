@@ -1,0 +1,63 @@
+:root {
+  color-scheme: light;
+  --bg: #efe7da;
+  --bg-accent: #d8d7c8;
+  --panel: rgba(255, 251, 245, 0.88);
+  --panel-strong: #fffdf8;
+  --text: #1b1d1d;
+  --muted: #5c655f;
+  --accent: #0f5e5b;
+  --accent-strong: #0a4441;
+  --warning: #9a4c16;
+  --danger: #8a2f3d;
+  --success: #2b6d40;
+  --border: rgba(27, 29, 29, 0.12);
+  --shadow: 0 24px 80px rgba(27, 29, 29, 0.12);
+  font-family: "Aptos", "Trebuchet MS", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(15, 94, 91, 0.16), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(154, 76, 22, 0.14), transparent 24%),
+    linear-gradient(180deg, #f6efe3 0%, var(--bg) 54%, var(--bg-accent) 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(27, 29, 29, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 29, 29, 0.02) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 85%);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}

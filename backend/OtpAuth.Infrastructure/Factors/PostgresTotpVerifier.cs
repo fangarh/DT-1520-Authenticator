@@ -37,7 +37,7 @@ public sealed class PostgresTotpVerifier : ITotpVerifier
         }
 
         var normalizedCode = code.Trim();
-        var currentStep = GetTimeStep(timestamp, enrollment.PeriodSeconds);
+        var currentStep = TotpCodeCalculator.GetTimeStep(timestamp, enrollment.PeriodSeconds);
 
         for (var offset = -1; offset <= 1; offset++)
         {
@@ -68,44 +68,15 @@ public sealed class PostgresTotpVerifier : ITotpVerifier
 
     internal static string GenerateCode(TotpEnrollmentSecret enrollment, DateTimeOffset timestamp)
     {
-        return GenerateCode(enrollment, GetTimeStep(timestamp, enrollment.PeriodSeconds));
+        return GenerateCode(enrollment, TotpCodeCalculator.GetTimeStep(timestamp, enrollment.PeriodSeconds));
     }
 
     private static string GenerateCode(TotpEnrollmentSecret enrollment, long timeStep)
     {
-        if (enrollment.Digits != 6)
-        {
-            throw new InvalidOperationException("Only 6-digit TOTP enrollments are currently supported.");
-        }
-
-        if (!string.Equals(enrollment.Algorithm, "SHA1", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Only SHA1 TOTP enrollments are currently supported.");
-        }
-
-        Span<byte> counterBytes = stackalloc byte[8];
-        BitConverter.TryWriteBytes(counterBytes, timeStep);
-
-        if (BitConverter.IsLittleEndian)
-        {
-            counterBytes.Reverse();
-        }
-
-        using var hmac = new HMACSHA1(enrollment.Secret);
-        var hash = hmac.ComputeHash(counterBytes.ToArray());
-        var offset = hash[^1] & 0x0F;
-        var binaryCode =
-            ((hash[offset] & 0x7F) << 24) |
-            ((hash[offset + 1] & 0xFF) << 16) |
-            ((hash[offset + 2] & 0xFF) << 8) |
-            (hash[offset + 3] & 0xFF);
-
-        var otp = binaryCode % 1_000_000;
-        return otp.ToString("D6");
-    }
-
-    private static long GetTimeStep(DateTimeOffset timestamp, int periodSeconds)
-    {
-        return timestamp.ToUnixTimeSeconds() / periodSeconds;
+        return TotpCodeCalculator.GenerateCode(
+            enrollment.Secret,
+            enrollment.Digits,
+            enrollment.Algorithm,
+            timeStep);
     }
 }

@@ -10,7 +10,8 @@
 - `backend/` — backend scaffold на `.NET`
 - `mobile/` — Android scaffold на `Kotlin`
 - `admin/` — admin scaffold на `React + Vite`
-- `infra/` — инфраструктурный корень
+- `installer-ui/` — отдельный local setup shell на `React + Vite` с loopback-only bridge к installer engine
+- `infra/` — packaging-корень для `on-prem` runtime contour и installer-артефактов
 - `config/mcp/` — локальные примеры MCP-конфигов
 
 ## Важные зоны внутри `OTP/`
@@ -24,6 +25,7 @@
 - `OTP/Security/` — канонические security-ограничения и защитная модель `MVP`
 - `OTP/Data/` — канонические заметки по данным и `ERD`
 - `OTP/Integrations/` — интеграционный слой и `OpenAPI`
+- `OTP/Integrations/TOTP Provisioning Contract.md` — каноническая заметка о contract visibility и семантике `secretUri/qrCodePayload`
 - `OTP/Product/` — продуктовые заметки и мобильный контур
 - `OTP/Delivery/` — план внедрения и коробочная поставка
 - `OTP/2FA/` — исторический набор исходных заметок по теме
@@ -36,14 +38,24 @@
 - `mobile` - Android project
 - `backend/OtpAuth.sln` - основной backend solution entry point
 - `admin/package.json` - admin workspace entry point
-- `infra/` - инфраструктурный корень
+- `mobile/settings.gradle.kts` - Android workspace entry point; объявляет `:app`, `:core:ui`, `:feature:provisioning`, `:feature:totp-codes`, `:security:storage`, `:totp-domain`
+- `installer-ui/package.json` - local installer UI shell entry point
+- `infra/docker-compose.yml` - базовый compose package для `postgres + redis + api + worker + admin` и optional `bootstrap` profile
+- `infra/README.md` - runbook первого packaging slice: env contract, bootstrap happy path и validation команды
+- `infra/scripts/install.ps1` - installer entry point: operation modes `Install|Update|Recover`, preflight, bootstrap orchestration и runtime startup для `Docker Compose`-based on-prem path
+- `infra/scripts/Installer.Contract.ps1` - machine-readable installer engine contract: manifest, validation issues, step results и sanitized JSON-report
+- `infra/scripts/Installer.Diagnostics.ps1` - structured runtime diagnostics для installer: parse `docker compose ps --format json`, sanitized worker heartbeat snapshot и troubleshooting hints
+- `infra/scripts/Installer.Common.ps1` - testable installer helpers: env parsing, config validation, execution plan и preflight checks
+- `OTP/Delivery/Installer Operations Runbook.md` - vault-first operational runbook для `install/update/recover` path и baseline post-start checks
+- `infra/` - packaging-корень для `Dockerfile`, `nginx` config, env examples и installer-следующих шагов
 - `config/mcp/` - локальные примеры MCP-конфигов
 
 Текущее состояние entry points:
 
 - `mobile` - проект создан в Android Studio
 - `backend/OtpAuth.sln` - restore/build проходят
-- `admin/package.json` - install/build проходят
+- `admin/package.json` - install/test/build проходят
+- `installer-ui/package.json` - install/test/build проходят; `npm run test:e2e` гоняет mock bridge browser regression для полного `install/update/recover` happy path
 
 Когда появится больше кода, сюда нужно добавить:
 
@@ -53,17 +65,123 @@
 
 Текущие test entry points:
 
+- `admin/src/shared/problem/problem-messages.test.ts` - unit tests для маппинга backend `ProblemDetails` в operator-friendly messages и action hints
+- `admin/src/shared/api/admin-api.test.ts` - unit tests для hardening frontend API client: `encodeURIComponent` path params и transport-safe admin command calls
+- `admin/src/features/enrollment-workspace/model/provisioning-artifact.test.ts` - unit tests для parsing/discard-логики provisioning artifact без повторного раскрытия secret через read path
+- `admin/src/features/auth/LoginPanel.test.tsx` - component tests для operator login form: bootstrapping state и submit credentials
+- `admin/src/features/auth/useAdminSession.test.tsx` - regression test для session bootstrap: failed `getSession()` не должен запускать бесконечный retry loop после state update
+- `admin/src/features/enrollment-status/EnrollmentStatusCard.test.tsx` - component tests для sanitized current enrollment summary без provisioning artifacts
+- `admin/src/features/enrollment-workspace/EnrollmentPanels.test.tsx` - component tests для `start/confirm/replace/revoke` action panels и safety copy
+- `admin/test-support/totp-code.test.ts` - unit tests для `TOTP` helper-а, который генерирует/валидирует коды для scripted `Playwright` contour
+- `admin/e2e/admin-flow.spec.ts` - checked-in scripted browser regression для operator flow `login -> start -> confirm -> reload/load current -> replace -> confirm -> revoke -> logout`
+- `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpAccountDescriptorTest.kt` - unit tests для account metadata contract, canonical label и базовой validation
+- `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/OtpAuthUriParserTest.kt` - unit tests для `otpauth://` parsing, strict validation, UTF-8 label decoding и redacted credential string representation
+- `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpSecretTest.kt` - unit tests для Base32 normalization, redacted secret handling и fail-closed invalid input path
+- `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpCodeGeneratorTest.kt` - RFC-backed unit tests для `TOTP` generation (`SHA1/SHA256/SHA512`) и countdown/state stability внутри time step
+- `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SecureTotpSecretRecordTest.kt` - unit tests для validation публичных storage value objects и encrypted record contract
+- `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SecureTotpSecretRecordSerializerTest.kt` - unit tests для serialization roundtrip encrypted record и snapshot payload без Android runtime
+- `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SharedPreferencesSecureTotpSecretStoreTest.kt` - unit tests для secure storage engine: save/read/list/delete, hashed storage key и corrupted record fail-closed path
+- `mobile/feature/provisioning/src/test/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraftTest.kt` - unit tests для import draft contract
+- `mobile/feature/provisioning/src/test/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowTest.kt` - unit tests для invalid/valid import path, preview state transitions и confirm/save feedback без Compose runtime guessing
+- `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodeSummaryTest.kt` - unit tests для runtime code summary contract
+- `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesPresenterTest.kt` - unit tests для runtime presenter: sorting saved accounts, code generation handshake и empty-state contract
+- `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRemovalWorkflowTest.kt` - unit tests для local remove confirm-state без Compose/runtime guessing
+- `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/AuthenticatorModuleWiringTest.kt` - unit tests для app-side secure store catalog wiring, fail-closed refresh и safe preview-to-store mapping
+- `infra/tests/packaging.contract.tests.ps1` - automated contract checks для packaging slice: обязательные файлы, compose services, `bootstrap` profile, env contract и `HTTPS` admin edge
+- `infra/tests/installer.common.tests.ps1` - unit-style tests для installer helpers: env parsing, structured config validation, execution plans, worker wait-step, structured diagnostics и secret-safe JSON-report для `install/update/recover`
+- `installer-ui/src/shared/api/installer-api.test.ts` - unit tests для local installer API client: JSON request shape и bridge error surfacing
+- `installer-ui/src/features/installer-shell/InstallerRunForm.test.tsx` - component tests для local setup form: password guardrails, mode guidance и fail-closed submit для live `Install`
+- `installer-ui/src/features/installer-report/InstallerReportView.test.tsx` - component tests для sanitized installer report rendering: validation issues, operational handoff и `Admin UI` link
+- `installer-ui/e2e/installer-shell.spec.ts` - checked-in `Playwright` regression для local shell: mock `install/update/recover` happy path и runtime handoff copy
+- `backend/OtpAuth.Worker.Tests/FileWorkerHeartbeatPublisherTests.cs` - unit tests для worker snapshot publisher: write/replace и options hardening
+- `backend/OtpAuth.Worker.Tests/WorkerDiagnosticsCycleCoordinatorTests.cs` - unit tests для domain-aware worker diagnostics cycle: healthy/degraded snapshot и failure counter
+- `backend/OtpAuth.Worker.Tests/SecurityDataCleanupWorkerJobTests.cs` - unit tests для первого реального background job: sanitized cleanup metrics и interval validation
+- `backend/OtpAuth.Worker.Tests/RedisConnectionTargetTests.cs` - unit tests для safe parsing redis endpoint без утечки secret material
 - `backend/OtpAuth.Infrastructure.Tests` - unit tests для `Policy`, `Challenge` handlers, persistence, bootstrap OAuth, `TOTP` crypto/verifier и `VerifyTotp` runtime protection
-- `backend/OtpAuth.Migrations` - migration runner для `PostgreSQL` (`ensure-database`, `migrate`, `seed-bootstrap-clients`, `seed-bootstrap-totp-enrollment`)
+- `backend/OtpAuth.Infrastructure.Tests/Enrollments/EnrollmentApiTests.cs` - endpoint-level tests для `TOTP` enrollment management через `WebApplicationFactory` и in-memory provisioning store
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminAuthApiTests.cs` - endpoint-level tests для `admin auth contour`: `CSRF`, cookie session, login rate limit, logout и secure cookies
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminLoginHandlerTests.cs` - unit tests для `AdminLoginHandler`, password verification и audit/rate-limit integration
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminCurrentEnrollmentApiTests.cs` - endpoint-level tests для admin current enrollment read model: `401/403/404`, sanitized response и revoke metadata
+- `backend/OtpAuth.Infrastructure.Tests/Administration/GetCurrentTotpEnrollmentForAdminHandlerTests.cs` - unit tests для admin read model mapping и permission boundary
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminApplicationClientResolverTests.cs` - unit tests для fail-closed resolution `applicationClientId` на admin contour
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminEnrollmentCommandApiTests.cs` - endpoint-level tests для admin `start/confirm/replace/revoke`, `401/403/404/409`, `CSRF` и audit writes
+- `backend/OtpAuth.Migrations` - migration runner для `PostgreSQL` (`inspect-signing-key-lifecycle`, `audit-signing-key-lifecycle`, `list-signing-key-lifecycle-audit-events`, `inspect-totp-protection-key-lifecycle`, `audit-totp-protection-key-lifecycle`, `list-totp-protection-key-lifecycle-audit-events`, `list-security-audit-events`, `ensure-database`, `migrate`, `seed-bootstrap-clients`, `seed-bootstrap-totp-enrollment`, `reencrypt-totp-secrets`, `cleanup-security-data`, `rotate-integration-client-secret`, `deactivate-integration-client`, `activate-integration-client`)
 
-Текущие backend entry points по коду:
+Текущие entry points по коду:
 
+- `admin/src/app/App.tsx` - runtime `Admin UI MVP` shell: hero/meta chrome, session-aware routing между `LoginPanel` и enrollment workspace
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/MainActivity.kt` - Android entry point; поднимает только app shell без domain/storage логики
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorApp.kt` - composition root для mobile shell поверх `core:ui` и feature modules
+- `mobile/core/ui/src/main/java/ru/dt1520/security/authenticator/core/ui/AppSection.kt` - базовый UI container для feature placeholders и следующих mobile screens
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningRoute.kt` - provisioning shell: masked URI/manual inputs, preview/confirm/save orchestration и secure-save callback boundary
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraft.kt` - pure input model для `otpauth://` import и manual fallback, без прямой зависимости от storage
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowState.kt` - pure workflow state/reducer для preview/save feedback и invalid/valid import path
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningImportPreview.kt` - preview contract между provisioning feature и app wiring без раскрытия secret material в UI copy
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorSecretCatalog.kt` - app-side helpers для fail-closed refresh secure store snapshot-а и safe mapping preview -> stored secret без удержания provisioning preview после save
+- `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRoute.kt` - runtime offline codes screen: account cards, current code, countdown и explicit remove confirm flow
+- `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesPresenter.kt` - pure presenter для runtime screen поверх `TotpCredential` и текущего epoch time
+- `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRemovalWorkflow.kt` - pure remove-state workflow для двухшагового local delete UX
+- `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesUiState.kt` - UI contract для empty/runtime state offline codes screen
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/SecureTotpSecretStore.kt` - публичный storage contract для `TOTP` secret lifecycle: `list/read/save/delete`, encrypted record metadata и fail-closed storage exception
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/AndroidKeystoreSecureTotpSecretStore.kt` - Android entry point для `SharedPreferences + Android Keystore AES/GCM`
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/SharedPreferencesSecureTotpSecretStore.kt` - testable storage engine: snapshot serialization, encrypted record restore и hashed storage keys
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/TotpSecretCipher.kt` - cipher boundary и Android `Keystore` implementation для encrypt/decrypt `TOTP` payload
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/TotpSecretPersistence.kt` - internal persistence helpers: snapshot serializer теперь также хранит `digits + algorithm`, record serializer, `SharedPreferences` adapter и storage key factory
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpAccountDescriptor.kt` - account metadata contract с canonical label для provisioning/runtime surfaces
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/OtpAuthUriParser.kt` - pure Kotlin parser для `otpauth://totp/...` с strict validation и fail-closed duplicate param handling
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpCredential.kt` - secret-bearing domain aggregate с redacted `toString`, digits validation и algorithm binding
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpSecret.kt` - Base32 secret value object с normalization, decode и redacted representation
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpAlgorithm.kt` - behavior-based hash algorithm type для `SHA1/SHA256/SHA512` без enum-centric branching
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpCodeGenerator.kt` - RFC-backed HOTP/TOTP calculator с precomputed modulus path и countdown window derivation
+- `mobile/totp-domain/src/main/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpCodeState.kt` - runtime-safe countdown/state model для offline code screen
+- `installer-ui/src/app/App.tsx` - local installer UI shell: setup plane hero/meta chrome, form/report layout и notice routing без runtime `admin/`
+- `installer-ui/src/features/installer-shell/model/useInstallerShell.ts` - orchestration state для loopback shell: bootstrapping `shell-info`, submit в local bridge, password clearing и outcome notices
+- `installer-ui/src/features/installer-shell/InstallerRunForm.tsx` - operator form для `Install|Update|Recover` с mode-aware guidance, bootstrap password semantics, engine flags и client-side guardrails
+- `installer-ui/src/features/installer-report/InstallerReportView.tsx` - рендер sanitized engine report: validation issues, operational closure/handoff, step results, runtime services и worker diagnostics
+- `installer-ui/src/shared/api/installer-api.ts` - frontend client для `/api/shell-info` и `/api/run`
+- `installer-ui/server/installer-bridge.mjs` - loopback-only Node bridge: mock/live modes, process-level handoff `OTPAUTH_ADMIN_PASSWORD` и запуск `infra/scripts/install.ps1`
+- `installer-ui/server/dev-server.mjs` - локальный dev entry point, который поднимает bridge и `Vite` shell вместе
+- `admin/src/features/auth/useAdminSession.ts` - browser session bootstrap для cookie-backed `admin auth contour`, login/logout, error handling и single-attempt bootstrap без retry loop на failed session restore
+- `admin/src/features/auth/LoginPanel.tsx` - operator login form для `POST /api/v1/admin/auth/login`
+- `admin/src/features/enrollment-workspace/EnrollmentWorkspace.tsx` - основной runtime workspace для lookup/read/status и operator actions
+- `admin/src/features/enrollment-workspace/model/useEnrollmentWorkspace.ts` - orchestration state machine для `lookup/start/confirm/replace/revoke` и discard semantics provisioning artifact
+- `admin/src/shared/api/admin-api.ts` - frontend client для `/api/v1/admin/*` с `credentials: include`, CSRF bootstrap и typed request/response contracts
+- `admin/src/shared/problem/problem-messages.ts` - stable mapping backend `ProblemDetails` в UI copy для `401/403/404/409/422`
+- `admin/vite.config.ts` - `Vite` dev server на `127.0.0.1:4173` с proxy `/api -> http://127.0.0.1:5112`
+- `admin/src/test/setup.ts` - `Vitest` cleanup setup для `jsdom`-based component tests
+- `backend/OtpAuth.Api/Endpoints/AdminAuthEndpoints.cs` - `GET /api/v1/admin/auth/csrf-token`, `POST /api/v1/admin/auth/login`, `POST /api/v1/admin/auth/logout`, `GET /api/v1/admin/auth/session`
+- `backend/OtpAuth.Api/Endpoints/AdminEnrollmentReadEndpoints.cs` - `GET /api/v1/admin/tenants/{tenantId}/users/{externalUserId}/enrollments/totp/current`
+- `backend/OtpAuth.Api/Endpoints/AdminEnrollmentCommandEndpoints.cs` - `POST /api/v1/admin/enrollments/totp`, `POST /api/v1/admin/enrollments/totp/{enrollmentId}/confirm|replace|revoke`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - `POST /oauth2/token` для bootstrap `client_credentials`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`
 - `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` - `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}` и `POST /api/v1/challenges/{id}/verify-totp`
+- `backend/OtpAuth.Api/Endpoints/EnrollmentsEndpoints.cs` - `GET /api/v1/enrollments/totp/{id}`, `POST /api/v1/enrollments/totp`, `POST /api/v1/enrollments/totp/{id}/confirm`, `POST /api/v1/enrollments/totp/{id}/replace` и `POST /api/v1/enrollments/totp/{id}/revoke`
+- `backend/OtpAuth.Api/Authentication/AdminContextHttpContextExtensions.cs` - сбор `AdminContext` из cookie-backed session claims
+- `backend/OtpAuth.Application/Administration/AdminLoginHandler.cs` - application use case для operator login с rate limit и audit hooks
+- `backend/OtpAuth.Application/Administration/AdminContext.cs` - admin permission boundary для human operator flows
+- `backend/OtpAuth.Application/Administration/AdminApplicationClientResolver.cs` - fail-closed resolver для `applicationClientId`: явный client или auto-resolve только при единственном активном tenant client-е
+- `backend/OtpAuth.Application/Administration/AdminStartTotpEnrollmentHandler.cs` - admin `start` use case без `IntegrationClientContext`, с `Policy`, application client resolution и dual audit
+- `backend/OtpAuth.Application/Administration/AdminConfirmTotpEnrollmentHandler.cs` - admin `confirm` use case с by-id admin lookup, brute-force protection и audit привязкой к `adminUserId`
+- `backend/OtpAuth.Application/Administration/AdminReplaceTotpEnrollmentHandler.cs` - admin `replace` use case для replacement artifact без integration auth boundary
+- `backend/OtpAuth.Application/Administration/AdminRevokeTotpEnrollmentHandler.cs` - admin `revoke` use case с отдельным operator audit contour
+- `backend/OtpAuth.Application/Enrollments/GetCurrentTotpEnrollmentForAdminHandler.cs` - admin read use case для current `TOTP` enrollment summary по `tenantId + externalUserId`
+- `backend/OtpAuth.Infrastructure/Administration/PostgresAdminUserStore.cs` - `PostgreSQL`-backed bootstrap store для admin users и permissions
+- `backend/OtpAuth.Infrastructure/Administration/PostgresAdminUserBootstrapStore.cs` - operational read/write store для bootstrap admin users в `dt-auth` без выдачи password hashes наружу
+- `backend/OtpAuth.Infrastructure/Administration/AdminUserBootstrapMaterialFactory.cs` - fail-closed factory для bootstrap admin credential material: password только из env, PBKDF2 hash, permissions только из whitelist
+- `backend/OtpAuth.Infrastructure/Administration/Pbkdf2AdminPasswordHasher.cs` - strong password hashing для admin credentials
+- `backend/OtpAuth.Infrastructure/Administration/InMemoryAdminLoginRateLimiter.cs` - login brute-force guard для bootstrap admin auth contour
+- `backend/OtpAuth.Infrastructure/Administration/AdminSecurityAuditWriter.cs` - sanitized append-only audit writer для `admin_auth.login_*` и logout событий
+- `backend/OtpAuth.Infrastructure/Administration/AdminTotpEnrollmentAuditWriter.cs` - sanitized append-only audit writer для `admin_totp_enrollment.*` с `adminUserId`
+- `backend/OtpAuth.Infrastructure.Tests/Enrollments/EnrollmentApiTestFactory.cs` - API test host с test-auth, in-memory enrollment provisioning store и endpoint hardening harness
+- `backend/OtpAuth.Infrastructure.Tests/Enrollments/InMemoryEnrollmentApiStore.cs` - mutable test double для start/read/confirm/replace/revoke lifecycle внутри endpoint-level tests
 - `backend/OtpAuth.Application/Challenges/CreateChallengeHandler.cs` - create use case с вызовом `Policy`
 - `backend/OtpAuth.Application/Challenges/GetChallengeHandler.cs` - read use case для retrieval по `challengeId`
 - `backend/OtpAuth.Application/Challenges/VerifyTotpHandler.cs` - verify use case с переводом `Challenge` в `approved`, `failed` или `expired`
+- `backend/OtpAuth.Application/Enrollments/StartTotpEnrollmentHandler.cs` - start use case для admin/trusted-integration `TOTP` enrollment с `Policy`, provisioning artifact и audit
+- `backend/OtpAuth.Application/Enrollments/GetTotpEnrollmentHandler.cs` - scoped read use case для enrollment status без повторной выдачи provisioning artifacts
+- `backend/OtpAuth.Application/Enrollments/ConfirmTotpEnrollmentHandler.cs` - confirm use case для `TOTP` enrollment с brute-force protection по persisted attempt counter
+- `backend/OtpAuth.Application/Enrollments/ReplaceTotpEnrollmentHandler.cs` - safe replace flow для `TOTP` enrollment без потери текущего активного фактора до успешного confirm
+- `backend/OtpAuth.Application/Enrollments/RevokeTotpEnrollmentHandler.cs` - destructive operator flow для revoke активного `TOTP` enrollment
 - `backend/OtpAuth.Application/Challenges/IChallengeAttemptRecorder.cs` - append-only порт для фиксации verify-attempts
 - `backend/OtpAuth.Application/Integrations/*` - integration client contracts, token issuance, scopes и client context
 - `backend/OtpAuth.Application/Integrations/*` - integration client credential validation, token issuance, introspection, revocation и runtime validation contracts
@@ -71,23 +189,68 @@
 - `backend/OtpAuth.Infrastructure/Challenges/ChallengeDataMapper.cs` - `Mapperly` mapping для `Challenge` persistence model
 - `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeAttemptRecorder.cs` - append-only запись verify-attempts в `PostgreSQL`
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentStore.cs` - загрузка активного `TOTP` enrollment из `PostgreSQL`
+- `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentProvisioningStore.cs` - start/confirm lifecycle для pending/confirmed `TOTP` enrollment и persisted confirm-attempt counter
+- `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentProvisioningStore.cs` - start/read/confirm/replace/revoke lifecycle для `TOTP` enrollment, включая admin lookup по `tenantId + externalUserId` и by-id admin lookup
 - `backend/OtpAuth.Infrastructure/Factors/TotpSecretProtector.cs` - rotation-ready key ring для `TOTP`: current + legacy keys по `key version`
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpVerifier.cs` - enrollment-backed `TOTP` verification
+- `backend/OtpAuth.Infrastructure/Factors/TotpEnrollmentAuditWriter.cs` - sanitized enrollment lifecycle audit events в unified append-only trail
+- `backend/OtpAuth.Infrastructure/Factors/TotpEnrollmentAuditWriter.cs` - sanitized enrollment lifecycle audit events, включая revoke и replace
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpReplayProtector.cs` - persistent anti-replay reservation для использованных `TOTP` time step
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpVerificationRateLimiter.cs` - runtime rate limiting для `VerifyTotp` на основе `challenge_attempts`
 - `backend/OtpAuth.Infrastructure/Factors/TotpSecretsReEncryptionService.cs` - maintenance workflow для re-encryption `TOTP` secrets на current `key version`
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentMaintenanceStore.cs` - пакетная загрузка и обновление encrypted `TOTP` enrollment-ов для maintenance-операций
+- `backend/OtpAuth.Infrastructure/Factors/TotpProtectionKeyLifecycleReportFactory.cs` - sanitized report factory для audit/reporting по `TOTP` protection key lifecycle
+- `backend/OtpAuth.Infrastructure/Factors/TotpProtectionKeyLifecycleAuditService.cs` - запись и чтение append-only audit snapshots по `TOTP` protection key lifecycle
+- `backend/OtpAuth.Infrastructure/Security/SecurityAuditService.cs` - generic append-only security audit service для signing/`TOTP`/integration lifecycle событий
+- `backend/OtpAuth.Infrastructure/Security/PostgresSecurityAuditStore.cs` - `PostgreSQL`-backed store для `auth.security_audit_events`
 - `backend/OtpAuth.Infrastructure/Integrations/PostgresIntegrationClientStore.cs` - `PostgreSQL`-backed registry интеграционных клиентов для OAuth
+- `backend/OtpAuth.Infrastructure/Integrations/PostgresIntegrationClientLifecycleStore.cs` - lifecycle store для rotate/deactivate/reactivate integration clients
+- `backend/OtpAuth.Infrastructure/Integrations/IntegrationClientLifecycleAuditFactory.cs` - sanitized audit entries для integration client lifecycle без secret material
 - `backend/OtpAuth.Infrastructure/Integrations/PostgresRevokedIntegrationAccessTokenStore.cs` - persistent revoked-token store для integration access tokens
 - `backend/OtpAuth.Infrastructure/Integrations/IntegrationAccessTokenRuntimeValidator.cs` - runtime enforcement revoked/inactive integration tokens
+- `backend/OtpAuth.Application/Integrations/IntegrationClientLifecycleService.cs` - application service для operational rotation и activation lifecycle integration clients
+- `backend/OtpAuth.Worker/Worker.cs` - background worker loop с periodic diagnostics cycle и publish execution snapshot для compose/runtime diagnostics
+- `backend/OtpAuth.Worker/WorkerDiagnosticsCycleCoordinator.cs` - coordinator для dependency probes, scheduled worker jobs, execution outcome и failure counter
+- `backend/OtpAuth.Worker/PostgresWorkerDependencyProbe.cs` - sanitized dependency probe для `Postgres`
+- `backend/OtpAuth.Worker/RedisWorkerDependencyProbe.cs` - sanitized dependency probe для `Redis`
+- `backend/OtpAuth.Worker/FileWorkerHeartbeatPublisher.cs` - atomic write publisher для sanitized worker execution snapshot
+- `backend/OtpAuth.Worker/WorkerDiagnosticsOptions.cs` - config contract для heartbeat path, interval и dependency probe timeout
+- `backend/OtpAuth.Worker/IWorkerJob.cs` - общий контракт для scheduled background jobs с job-level diagnostics
+- `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJob.cs` - первый реальный background job worker-а для cleanup expired security data
+- `backend/OtpAuth.Worker/PostgresSecurityDataCleanupRunner.cs` - isolated runner для cleanup use case без падения worker startup на отсутствующей DB-конфигурации
+- `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJobOptions.cs` - config contract для scheduling job-а `security_data_cleanup`
+- `backend/OtpAuth.Infrastructure/Integrations/BootstrapSigningKeyRing.cs` - lifecycle-aware signing key ring для current/legacy keys с `RetireAtUtc` и fail-closed `kid` resolution
+- `backend/OtpAuth.Infrastructure/Integrations/BootstrapSigningKeyLifecycleReportFactory.cs` - sanitized report factory для signing key lifecycle inspection/audit
+- `backend/OtpAuth.Infrastructure/Integrations/SigningKeyLifecycleAuditService.cs` - запись и чтение append-only audit snapshots по signing key lifecycle
 - `backend/OtpAuth.Infrastructure/Integrations/PostgresIntegrationClientSeeder.cs` - explicit bootstrap seed для integration clients
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentSeeder.cs` - explicit bootstrap seed для `TOTP` enrollment
 - `backend/OtpAuth.Infrastructure/Integrations/JwtIntegrationAccessTokenIssuer.cs` - JWT issuance/introspection с `kid` и validation по current + legacy signing keys
 - `backend/OtpAuth.Api/Authentication/IntegrationClientContextHttpContextExtensions.cs` - сбор integration client context из JWT claims
 - `backend/scripts/initialize-postgres.ps1` - bootstrap скрипт для `ensure-database + migrate + optional seed`
 - `backend/scripts/maintain-security-data.ps1` - maintenance-скрипт для `TOTP` re-encryption и cleanup security-данных
+- `backend/scripts/manage-integration-client.ps1` - operational script для rotate secret и deactivate/reactivate integration clients
+- `backend/scripts/inspect-signing-key-lifecycle.ps1` - operational script для inspection rollout/retirement status signing key ring
+- `backend/scripts/audit-signing-key-lifecycle.ps1` - operational script для записи audit snapshot-а и чтения последних signing key audit events
+- `backend/scripts/inspect-totp-protection-key-lifecycle.ps1` - operational script для inspection `TOTP` protection key lifecycle against database usage
+- `backend/scripts/audit-totp-protection-key-lifecycle.ps1` - operational script для записи audit snapshot-а и чтения последних `TOTP` protection key audit events
+- `infra/docker/api.Dockerfile` - production image для `OtpAuth.Api` с non-root `aspnet` runtime и внутренним `8080`
+- `infra/docker/worker.Dockerfile` - production image для `OtpAuth.Worker`
+- `infra/docker/bootstrap.Dockerfile` - one-shot bootstrap image поверх `OtpAuth.Migrations`
+- `infra/docker/admin.Dockerfile` - production image для `Admin UI` на `nginx-unprivileged`
+- `infra/nginx/admin.conf` - `HTTPS` edge и reverse proxy `/api/*`, `/oauth2/*` на внутренний `api`
+- `infra/env/runtime.env.example` - пример runtime/install env contract вне репозитория
+- `infra/scripts/install.ps1` - поддерживает `-Mode Install|Update|Recover`, `-PreflightOnly`, `-DryRun`, `-SkipImageBuild`, `-SkipBootstrap`, `-SkipBootstrapAdmin` и `-ReportJsonPath`; runtime report теперь включает structured service status, worker heartbeat diagnostics и troubleshooting hints
 - `backend/OtpAuth.Migrations/Migrations/202604140004_CreateTotpUsedTimeSteps.cs` - схема anti-replay reservation для `TOTP`
 - `backend/OtpAuth.Migrations/Migrations/202604140005_CreateRevokedIntegrationAccessTokens.cs` - схема revoked integration access token store
+- `backend/OtpAuth.Migrations/Migrations/202604140006_AddIntegrationClientAuthStateTracking.cs` - схема persisted auth state для invalidation issued JWT после client lifecycle событий
+- `backend/OtpAuth.Migrations/Migrations/202604140007_CreateSigningKeyAuditEvents.cs` - append-only audit trail для sanitized signing key lifecycle snapshots
+- `backend/OtpAuth.Migrations/Migrations/202604140008_CreateTotpProtectionKeyAuditEvents.cs` - append-only audit trail для sanitized `TOTP` protection key lifecycle snapshots
+- `backend/OtpAuth.Migrations/Migrations/202604150001_CreateSecurityAuditEvents.cs` - unified append-only security audit trail с backfill legacy signing/`TOTP` lifecycle snapshots
+- `backend/OtpAuth.Migrations/Migrations/202604150002_AddTotpEnrollmentConfirmationAttemptTracking.cs` - persisted brute-force protection для `TOTP` enrollment confirmation
+- `backend/OtpAuth.Migrations/Migrations/202604150003_AddTotpEnrollmentReplacementColumns.cs` - pending replacement state для safe `TOTP` enrollment replace и отдельный replacement attempt counter
+- `backend/OtpAuth.Migrations/Migrations/202604150004_CreateAdminUsers.cs` - bootstrap schema для `auth.admin_users` и `auth.admin_user_permissions`
+- `backend/OtpAuth.Migrations/Migrations/202604150005_AddTotpEnrollmentRevokedAt.cs` - явный `revoked_utc` для operator/admin read model
+- `backend/OtpAuth.Migrations/Program.cs` - migration runner и operational commands: security audit, bootstrap clients, `list-admin-users`, `upsert-admin-user`
 - `backend/OtpAuth.Infrastructure/Persistence/SecurityDataCleanupService.cs` - retention cleanup для `challenge_attempts`, `totp_used_time_steps` и `revoked_integration_access_tokens`
 
 ## Последнее обновление
@@ -107,3 +270,34 @@
 - `2026-04-14`: карта дополнена bootstrap OAuth introspection/revocation, runtime revoked-token validation и migration для `revoked_integration_access_tokens`
 - `2026-04-14`: карта дополнена rotation-ready key rings для `TOTP` и bootstrap OAuth signing keys
 - `2026-04-14`: карта дополнена maintenance workflow для `TOTP` re-encryption и cleanup/retention security-данных
+- `2026-04-14`: карта дополнена operational integration client lifecycle, persisted auth state tracking и script для rotate/deactivate/reactivate
+- `2026-04-14`: карта дополнена config-driven signing key lifecycle, inspection command/script и `RetireAtUtc` для legacy signing keys
+- `2026-04-14`: карта дополнена append-only signing key audit snapshots, reporting command и `auth.signing_key_audit_events`
+- `2026-04-14`: карта дополнена append-only `TOTP` protection key audit snapshots, reporting commands и `auth.totp_protection_key_audit_events`
+- `2026-04-15`: карта дополнена unified `auth.security_audit_events`, generic security audit service и reporting для signing/`TOTP`/integration lifecycle
+- `2026-04-15`: карта дополнена `TOTP` enrollment API, provisioning store, enrollment lifecycle audit writer и persisted confirm-attempt tracking
+- `2026-04-15`: карта дополнена read path для `TOTP` enrollment status и первым шагом iterative enrollment management roadmap
+- `2026-04-15`: карта дополнена destructive revoke flow для `TOTP` enrollment и второй итерацией enrollment management roadmap
+- `2026-04-15`: карта дополнена safe replace flow для `TOTP` enrollment, pending replacement state и третьей итерацией enrollment management roadmap
+- `2026-04-15`: карта дополнена endpoint-level hardening harness для `TOTP` enrollment API и четвертой итерацией enrollment management roadmap
+- `2026-04-15`: карта дополнена admin auth foundation: cookie session endpoints, `CSRF`, login rate limit, admin security audit writer, `auth.admin_users` schema и dedicated administration tests
+- `2026-04-15`: карта дополнена admin current enrollment read model: dedicated endpoint, application handler, sanitized admin response, `revoked_utc` migration и administration tests
+- `2026-04-15`: карта дополнена frontend `Admin UI MVP` shell: `app` shell, auth/session bootstrap, enrollment workspace, typed admin API client, unit tests и `Vite` proxy на backend runtime
+- `2026-04-15`: карта дополнена `jsdom`/Testing Library component tests для `LoginPanel`, `EnrollmentStatusCard` и operator action panels; `admin` test contour теперь покрывает helper-, API- и component-level scenarios
+- `2026-04-15`: карта дополнена operational admin bootstrap path (`list-admin-users`, `upsert-admin-user`) и live `Playwright MCP` verification против реального `OtpAuth.Api`/`dt-auth` для flow `login -> start -> confirm -> replace -> confirm -> revoke -> load current`
+- `2026-04-15`: карта дополнена checked-in `Playwright` regression contour в `admin/e2e` и `TOTP` test helper-ом в `admin/test-support`, чтобы browser flow воспроизводимо прогонялся без внешних секретов
+- `2026-04-15`: карта дополнена первым packaging slice в `infra/`: compose runtime contour, `Dockerfile` для `api/worker/admin/bootstrap`, `HTTPS` admin edge, env contract example и packaging contract checks
+- `2026-04-15`: карта дополнена первым installer slice в `infra/scripts`: installer entry point, preflight helpers и unit-style tests для install plan/config validation
+- `2026-04-15`: карта дополнена operation modes `Install|Update|Recover`, baseline runtime status report и vault-first runbook `Installer Operations Runbook`
+- `2026-04-15`: карта дополнена worker execution snapshot diagnostics, dependency probes `Postgres/Redis`, compose healthcheck и расширенным test project `OtpAuth.Worker.Tests`
+- `2026-04-15`: карта дополнена job-level worker diagnostics: `jobStatuses` в heartbeat, generic `IWorkerJob` contract и первым real background job `security_data_cleanup`
+- `2026-04-15`: карта дополнена `Iteration 1` installer hardening: `Installer.Contract.ps1`, structured validation issues, stable step ids/results и sanitized JSON-report для будущего local setup UI
+- `2026-04-15`: карта дополнена `Iteration 2` installer hardening: `Installer.Diagnostics.ps1`, worker `--wait` startup, structured runtime status, sanitized worker heartbeat diagnostics и troubleshooting hints для degraded runtime
+- `2026-04-15`: карта дополнена `Iteration 3` installer UI shell: новый root `installer-ui`, loopback-only bridge к `install.ps1`, typed React/Vite shell, unit tests и checked-in `Playwright` regression на mock bridge
+- `2026-04-15`: карта дополнена `Iteration 4` installer UI completion: mode-aware guardrails, handoff в runtime `Admin UI`, report-level operational closure и расширенный `Playwright` contour для `install/update/recover`
+- `2026-04-15`: карта дополнена `Android TOTP-first` checkpoint note и первым clean module layout для `mobile/`
+- `2026-04-15`: карта дополнена `Step 3` mobile-трека: `security:storage` теперь имеет `Keystore`-backed store, testable persistence helpers и unit tests на validation/restore/error paths
+- `2026-04-17`: карта дополнена `Step 4` mobile-трека: `totp-domain` теперь содержит provisioning parser, redacted secret-bearing types, RFC-backed code generator, countdown model и dedicated unit tests
+- `2026-04-17`: карта дополнена `Step 5` mobile-трека: `feature:provisioning` теперь имеет masked URI/manual import flow, preview/save reducer, secure-save callback boundary и unit tests; `app` wired к `AndroidKeystoreSecureTotpSecretStore`
+- `2026-04-17`: карта дополнена `Step 6` mobile-трека: `feature:totp-codes` теперь содержит runtime presenter/remove workflow, `AuthenticatorApp` обновляет secure store snapshot без удержания preview credential, а live verification подтверждена на `emulator-5554`
+- `2026-04-17`: карта дополнена `Step 7` mobile-трека: добавлена каноническая заметка `OTP/Integrations/TOTP Provisioning Contract.md`, `OpenAPI` теперь явно помечает `secretUri/qrCodePayload` как artifact-only поля, а следующий mobile focus смещен на `Compose` UI/instrumented tests для provisioning/runtime screens

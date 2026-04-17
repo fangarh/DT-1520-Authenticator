@@ -1,0 +1,185 @@
+.emptyState {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.emptyState p,
+.muted {
+  color: rgba(247, 231, 220, 0.72);
+  line-height: 1.5;
+}
+
+.summaryGrid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1.25rem;
+}
+
+.summaryCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(247, 231, 220, 0.08);
+  border-radius: 20px;
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem 1.1rem;
+}
+
+.summaryCard span {
+  color: rgba(247, 231, 220, 0.66);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryCard strong {
+  font-size: 1.3rem;
+}
+
+.summaryCard small {
+  color: rgba(247, 231, 220, 0.72);
+}
+
+.section {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.sectionHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+}
+
+.sectionHeader span {
+  color: rgba(247, 231, 220, 0.66);
+}
+
+.simpleList,
+.publisherList {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.stepList,
+.hintList,
+.serviceGrid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.serviceGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stepCard,
+.serviceCard,
+.workerCard,
+.hintCard,
+.handoffCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(247, 231, 220, 0.08);
+  border-radius: 20px;
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+}
+
+.stepMeta {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.stepMessage {
+  margin: 0;
+}
+
+.inlineFacts {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.inlineFacts dt {
+  color: rgba(247, 231, 220, 0.66);
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+}
+
+.inlineFacts dd {
+  margin: 0;
+}
+
+.commandPreview,
+.outputBlock {
+  background: rgba(8, 13, 15, 0.82);
+  border-radius: 16px;
+  display: block;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  font-size: 0.82rem;
+  overflow-x: auto;
+  padding: 0.8rem 0.9rem;
+}
+
+.outputBlock {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.workerColumns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workerColumns h4 {
+  margin: 0 0 0.5rem;
+}
+
+.handoffGrid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.handoffLink {
+  align-items: center;
+  background: rgba(111, 191, 145, 0.16);
+  border: 1px solid rgba(111, 191, 145, 0.28);
+  border-radius: 999px;
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 2.9rem;
+  padding: 0 1.1rem;
+  text-decoration: none;
+}
+
+.nextStepList {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+@media (max-width: 960px) {
+  .summaryGrid,
+  .handoffGrid,
+  .serviceGrid,
+  .inlineFacts,
+  .workerColumns {
+    grid-template-columns: 1fr;
+  }
+}

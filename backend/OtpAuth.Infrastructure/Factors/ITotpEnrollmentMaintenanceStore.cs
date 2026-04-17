@@ -7,6 +7,9 @@ public interface ITotpEnrollmentMaintenanceStore
         int batchSize,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyCollection<TotpEnrollmentKeyVersionUsage>> GetKeyVersionUsageAsync(
+        CancellationToken cancellationToken);
+
     Task<bool> UpdateProtectedSecretAsync(
         Guid enrollmentId,
         int expectedKeyVersion,

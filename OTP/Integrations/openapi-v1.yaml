@@ -369,6 +369,36 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/enrollments/totp/{enrollmentId}:
+    get:
+      tags: [Enrollments]
+      summary: Get TOTP enrollment status
+      operationId: getTotpEnrollment
+      security:
+        - IntegrationOAuth2:
+            - enrollments:write
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentId'
+      responses:
+        '200':
+          description: Enrollment state
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollment'
+              examples:
+                confirmed:
+                  value:
+                    enrollmentId: "a75bf0b8-3a40-418e-a336-0cb7b18ff22a"
+                    status: confirmed
+                    hasPendingReplacement: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/enrollments/totp/{enrollmentId}/confirm:
     post:
       tags: [Enrollments]
@@ -397,6 +427,72 @@ paths:
                 $ref: '#/components/schemas/TotpEnrollment'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/enrollments/totp/{enrollmentId}/replace:
+    post:
+      tags: [Enrollments]
+      summary: Start safe TOTP enrollment replacement
+      operationId: replaceTotpEnrollment
+      security:
+        - IntegrationOAuth2:
+            - enrollments:write
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentId'
+      responses:
+        '200':
+          description: Replacement started
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollment'
+              examples:
+                replacementPending:
+                  value:
+                    enrollmentId: "a75bf0b8-3a40-418e-a336-0cb7b18ff22a"
+                    status: confirmed
+                    hasPendingReplacement: true
+                    secretUri: "otpauth://totp/OTPAuth:ivan.petrov?secret=BASE32SECRET&issuer=OTPAuth"
+                    qrCodePayload: "otpauth://totp/OTPAuth:ivan.petrov?secret=BASE32SECRET&issuer=OTPAuth"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/enrollments/totp/{enrollmentId}/revoke:
+    post:
+      tags: [Enrollments]
+      summary: Revoke TOTP enrollment
+      operationId: revokeTotpEnrollment
+      security:
+        - IntegrationOAuth2:
+            - enrollments:write
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentId'
+      responses:
+        '200':
+          description: Enrollment revoked
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrollment'
+              examples:
+                revoked:
+                  value:
+                    enrollmentId: "a75bf0b8-3a40-418e-a336-0cb7b18ff22a"
+                    status: revoked
+                    hasPendingReplacement: false
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -863,7 +959,7 @@ components:
       properties:
         code:
           type: string
-          pattern: '^[0-9]{6,8}$'
+          pattern: '^[0-9]{6}$'
     ApproveChallengeRequest:
       type: object
       required: [deviceId]
@@ -909,20 +1005,24 @@ components:
       properties:
         code:
           type: string
-          pattern: '^[0-9]{6,8}$'
+          pattern: '^[0-9]{6}$'
     TotpEnrollment:
       type: object
-      required: [enrollmentId, status]
+      required: [enrollmentId, status, hasPendingReplacement]
       properties:
         enrollmentId:
           type: string
           format: uuid
         status:
           $ref: '#/components/schemas/EnrollmentStatus'
+        hasPendingReplacement:
+          type: boolean
         secretUri:
           type: string
+          description: Present only in start/replace responses that return one-time provisioning material.
         qrCodePayload:
           type: string
+          description: Present only in start/replace responses; currently equals secretUri and is intended for QR generation.
     ActivateDeviceRequest:
       type: object
       required: [tenantId, externalUserId, platform, activationCode]

@@ -17,6 +17,18 @@ Scope-ы текущего draft:
 - `enrollments:write`
 - `devices:write`
 
+## Admin/operator auth
+
+`Admin UI` не использует integration `OAuth 2.0 client_credentials`.
+
+Для browser-based operator surface принимается отдельный `admin auth contour` с отдельной session model и role/permission boundary.
+
+Причины:
+
+- human operator и integration client имеют разную модель доверия
+- browser UI не должен получать `client_secret`
+- admin actions должны аудироваться и авторизоваться отдельно от machine-to-machine flows
+
 ## Текущий bootstrap implementation status
 
 В коде backend уже есть рабочий bootstrap `client_credentials` flow:
@@ -32,7 +44,7 @@ Scope-ы текущего draft:
 - на рабочем сервере `dt-auth` bootstrap token issuance уже проверен end-to-end через `/oauth2/token`
 - flow `CreateChallenge -> GetChallenge -> VerifyTotp` уже проверен end-to-end через тот же bootstrap auth слой и реальный `PostgreSQL`
 
-Это все еще bootstrap-уровень, потому что revocation, introspection, secret rotation workflow и production token lifecycle пока не реализованы как полноценный auth subsystem.
+Это все еще bootstrap-уровень, потому что production token lifecycle, signing key lifecycle и полноценный management API пока не реализованы как завершенный auth subsystem.
 
 ## Текущий bootstrap auth subsystem
 
@@ -43,13 +55,27 @@ Scope-ы текущего draft:
 - persistent store `auth.revoked_integration_access_tokens`
 - runtime-проверка revoked token на входе через `JwtBearer` validation events
 - JWT access token выпускается с `kid`, а validation идет по current + legacy signing keys
+- legacy signing key может получить `RetireAtUtc`; после этой точки runtime/introspection больше не принимают токены с retired `kid`
+- JWT access token выпускается с `iat`, а runtime/introspection сверяют его с persisted `last_auth_state_changed_utc` integration client-а
+- operational commands для integration client lifecycle:
+  - `rotate-integration-client-secret <client-id>`
+  - `deactivate-integration-client <client-id>`
+  - `activate-integration-client <client-id>`
+- operational inspection для signing key lifecycle:
+  - `inspect-signing-key-lifecycle`
+- operational audit/reporting для signing key lifecycle:
+  - `audit-signing-key-lifecycle`
+  - `list-signing-key-lifecycle-audit-events [limit]`
 
 Security behavior:
 
 - introspection и revoke требуют `client_id + client_secret`
 - чужой токен не раскрывается: introspection возвращает `active=false`, revoke делает no-op
 - revoked token перестает проходить на защищенные endpoint-ы
-- bootstrap flow по-прежнему не заменяет полноценный auth subsystem: нет refresh token model, нет signing key rotation UI/API, нет token introspection caching, нет management API для client lifecycle
+- rotate/deactivate/reactivate integration client инвалидируют уже выданные JWT через persisted `client auth state`
+- signing key rollout выполняется через смену current key, а старый key переводится в legacy с `RetireAtUtc = rollout time + token lifetime + clock skew`
+- audit snapshot signing key lifecycle пишется append-only в `auth.signing_key_audit_events` и содержит только sanitized metadata без signing material
+- bootstrap flow по-прежнему не заменяет полноценный auth subsystem: нет refresh token model, нет signing key rotation UI/API, нет token introspection caching, нет admin/API management surface для client lifecycle и нет общего audit contour для остальных security-событий
 
 ## Mobile device tokens
 
@@ -64,6 +90,7 @@ Security behavior:
 - интеграционный клиент и мобильное устройство имеют разную модель доверия
 - для внешних систем удобнее и понятнее `OAuth 2.0 client credentials`
 - для устройства нужен lifecycle, завязанный на `Device Registry`
+- для `Admin UI` нужен отдельный human-operator auth contour, а не reuse integration auth
 
 ## Callback and webhook model
 

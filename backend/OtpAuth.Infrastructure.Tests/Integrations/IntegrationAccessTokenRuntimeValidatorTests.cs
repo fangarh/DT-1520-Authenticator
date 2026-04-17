@@ -47,6 +47,7 @@ public sealed class IntegrationAccessTokenRuntimeValidatorTests
             new Claim("tenant_id", Guid.NewGuid().ToString()),
             new Claim("application_client_id", client.ApplicationClientId.ToString()),
             new Claim("jti", "jwt-1"),
+            new Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
         ], "Bearer"));
 
         var result = await validator.ValidateAsync(mismatchedPrincipal, CancellationToken.None);
@@ -75,7 +76,33 @@ public sealed class IntegrationAccessTokenRuntimeValidatorTests
             new Claim("tenant_id", client.TenantId.ToString()),
             new Claim("application_client_id", client.ApplicationClientId.ToString()),
             new Claim("jti", jwtId),
+            new Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
         ], "Bearer"));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ReturnsFailure_WhenTokenWasIssuedBeforeClientAuthStateChanged()
+    {
+        var client = CreateClient() with
+        {
+            LastAuthStateChangedUtc = DateTimeOffset.UtcNow,
+        };
+        var validator = new IntegrationAccessTokenRuntimeValidator(
+            new InMemoryIntegrationClientStore(client),
+            new InMemoryRevocationStore());
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("client_id", client.ClientId),
+            new Claim("tenant_id", client.TenantId.ToString()),
+            new Claim("application_client_id", client.ApplicationClientId.ToString()),
+            new Claim("jti", "jwt-1"),
+            new Claim("iat", DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds().ToString()),
+        ], "Bearer"));
+
+        var result = await validator.ValidateAsync(principal, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Integration access token is no longer valid for the current client state.", result.ErrorMessage);
     }
 
     private sealed class InMemoryIntegrationClientStore : IIntegrationClientStore
@@ -93,6 +120,14 @@ public sealed class IntegrationAccessTokenRuntimeValidatorTests
                 _client is not null && string.Equals(_client.ClientId, clientId, StringComparison.Ordinal)
                     ? _client
                     : null);
+        }
+
+        public Task<IReadOnlyCollection<IntegrationClient>> ListActiveByTenantAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<IntegrationClient> clients = _client is not null && _client.TenantId == tenantId
+                ? [_client]
+                : [];
+            return Task.FromResult(clients);
         }
     }
 

@@ -24,6 +24,8 @@ public sealed record BootstrapOAuthSigningKeyOptions
     public required string KeyId { get; init; }
 
     public required string Key { get; init; }
+
+    public DateTimeOffset? RetireAtUtc { get; init; }
 }
 
 public sealed record BootstrapOAuthClientOptions

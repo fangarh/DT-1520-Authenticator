@@ -26,9 +26,11 @@ public sealed class IntegrationAccessTokenRuntimeValidator : IIntegrationAccessT
         var tenantId = principal.FindFirst("tenant_id")?.Value;
         var applicationClientId = principal.FindFirst("application_client_id")?.Value;
         var jwtId = principal.FindFirst("jti")?.Value;
+        var issuedAtRaw = principal.FindFirst("iat")?.Value;
 
         if (string.IsNullOrWhiteSpace(clientId) ||
             string.IsNullOrWhiteSpace(jwtId) ||
+            !long.TryParse(issuedAtRaw, out var issuedAtUnixTimeSeconds) ||
             !Guid.TryParse(tenantId, out var parsedTenantId) ||
             !Guid.TryParse(applicationClientId, out var parsedApplicationClientId))
         {
@@ -44,6 +46,12 @@ public sealed class IntegrationAccessTokenRuntimeValidator : IIntegrationAccessT
         if (client.TenantId != parsedTenantId || client.ApplicationClientId != parsedApplicationClientId)
         {
             return IntegrationAccessTokenRuntimeValidationResult.Failure("Integration access token claims do not match the active client.");
+        }
+
+        var issuedAtUtc = DateTimeOffset.FromUnixTimeSeconds(issuedAtUnixTimeSeconds);
+        if (issuedAtUtc < client.LastAuthStateChangedUtc)
+        {
+            return IntegrationAccessTokenRuntimeValidationResult.Failure("Integration access token is no longer valid for the current client state.");
         }
 
         if (await _revocationStore.IsRevokedAsync(jwtId, cancellationToken))

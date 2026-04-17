@@ -99,6 +99,20 @@ public sealed class TotpSecretsReEncryptionServiceTests
                     .ToArray());
         }
 
+        public Task<IReadOnlyCollection<TotpEnrollmentKeyVersionUsage>> GetKeyVersionUsageAsync(
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyCollection<TotpEnrollmentKeyVersionUsage>>(
+                _records
+                    .GroupBy(record => record.KeyVersion)
+                    .Select(group => new TotpEnrollmentKeyVersionUsage
+                    {
+                        KeyVersion = group.Key,
+                        EnrollmentCount = group.Count(),
+                    })
+                    .ToArray());
+        }
+
         public Task<bool> UpdateProtectedSecretAsync(
             Guid enrollmentId,
             int expectedKeyVersion,

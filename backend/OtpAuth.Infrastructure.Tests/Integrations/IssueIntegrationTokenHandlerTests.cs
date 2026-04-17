@@ -27,7 +27,7 @@ public sealed class IssueIntegrationTokenHandlerTests
                 Audience = "otpauth-api-tests",
                 SigningKey = "integration-tests-signing-key-1234567890",
                 AccessTokenLifetimeMinutes = 60,
-            }, new InMemoryRevocationStore()));
+            }, new InMemoryIntegrationClientStore(client), new InMemoryRevocationStore()));
 
         var result = await handler.HandleAsync(
             new IssueIntegrationTokenRequest
@@ -181,6 +181,16 @@ public sealed class IssueIntegrationTokenHandlerTests
             cancellationToken.ThrowIfCancellationRequested();
             _clients.TryGetValue(clientId, out var client);
             return Task.FromResult(client);
+        }
+
+        public Task<IReadOnlyCollection<IntegrationClient>> ListActiveByTenantAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            IReadOnlyCollection<IntegrationClient> clients = _clients.Values
+                .Where(client => client.TenantId == tenantId)
+                .ToArray();
+            return Task.FromResult(clients);
         }
     }
 

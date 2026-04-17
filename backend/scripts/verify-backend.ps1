@@ -4,7 +4,10 @@ $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendRoot = Split-Path -Parent $scriptRoot
 $solutionPath = Join-Path $backendRoot 'OtpAuth.slnx'
-$testsProjectPath = Join-Path $backendRoot 'OtpAuth.Infrastructure.Tests\OtpAuth.Infrastructure.Tests.csproj'
+$testProjectPaths = @(
+    Join-Path $backendRoot 'OtpAuth.Infrastructure.Tests\OtpAuth.Infrastructure.Tests.csproj'
+    Join-Path $backendRoot 'OtpAuth.Worker.Tests\OtpAuth.Worker.Tests.csproj'
+)
 
 Push-Location $backendRoot
 try {
@@ -15,11 +18,13 @@ try {
         throw "dotnet build failed with exit code $LASTEXITCODE."
     }
 
-    Write-Host 'Running backend policy tests sequentially...'
-    dotnet test $testsProjectPath -p:BuildInParallel=false -p:RestoreBuildInParallel=false -maxcpucount:1
+    foreach ($testProjectPath in $testProjectPaths) {
+        Write-Host "Running tests sequentially for $testProjectPath..."
+        dotnet test $testProjectPath -p:BuildInParallel=false -p:RestoreBuildInParallel=false -maxcpucount:1
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet test failed with exit code $LASTEXITCODE."
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet test failed for '$testProjectPath' with exit code $LASTEXITCODE."
+        }
     }
 }
 finally {

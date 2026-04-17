@@ -9,6 +9,8 @@
 - [[Product Vision]]
 - [[Mobile App]]
 - [[Android App Bootstrap]]
+- [[Android TOTP-First Plan]]
+- [[../Delivery/Admin and Android Readiness Gates]]
 - [[../Delivery/Implementation Plan 8-12 Weeks]]
 - [[../Architecture/Technology Baseline]]
 

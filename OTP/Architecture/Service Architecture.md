@@ -78,6 +78,13 @@ flowchart LR
 - фиксация критичных событий
 - экспорт для расследований и `SIEM`
 
+### Admin
+
+- human-operator auth contour
+- operator-facing enrollment and support flows
+- отдельная role/permission model для административных действий
+- browser-facing session model, не совпадающая с integration auth
+
 ## Базовый runtime stack
 
 - backend: `ASP.NET Core`

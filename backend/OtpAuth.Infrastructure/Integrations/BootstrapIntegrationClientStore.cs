@@ -19,6 +19,18 @@ public sealed class BootstrapIntegrationClientStore : IIntegrationClientStore
         return Task.FromResult(client);
     }
 
+    public Task<IReadOnlyCollection<IntegrationClient>> ListActiveByTenantAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var clients = _clients.Values
+            .Where(client => client.TenantId == tenantId)
+            .OrderBy(client => client.ClientId, StringComparer.Ordinal)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyCollection<IntegrationClient>>(clients);
+    }
+
     public static BootstrapIntegrationClientStore CreateFromOptions(
         BootstrapOAuthOptions options,
         IClientSecretHasher hasher)

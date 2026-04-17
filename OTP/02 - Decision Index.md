@@ -21,6 +21,16 @@
 - `ADR-017`: перед введением нового `enum` нужно проверять, не выражает ли он поведение, которое лучше оформить отдельными типами или стратегиями
 - `ADR-018`: backend не использует `Entity Framework`; persistence строится на `Dapper` и бесплатном mapper
 - `ADR-019`: миграции `PostgreSQL` управляются через `FluentMigrator` и отдельный migration runner
+- `ADR-020`: lifecycle integration clients должен инвалидировать уже выданные access token-ы через persisted auth-state timestamp
+- `ADR-021`: signing key lifecycle использует config-driven rollout и `RetireAtUtc` для legacy keys
+- `ADR-022`: signing key lifecycle пишет append-only audit snapshots без хранения signing material
+- `ADR-023`: `TOTP` protection key lifecycle пишет append-only audit snapshots без хранения secret material
+- `ADR-024`: единый security audit trail хранит sanitized append-only events для key lifecycle и integration client lifecycle
+- `ADR-025`: bootstrap/setup plane отделяется от runtime admin UI и не дает админке host-level lifecycle прав
+- `ADR-026`: `Admin UI` использует отдельный admin auth contour, а не integration `client_credentials`
+- `ADR-027`: `Admin UI` использует current enrollment read model по `tenantId + externalUserId`, а не строится вокруг одного `enrollmentId`
+- `ADR-028`: admin `start` резолвит `applicationClientId` явно или только при единственном активном integration client-е tenant-а
+- `ADR-029`: installer использует script-first engine и отдельный локальный setup UI поверх него
 
 ## Reading Path
 
@@ -44,6 +54,16 @@
 16. [[Decisions/ADR-017 - Prefer Types with Behavior over Enums for Extensible Domain Concepts]]
 17. [[Decisions/ADR-018 - No Entity Framework, Use Dapper and Free Mapper]]
 18. [[Decisions/ADR-019 - FluentMigrator for PostgreSQL Schema Management]]
+19. [[Decisions/ADR-020 - Integration Client Lifecycle Invalidates Issued Tokens]]
+20. [[Decisions/ADR-021 - Signing Key Lifecycle Uses Configured Legacy Retirement]]
+21. [[Decisions/ADR-022 - Signing Key Lifecycle Audit Snapshots Are Append-Only]]
+22. [[Decisions/ADR-023 - Totp Protection Key Lifecycle Audit Snapshots Are Append-Only]]
+23. [[Decisions/ADR-024 - Unified Security Audit Trail Uses Sanitized Append-Only Events]]
+24. [[Decisions/ADR-025 - Bootstrap Setup Plane Is Separate from Runtime Admin]]
+25. [[Decisions/ADR-026 - Admin UI Uses Separate Admin Auth Contour]]
+26. [[Decisions/ADR-027 - Admin UI Uses Current Enrollment Read Model by User]]
+27. [[Decisions/ADR-028 - Admin Start Resolves Application Client Explicitly or Uniquely by Tenant]]
+28. [[Decisions/ADR-029 - Installer Uses Script-First Engine and Separate Local Setup UI]]
 
 Если задача относится к процессу и поддержанию контекста:
 
