@@ -29,6 +29,7 @@ public sealed class VerifyTotpHandlerTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Challenge);
         Assert.Equal(ChallengeStatus.Approved, result.Challenge!.Status);
+        Assert.NotNull(result.Challenge.ApprovedUtc);
         Assert.Equal(ChallengeAttemptResults.Approved, Assert.Single(recorder.Attempts).Result);
     }
 

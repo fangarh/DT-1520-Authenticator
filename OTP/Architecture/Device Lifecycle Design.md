@@ -4,6 +4,8 @@
 
 Accepted working contract
 
+Implementation status on `2026-04-17`: runtime slice `activate -> refresh -> revoke` implemented in backend with `auth.devices`, `auth.device_refresh_tokens`, `auth.device_activation_codes`, separate device JWT validator and unit/endpoint coverage. Device-bound `push approve/deny` contour тоже реализован поверх `DeviceBearer`: challenge хранит `target_device_id`, approve/deny валидируют binding + `Policy`, а create-path auto-bind-ит `push` только при единственном active push-capable device. Delivery slice поверх этого тоже реализован: `push` challenge atomically пишет row в `auth.push_challenge_deliveries`, worker lease-ит queued delivery через `PostgreSQL`, а trusted integration path теперь умеет deterministic routing через explicit `targetDeviceId` и `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true`.
+
 ## Цель
 
 Зафиксировать минимальный backend contract для `Device Registry`, чтобы следующие runtime slices не расходились между `Policy`, `Security`, `OpenAPI` и будущим `Android/push` contour.
@@ -137,6 +139,70 @@ Accepted working contract
 
 ## Persistence contract
 
+### `auth.challenges`
+
+Для device-bound `push` contour challenge persistence дополнительно хранит:
+
+- `target_device_id`
+- `approved_utc`
+- `denied_utc`
+
+Ожидаемые инварианты:
+
+- `target_device_id` обязателен для `factor_type = push`
+- `approve/deny` fail-closed отклоняются, если authenticated `device_id` не совпадает с bound target
+- при нескольких active devices backend не выбирает target неявно; без deterministic binding `push` не должен становиться preferred factor
+- integration client может снять ambiguity только явным `targetDeviceId`; без него multi-device path продолжает fail-closed fallback на `TOTP`
+
+### `auth.push_challenge_deliveries`
+
+Outbox-like delivery storage для фактической постановки `push` challenge на bound device:
+
+- `id`
+- `challenge_id`
+- `tenant_id`
+- `application_client_id`
+- `external_user_id`
+- `target_device_id`
+- `status`
+- `attempt_count`
+- `next_attempt_utc`
+- `last_attempt_utc`
+- `delivered_utc`
+- `last_error_code`
+- `locked_until_utc`
+- `provider_message_id`
+- `created_utc`
+- `updated_utc`
+
+Ожидаемые инварианты:
+
+- запись delivery создается атомарно вместе с `push` challenge
+- для одного `challenge_id` существует не более одной delivery row
+- worker берет due rows через lease/lock, а не через blind polling
+- raw `pushToken` не дублируется в delivery table; при dispatch worker читает актуальный token из `auth.devices`
+- permanent delivery failure не меняет challenge binding на другой device автоматически
+
+### `auth.device_activation_codes`
+
+Bootstrap/runtime activation artifact storage:
+
+- `id`
+- `tenant_id`
+- `application_client_id`
+- `external_user_id`
+- `platform`
+- `code_hash`
+- `expires_utc`
+- `consumed_utc`
+- `created_utc`
+
+Ожидаемые инварианты:
+
+- activation code plaintext не хранится
+- artifact consume-ится атомарно вместе с первой device/token issuance
+- expired или уже consumed artifact снаружи маскируется как generic invalid/expired activation code
+
 ### `auth.devices`
 
 Минимально нужны поля:
@@ -213,9 +279,10 @@ Audit payload не должен содержать:
 
 ## Следующий runtime slice после этого design step
 
-1. `auth.devices` и `auth.device_refresh_tokens`
-2. `ActivateDeviceHandler`
-3. `RefreshDeviceTokenHandler`
-4. `RevokeDeviceHandler`
-5. runtime validator для device access token с `last_auth_state_changed_utc`
-6. unit + endpoint tests для `active/revoked/blocked/replay`
+Этот runtime slice реализован на `2026-04-17`.
+
+Следующий practical step поверх него:
+
+1. mobile/runtime read path для pending `push` challenge на самом device
+2. provider-specific adapter вместо текущего gateway-stub без изменения outbox/runtime contract
+3. future activation/admin support surface без ослабления уже принятых replay/revoke invariants

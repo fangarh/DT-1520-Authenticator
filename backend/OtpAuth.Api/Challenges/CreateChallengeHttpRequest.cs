@@ -12,6 +12,8 @@ public sealed record CreateChallengeHttpRequest
 
     public IReadOnlyCollection<string>? PreferredFactors { get; init; }
 
+    public Guid? TargetDeviceId { get; init; }
+
     public CallbackRegistrationHttpRequest? Callback { get; init; }
 
     public string? CorrelationId { get; init; }

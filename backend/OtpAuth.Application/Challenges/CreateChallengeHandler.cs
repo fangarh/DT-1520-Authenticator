@@ -1,4 +1,5 @@
 using OtpAuth.Application.Policy;
+using OtpAuth.Application.Devices;
 using OtpAuth.Application.Integrations;
 using OtpAuth.Domain.Challenges;
 using OtpAuth.Domain.Policy;
@@ -10,13 +11,16 @@ public sealed class CreateChallengeHandler
     private static readonly TimeSpan ChallengeLifetime = TimeSpan.FromMinutes(5);
 
     private readonly IChallengeRepository _challengeRepository;
+    private readonly IDeviceRegistryStore _deviceRegistryStore;
     private readonly IPolicyEvaluator _policyEvaluator;
 
     public CreateChallengeHandler(
         IChallengeRepository challengeRepository,
+        IDeviceRegistryStore deviceRegistryStore,
         IPolicyEvaluator policyEvaluator)
     {
         _challengeRepository = challengeRepository;
+        _deviceRegistryStore = deviceRegistryStore;
         _policyEvaluator = policyEvaluator;
     }
 
@@ -42,10 +46,28 @@ public sealed class CreateChallengeHandler
             .Distinct()
             .ToArray();
 
+        if (request.TargetDeviceId.HasValue && !preferredFactors.Contains(FactorType.Push))
+        {
+            return CreateChallengeResult.Failure(
+                CreateChallengeErrorCode.ValidationFailed,
+                "TargetDeviceId can be used only when preferredFactors include push.");
+        }
+
         var availableFactors = preferredFactors
             .Append(FactorType.Totp)
             .Distinct()
             .ToArray();
+
+        var pushResolution = await ResolvePushDeviceAsync(
+            request,
+            preferredFactors,
+            cancellationToken);
+        if (pushResolution.ErrorMessage is not null)
+        {
+            return CreateChallengeResult.Failure(CreateChallengeErrorCode.ValidationFailed, pushResolution.ErrorMessage);
+        }
+
+        var resolvedPushDevice = pushResolution.Device;
 
         var policyContext = new PolicyContext
         {
@@ -58,12 +80,14 @@ public sealed class CreateChallengeHandler
                 ? preferredFactors[0]
                 : null,
             AvailableFactors = availableFactors,
-            DeviceTrustState = DeviceTrustState.None,
+            DeviceTrustState = resolvedPushDevice is null
+                ? DeviceTrustState.None
+                : MapDeviceTrustState(resolvedPushDevice.Status),
             DeploymentProfile = DeploymentProfile.Cloud,
             EnvironmentMode = EnvironmentMode.Production,
             ChallengePurpose = MapChallengePurpose(request.OperationType),
             EnrollmentInitiationSource = EnrollmentInitiationSource.Admin,
-            PushChannelAvailable = false,
+            PushChannelAvailable = !string.IsNullOrWhiteSpace(resolvedPushDevice?.PushToken),
         };
 
         var policyDecision = _policyEvaluator.Evaluate(policyContext);
@@ -86,11 +110,24 @@ public sealed class CreateChallengeHandler
             FactorType = policyDecision.PreferredFactor.Value,
             Status = ChallengeStatus.Pending,
             ExpiresAt = DateTimeOffset.UtcNow.Add(ChallengeLifetime),
+            TargetDeviceId = policyDecision.PreferredFactor == FactorType.Push
+                ? resolvedPushDevice?.Id
+                : null,
             CorrelationId = NormalizeOptional(request.CorrelationId) ?? Guid.NewGuid().ToString("N"),
             CallbackUrl = request.CallbackUrl,
         };
 
-        await _challengeRepository.AddAsync(challenge, cancellationToken);
+        var pushDelivery = challenge.FactorType == FactorType.Push && challenge.TargetDeviceId.HasValue
+            ? PushChallengeDelivery.CreateQueued(
+                challenge.Id,
+                challenge.TenantId,
+                challenge.ApplicationClientId,
+                challenge.ExternalUserId,
+                challenge.TargetDeviceId.Value,
+                DateTimeOffset.UtcNow)
+            : null;
+
+        await _challengeRepository.AddAsync(challenge, pushDelivery, cancellationToken);
 
         return CreateChallengeResult.Success(challenge);
     }
@@ -128,6 +165,61 @@ public sealed class CreateChallengeHandler
         }
 
         return null;
+    }
+
+    private async Task<PushDeviceResolution> ResolvePushDeviceAsync(
+        CreateChallengeRequest request,
+        IReadOnlyCollection<FactorType> preferredFactors,
+        CancellationToken cancellationToken)
+    {
+        if (!preferredFactors.Contains(FactorType.Push))
+        {
+            return PushDeviceResolution.None();
+        }
+
+        if (request.TargetDeviceId.HasValue)
+        {
+            var explicitTarget = await _deviceRegistryStore.GetByIdAsync(
+                request.TargetDeviceId.Value,
+                request.TenantId,
+                request.ApplicationClientId,
+                cancellationToken);
+            if (explicitTarget is null ||
+                explicitTarget.Status != Domain.Devices.DeviceStatus.Active ||
+                string.IsNullOrWhiteSpace(explicitTarget.PushToken) ||
+                !string.Equals(explicitTarget.ExternalUserId, request.ExternalUserId.Trim(), StringComparison.Ordinal))
+            {
+                return PushDeviceResolution.Invalid(
+                    "TargetDeviceId must reference an active push-capable device bound to the requested user.");
+            }
+
+            return PushDeviceResolution.Success(explicitTarget);
+        }
+
+        var activeDevices = await _deviceRegistryStore.ListActiveByExternalUserAsync(
+            request.TenantId,
+            request.ApplicationClientId,
+            request.ExternalUserId.Trim(),
+            cancellationToken);
+        var pushCapableDevices = activeDevices
+            .Where(device => !string.IsNullOrWhiteSpace(device.PushToken))
+            .ToArray();
+
+        return pushCapableDevices.Length == 1
+            ? PushDeviceResolution.Success(pushCapableDevices[0])
+            : PushDeviceResolution.None();
+    }
+
+    private static DeviceTrustState MapDeviceTrustState(Domain.Devices.DeviceStatus status)
+    {
+        return status switch
+        {
+            Domain.Devices.DeviceStatus.Pending => DeviceTrustState.Pending,
+            Domain.Devices.DeviceStatus.Active => DeviceTrustState.Active,
+            Domain.Devices.DeviceStatus.Revoked => DeviceTrustState.Revoked,
+            Domain.Devices.DeviceStatus.Blocked => DeviceTrustState.Blocked,
+            _ => DeviceTrustState.Unknown,
+        };
     }
 
     private static ChallengePurpose MapChallengePurpose(OperationType operationType)
@@ -173,5 +265,24 @@ public sealed class CreateChallengeHandler
         Span<byte> guidBytes = stackalloc byte[16];
         hash.AsSpan(0, 16).CopyTo(guidBytes);
         return new Guid(guidBytes);
+    }
+
+    private sealed record PushDeviceResolution
+    {
+        public Domain.Devices.RegisteredDevice? Device { get; init; }
+
+        public string? ErrorMessage { get; init; }
+
+        public static PushDeviceResolution None() => new();
+
+        public static PushDeviceResolution Success(Domain.Devices.RegisteredDevice device) => new()
+        {
+            Device = device,
+        };
+
+        public static PushDeviceResolution Invalid(string errorMessage) => new()
+        {
+            ErrorMessage = errorMessage,
+        };
     }
 }

@@ -20,6 +20,9 @@ public sealed class ChallengeDataMapperTests
         Assert.Equal(challenge.CallbackUrl!.ToString(), persistenceModel.CallbackUrl);
         Assert.Equal(challenge.Status, persistenceModel.Status);
         Assert.Equal(challenge.FactorType, persistenceModel.FactorType);
+        Assert.Equal(challenge.TargetDeviceId, persistenceModel.TargetDeviceId);
+        Assert.Equal(challenge.ApprovedUtc, persistenceModel.ApprovedUtc);
+        Assert.Equal(challenge.DeniedUtc, persistenceModel.DeniedUtc);
     }
 
     [Fact]
@@ -37,6 +40,9 @@ public sealed class ChallengeDataMapperTests
             FactorType = FactorType.Totp,
             Status = ChallengeStatus.Pending,
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TargetDeviceId = Guid.NewGuid(),
+            ApprovedUtc = DateTimeOffset.UtcNow,
+            DeniedUtc = null,
             CorrelationId = "corr-111",
             CallbackUrl = "https://crm.example.com/hooks/otp",
         };
@@ -46,6 +52,9 @@ public sealed class ChallengeDataMapperTests
         Assert.Equal(persistenceModel.Id, challenge.Id);
         Assert.NotNull(challenge.CallbackUrl);
         Assert.Equal(persistenceModel.CallbackUrl, challenge.CallbackUrl!.ToString());
+        Assert.Equal(persistenceModel.TargetDeviceId, challenge.TargetDeviceId);
+        Assert.Equal(persistenceModel.ApprovedUtc, challenge.ApprovedUtc);
+        Assert.Equal(persistenceModel.DeniedUtc, challenge.DeniedUtc);
     }
 
     [Fact]
@@ -63,6 +72,9 @@ public sealed class ChallengeDataMapperTests
             FactorType = FactorType.Totp,
             Status = ChallengeStatus.Approved,
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(1),
+            TargetDeviceId = null,
+            ApprovedUtc = DateTimeOffset.UtcNow,
+            DeniedUtc = null,
             CorrelationId = "corr-222",
             CallbackUrl = null,
         };
@@ -86,6 +98,9 @@ public sealed class ChallengeDataMapperTests
             FactorType = FactorType.Totp,
             Status = ChallengeStatus.Pending,
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TargetDeviceId = Guid.NewGuid(),
+            ApprovedUtc = DateTimeOffset.UtcNow,
+            DeniedUtc = null,
             CorrelationId = "auth-req-2026-04-14-100",
             CallbackUrl = new Uri("https://crm.example.com/webhooks/otpauth"),
         };

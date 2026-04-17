@@ -92,7 +92,7 @@
 - admin `start` теперь использует явный `applicationClientId` или fail-closed auto-resolve только при единственном активном integration client-е tenant-а; `confirm/replace/revoke` используют отдельный admin lookup по `enrollmentId`
 - admin enrollment actions теперь пишут append-only sanitized audit события `admin_totp_enrollment.*` с привязкой к `adminUserId`, а state-changing endpoints под cookie session требуют `CSRF`
 - реализован frontend `Admin UI MVP` shell в `admin`: session bootstrap, login/logout, lookup текущего enrollment-а, `start/confirm/replace/revoke`, problem mapping и одноразовое отображение provisioning artifacts только в рамках текущей operator session
-- `backend` проходит последовательную проверку `build + tests` с `174` automated tests
+- `backend` проходит последовательную проверку `build + tests` с `232` automated tests (`217` в `OtpAuth.Infrastructure.Tests` + `15` в `OtpAuth.Worker.Tests`)
 - `admin` проходит `npm test` (`19` tests), `npm run build` и `npm run test:e2e`; `Vitest` настроен на `jsdom`, а checked-in `Playwright` suite прогоняет scripted browser regression для `login/logout`, `start/confirm`, `reload/load current`, `replace/confirm`, `revoke` и проверки, что provisioning artifact не живет в `localStorage`
 - добавлены operational bootstrap-команды `list-admin-users` и `upsert-admin-user` в `OtpAuth.Migrations`; bootstrap admin password читается только из `OTPAUTH_ADMIN_PASSWORD`, permissions ограничены whitelist-ом `enrollments.read|write`
 - live browser verification через `Playwright MCP` теперь подтверждена на реальном backend/runtime contour: `logout/login`, `start -> confirm`, `replace -> confirm`, `revoke` и follow-up `Load current` успешно пройдены против `OtpAuth.Api` на `127.0.0.1:5112` и `dt-auth`
@@ -118,13 +118,17 @@
 - в `mobile/feature:totp-codes` реализован `Step 6` из `Android TOTP-first`: runtime list of saved accounts, offline `TOTP` code + countdown, explicit remove confirm flow и scroll-safe app shell для реального Android viewport
 - завершен `Step 7` из `Android TOTP-first`: stable provisioning contract зафиксирован в vault, `OpenAPI` явно описывает artifact-only поля `secretUri/qrCodePayload`, а mobile/admin/security notes синхронизированы с backend contract
 - реализован первый backend slice для `backup codes`: `auth.backup_codes`, `POST /api/v1/challenges/{id}/verify-backup-code`, hash-only storage, one-time consume semantics и explicit bootstrap seeding через migration runner
-- зафиксирован канонический design-contract для `Device Registry`: `ADR-030`, `Device Lifecycle Design`, rotating hash-only refresh tokens, `last_auth_state_changed_utc` и обновленный `OpenAPI`/vault sync под будущий runtime slice
+- реализован runtime `Device Registry` slice `activate -> refresh -> revoke`: `auth.devices`, `auth.device_refresh_tokens`, `auth.device_activation_codes`, отдельный device bearer issuer/validator, hash-only rotating refresh tokens, one-time activation artifact и append-only audit `device.*`
+- реализован device-bound `push approve/deny` contour поверх `DeviceBearer`: `POST /api/v1/challenges/{id}/approve|deny`, `target_device_id` binding, `approved_utc/denied_utc`, policy check для device-scoped runtime actions и sanitized audit `challenge.approved|denied`
+- `CreateChallenge` теперь auto-bind-ит `push` только при единственном active push-capable device пользователя; при multi-device ambiguity integration может передать explicit `targetDeviceId`, а без него runtime fail-closed уходит в безопасный fallback на `TOTP`
+- реализован delivery slice для фактической постановки `push` challenge: `CreateChallenge` атомарно пишет row в `auth.push_challenge_deliveries`, `OtpAuth.Worker` обрабатывает queued delivery через job `push_challenge_delivery`, а dispatch идет через sanitized gateway contract без дублирования raw `pushToken` в outbox table
+- реализован explicit support path для multi-device routing: `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true` возвращает active device list c `isPushCapable`, после чего integration может создать `push` challenge с explicit `targetDeviceId`
 
 Пока не реализовано:
 
 - production-ready backend за пределами bootstrap `Challenges` slice
 - mobile app
-- следующим backend/product блоком после design-contract sync является runtime `Device Registry` slice `activate -> refresh -> revoke`
+- следующим backend/product блоком после delivery/routing slice является mobile/runtime read path для pending `push` challenge на самом device и provider-specific adapter поверх уже готового outbox contract
 - `API`
 - отдельный `Bootstrap Agent`
 - полноценное integration/contract/e2e покрытие за пределами текущего bootstrap backend slice
@@ -293,3 +297,10 @@
 - `2026-04-17`: `Android TOTP-first` закрыт как локальный slice: backup hardening, UI/instrumented contour и финальная live MCP-проверка подтверждены; следующий приоритетный backend/product шаг смещен на device lifecycle design/contracts
 - `2026-04-17`: `ADR-030` и `Device Lifecycle Design` зафиксировали contract для `Device Registry`: lifecycle `pending/active/revoked/blocked`, opaque rotating refresh tokens, `last_auth_state_changed_utc`, fail-closed replay handling и sync `OpenAPI/Auth/Security/Data`; следующий practical backend step теперь смещен на runtime slice `activate -> refresh -> revoke`
 - `2026-04-17`: реализован первый `backup codes` backend slice: добавлены таблица `auth.backup_codes`, `verify-backup-code` challenge endpoint, hash-only verifier с one-time consume semantics, explicit bootstrap seed command и unit coverage; фактор больше не ограничен enum/policy-декларацией
+- `2026-04-17`: завершен runtime `Device Registry` slice: добавлены `POST /api/v1/devices/activate`, `POST /api/v1/auth/device-tokens/refresh`, `POST /api/v1/devices/{deviceId}/revoke`, таблицы `auth.devices + auth.device_refresh_tokens + auth.device_activation_codes`, bootstrap command `seed-bootstrap-device-activation`, separate device JWT auth contour и fail-closed refresh replay blocking с audit событиями `device.*`
+- `2026-04-17`: локальная backend-проверка после `Device Registry` проходит: `dotnet test OtpAuth.Infrastructure.Tests` зеленый (`197/197`), `verify-backend.ps1` зеленый, а новый device contour закрыт unit + endpoint tests для `activate/revoke/refresh/replay/runtime validation`
+- `2026-04-17`: реализован device-bound `push approve/deny` contour: backend публикует `POST /api/v1/challenges/{id}/approve` и `POST /api/v1/challenges/{id}/deny` под `DeviceBearer`, challenge persistence хранит `target_device_id + approved_utc + denied_utc`, approve требует `biometricVerified=true`, а create-path auto-bind-ит `push` только при единственном active push-capable device
+- `2026-04-17`: локальная backend-проверка после `push approve/deny` проходит: `dotnet test OtpAuth.Infrastructure.Tests` зеленый (`211/211`), `verify-backend.ps1` зеленый, а новый contour покрыт unit + endpoint tests для approve/deny binding, policy fallback и expired/not-found paths
+- `2026-04-17`: реализован `push delivery` slice: `CreateChallenge` принимает optional `targetDeviceId`, атомарно пишет `push` challenge + row в `auth.push_challenge_deliveries`, а `OtpAuth.Worker` job `push_challenge_delivery` lease-ит due rows, dispatch-ит sanitized request в gateway и пишет `delivered/rescheduled/failed` status без хранения raw `pushToken` в outbox table
+- `2026-04-17`: реализован explicit support path для multi-device routing: `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true` возвращает active devices с `isPushCapable`, а create-path теперь допускает deterministic `push` routing через explicit `targetDeviceId`
+- `2026-04-17`: локальная backend-проверка после `push delivery + routing` проходит: `verify-backend.ps1` зеленый, `OtpAuth.Infrastructure.Tests` зеленый (`217/217`), `OtpAuth.Worker.Tests` зеленый (`15/15`)

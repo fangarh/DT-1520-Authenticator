@@ -18,6 +18,8 @@ public sealed record CreateChallengeRequest
 
     public IReadOnlyCollection<FactorType> PreferredFactors { get; init; } = Array.Empty<FactorType>();
 
+    public Guid? TargetDeviceId { get; init; }
+
     public string? CorrelationId { get; init; }
 
     public Uri? CallbackUrl { get; init; }

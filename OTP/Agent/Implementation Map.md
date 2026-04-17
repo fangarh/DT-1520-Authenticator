@@ -99,6 +99,13 @@
 - `backend/OtpAuth.Worker.Tests/WorkerDiagnosticsCycleCoordinatorTests.cs` - unit tests для domain-aware worker diagnostics cycle: healthy/degraded snapshot и failure counter
 - `backend/OtpAuth.Worker.Tests/SecurityDataCleanupWorkerJobTests.cs` - unit tests для первого реального background job: sanitized cleanup metrics и interval validation
 - `backend/OtpAuth.Worker.Tests/RedisConnectionTargetTests.cs` - unit tests для safe parsing redis endpoint без утечки secret material
+- `backend/OtpAuth.Worker.Tests/PushChallengeDeliveryWorkerJobTests.cs` - unit tests для job `push_challenge_delivery`: sanitized metrics и options validation
+- `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceApiTests.cs` - endpoint-level tests для `Device Registry`: `activate`, `refresh`, `revoke`, replay blocking и scope boundary
+- `backend/OtpAuth.Infrastructure.Tests/Devices/RefreshDeviceTokenHandlerTests.cs` - unit tests для fail-closed refresh token reuse path с переводом устройства в `blocked`
+- `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceAccessTokenRuntimeValidatorTests.cs` - unit tests для device JWT runtime validation: claim mismatch, inactive device и `last_auth_state_changed_utc`
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDecisionHandlerTests.cs` - unit tests для device-bound `push approve/deny`: binding, `biometricVerified`, policy fallback, expired/not-found paths и sanitized audit
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeApiTests.cs` - endpoint-level tests для `POST /api/v1/challenges/{id}/approve|deny` под `DeviceBearer`
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDeliveryCoordinatorTests.cs` - unit tests для outbox-driven `push` delivery: `delivered`, `rescheduled`, `failed` без provider-specific transport
 - `backend/OtpAuth.Infrastructure.Tests` - unit tests для `Policy`, `Challenge` handlers, persistence, bootstrap OAuth, `TOTP` crypto/verifier и `VerifyTotp` runtime protection
 - `backend/OtpAuth.Infrastructure.Tests/Enrollments/EnrollmentApiTests.cs` - endpoint-level tests для `TOTP` enrollment management через `WebApplicationFactory` и in-memory provisioning store
 - `backend/OtpAuth.Infrastructure.Tests/Administration/AdminAuthApiTests.cs` - endpoint-level tests для `admin auth contour`: `CSRF`, cookie session, login rate limit, logout и secure cookies
@@ -158,7 +165,7 @@
 - `backend/OtpAuth.Api/Endpoints/AdminEnrollmentCommandEndpoints.cs` - `POST /api/v1/admin/enrollments/totp`, `POST /api/v1/admin/enrollments/totp/{enrollmentId}/confirm|replace|revoke`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - `POST /oauth2/token` для bootstrap `client_credentials`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`
-- `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` - `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}` и `POST /api/v1/challenges/{id}/verify-totp`
+- `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` - `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}`, `POST /api/v1/challenges/{id}/verify-totp`, `POST /api/v1/challenges/{id}/verify-backup-code` и device-bound `POST /api/v1/challenges/{id}/approve|deny`
 - `backend/OtpAuth.Api/Endpoints/EnrollmentsEndpoints.cs` - `GET /api/v1/enrollments/totp/{id}`, `POST /api/v1/enrollments/totp`, `POST /api/v1/enrollments/totp/{id}/confirm`, `POST /api/v1/enrollments/totp/{id}/replace` и `POST /api/v1/enrollments/totp/{id}/revoke`
 - `backend/OtpAuth.Api/Authentication/AdminContextHttpContextExtensions.cs` - сбор `AdminContext` из cookie-backed session claims
 - `backend/OtpAuth.Application/Administration/AdminLoginHandler.cs` - application use case для operator login с rate limit и audit hooks
@@ -182,12 +189,15 @@
 - `backend/OtpAuth.Application/Challenges/GetChallengeHandler.cs` - read use case для retrieval по `challengeId`
 - `backend/OtpAuth.Application/Challenges/VerifyTotpHandler.cs` - verify use case с переводом `Challenge` в `approved`, `failed` или `expired`
 - `backend/OtpAuth.Application/Challenges/VerifyBackupCodeHandler.cs` - verify use case для `backup_code` challenge с rate limiting, one-time consume semantics и переводом `Challenge` в `approved`, `failed` или `expired`
+- `backend/OtpAuth.Application/Challenges/ApprovePushChallengeHandler.cs` - device-bound approve use case: binding к `target_device_id`, `Policy`, `biometricVerified` и sanitized audit
+- `backend/OtpAuth.Application/Challenges/DenyPushChallengeHandler.cs` - device-bound deny use case: binding к `target_device_id`, deny timestamp и sanitized audit без raw reason
 - `backend/OtpAuth.Application/Enrollments/StartTotpEnrollmentHandler.cs` - start use case для admin/trusted-integration `TOTP` enrollment с `Policy`, provisioning artifact и audit
 - `backend/OtpAuth.Application/Enrollments/GetTotpEnrollmentHandler.cs` - scoped read use case для enrollment status без повторной выдачи provisioning artifacts
 - `backend/OtpAuth.Application/Enrollments/ConfirmTotpEnrollmentHandler.cs` - confirm use case для `TOTP` enrollment с brute-force protection по persisted attempt counter
 - `backend/OtpAuth.Application/Enrollments/ReplaceTotpEnrollmentHandler.cs` - safe replace flow для `TOTP` enrollment без потери текущего активного фактора до успешного confirm
 - `backend/OtpAuth.Application/Enrollments/RevokeTotpEnrollmentHandler.cs` - destructive operator flow для revoke активного `TOTP` enrollment
 - `backend/OtpAuth.Application/Challenges/IChallengeAttemptRecorder.cs` - append-only порт для фиксации verify-attempts
+- `backend/OtpAuth.Application/Challenges/IChallengeDecisionAuditWriter.cs` - sanitized append-only audit contract для `challenge.approved|denied`
 - `backend/OtpAuth.Application/Integrations/*` - integration client contracts, token issuance, scopes и client context
 - `backend/OtpAuth.Application/Integrations/*` - integration client credential validation, token issuance, introspection, revocation и runtime validation contracts
 - `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeRepository.cs` - `PostgreSQL`-backed persistence для `Challenge`
@@ -216,6 +226,17 @@
 - `backend/OtpAuth.Infrastructure/Integrations/IntegrationClientLifecycleAuditFactory.cs` - sanitized audit entries для integration client lifecycle без secret material
 - `backend/OtpAuth.Infrastructure/Integrations/PostgresRevokedIntegrationAccessTokenStore.cs` - persistent revoked-token store для integration access tokens
 - `backend/OtpAuth.Infrastructure/Integrations/IntegrationAccessTokenRuntimeValidator.cs` - runtime enforcement revoked/inactive integration tokens
+- `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - integration-authenticated device lifecycle API: `activate` и `revoke`
+- `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - anonymous `POST /api/v1/auth/device-tokens/refresh` рядом с bootstrap OAuth endpoints
+- `backend/OtpAuth.Application/Devices/ActivateDeviceHandler.cs` - orchestrates one-time activation artifact validation, device record creation и initial token pair issuance
+- `backend/OtpAuth.Application/Devices/RefreshDeviceTokenHandler.cs` - hash-only rotating refresh flow с fail-closed replay detection и `blocked` transition
+- `backend/OtpAuth.Application/Devices/RevokeDeviceHandler.cs` - scoped revoke use case для device lifecycle и auth-state invalidation
+- `backend/OtpAuth.Infrastructure/Devices/PostgresDeviceRegistryStore.cs` - transaction-safe `PostgreSQL` store для `auth.devices`, `auth.device_refresh_tokens` и atomic activation/refresh/revoke mutations
+- `backend/OtpAuth.Infrastructure/Devices/JwtDeviceAccessTokenIssuer.cs` - отдельный device JWT issuer поверх общей signing key infrastructure
+- `backend/OtpAuth.Infrastructure/Devices/DeviceAccessTokenRuntimeValidator.cs` - runtime validator для device bearer token с `status=active` и `iat >= last_auth_state_changed_utc`
+- `backend/OtpAuth.Infrastructure/Devices/DeviceLifecycleAuditWriter.cs` - sanitized append-only audit writer для `device.activated|token_refreshed|refresh_reuse_detected|revoked|blocked`
+- `backend/OtpAuth.Migrations/Migrations/202604170002_CreateDevices.cs` - схема `auth.devices`, `auth.device_refresh_tokens` и `auth.device_activation_codes`
+- `backend/OtpAuth.Migrations/Program.cs` - migration runner теперь поддерживает `seed-bootstrap-device-activation`
 - `backend/OtpAuth.Application/Integrations/IntegrationClientLifecycleService.cs` - application service для operational rotation и activation lifecycle integration clients
 - `backend/OtpAuth.Worker/Worker.cs` - background worker loop с periodic diagnostics cycle и publish execution snapshot для compose/runtime diagnostics
 - `backend/OtpAuth.Worker/WorkerDiagnosticsCycleCoordinator.cs` - coordinator для dependency probes, scheduled worker jobs, execution outcome и failure counter
@@ -225,8 +246,17 @@
 - `backend/OtpAuth.Worker/WorkerDiagnosticsOptions.cs` - config contract для heartbeat path, interval и dependency probe timeout
 - `backend/OtpAuth.Worker/IWorkerJob.cs` - общий контракт для scheduled background jobs с job-level diagnostics
 - `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJob.cs` - первый реальный background job worker-а для cleanup expired security data
+- `backend/OtpAuth.Worker/PushChallengeDeliveryWorkerJob.cs` - worker job для lease/retry/dispatch `push` challenge deliveries через `auth.push_challenge_deliveries`
+- `backend/OtpAuth.Worker/PushChallengeDeliveryWorkerJobOptions.cs` - config contract для interval/batch/lease/retry/max attempts `push_challenge_delivery`
 - `backend/OtpAuth.Worker/PostgresSecurityDataCleanupRunner.cs` - isolated runner для cleanup use case без падения worker startup на отсутствующей DB-конфигурации
 - `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJobOptions.cs` - config contract для scheduling job-а `security_data_cleanup`
+- `backend/OtpAuth.Application/Challenges/PushChallengeDeliveryCoordinator.cs` - application orchestration для фактической постановки `push` challenge на bound device через lease-able delivery store и gateway
+- `backend/OtpAuth.Application/Challenges/PushChallengeDeliveryContracts.cs` - delivery contracts: queued delivery model, store/gateway interfaces и dispatch result
+- `backend/OtpAuth.Application/Devices/ListDevicesForRoutingHandler.cs` - integration support read path для active devices по `externalUserId` c optional `pushCapableOnly`
+- `backend/OtpAuth.Infrastructure/Challenges/PostgresPushChallengeDeliveryStore.cs` - `PostgreSQL` store для `auth.push_challenge_deliveries`: atomic lease/update status/retry metadata
+- `backend/OtpAuth.Infrastructure/Challenges/LoggingPushChallengeDeliveryGateway.cs` - текущий sanitized delivery gateway stub; не хранит и не логирует raw `pushToken`
+- `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - теперь также публикует `GET /api/v1/devices` как support path для multi-device routing
+- `backend/OtpAuth.Migrations/Migrations/202604170004_CreatePushChallengeDeliveries.cs` - схема `auth.push_challenge_deliveries`
 - `backend/OtpAuth.Infrastructure/Integrations/BootstrapSigningKeyRing.cs` - lifecycle-aware signing key ring для current/legacy keys с `RetireAtUtc` и fail-closed `kid` resolution
 - `backend/OtpAuth.Infrastructure/Integrations/BootstrapSigningKeyLifecycleReportFactory.cs` - sanitized report factory для signing key lifecycle inspection/audit
 - `backend/OtpAuth.Infrastructure/Integrations/SigningKeyLifecycleAuditService.cs` - запись и чтение append-only audit snapshots по signing key lifecycle
@@ -317,3 +347,6 @@
 - `2026-04-17`: `Android TOTP-first` закрыт как локальный mobile slice; следующий рабочий фокус после mobile DoD closure смещен на device lifecycle design/contracts
 - `2026-04-17`: карта дополнена первым `backup codes` backend slice: `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` теперь публикует `POST /api/v1/challenges/{id}/verify-backup-code`, `backend/OtpAuth.Migrations/Migrations/202604170001_CreateBackupCodes.cs` создает `auth.backup_codes`, а migration runner получил explicit `seed-bootstrap-backup-codes`
 - `2026-04-17`: зафиксирован канонический `device lifecycle` contract: добавлены `ADR-030`, `OTP/Architecture/Device Lifecycle Design.md`, storage policy для rotating hash-only refresh tokens и sync `OpenAPI/Auth/Security/Data` под следующий runtime slice `activate -> refresh -> revoke`
+- `2026-04-17`: карта дополнена реализованным runtime `Device Registry` slice: backend теперь публикует `activate/refresh/revoke`, хранит one-time activation artifacts в `auth.device_activation_codes`, rotate-ит hash-only refresh tokens в `auth.device_refresh_tokens`, блокирует устройство при refresh replay и покрыт dedicated unit + endpoint tests
+- `2026-04-17`: карта дополнена device-bound `push approve/deny` slice: challenge теперь хранит `target_device_id + approved_utc + denied_utc`, `CreateChallenge` auto-bind-ит `push` только при единственном active push-capable device, а backend публикует `approve/deny` под `DeviceBearer` с policy/binding checks и dedicated tests
+- `2026-04-17`: карта дополнена `push delivery + routing` slice: `CreateChallenge` теперь поддерживает explicit `targetDeviceId`, `GET /api/v1/devices` дает active routing candidates, `auth.push_challenge_deliveries` хранит queued delivery rows, а `OtpAuth.Worker` dispatch-ит их через job `push_challenge_delivery`

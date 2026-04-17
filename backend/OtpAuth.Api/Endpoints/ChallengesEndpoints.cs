@@ -21,6 +21,14 @@ public static class ChallengesEndpoints
             .RequireAuthorization("ChallengesWrite")
             .WithName("VerifyBackupCode");
 
+        app.MapPost("/api/v1/challenges/{challengeId:guid}/approve", ApproveChallengeAsync)
+            .RequireAuthorization("DeviceChallengeWrite")
+            .WithName("ApproveChallenge");
+
+        app.MapPost("/api/v1/challenges/{challengeId:guid}/deny", DenyChallengeAsync)
+            .RequireAuthorization("DeviceChallengeWrite")
+            .WithName("DenyChallenge");
+
         app.MapPost("/api/v1/challenges", CreateChallengeAsync)
             .RequireAuthorization("ChallengesWrite")
             .WithName("CreateChallenge");
@@ -222,6 +230,102 @@ public static class ChallengesEndpoints
                 _ => CreateProblem(
                     StatusCodes.Status400BadRequest,
                     "Invalid backup code verification request.",
+                    result.ErrorMessage),
+            };
+        }
+
+        return Results.Ok(CreateChallengeRequestMapper.MapResponse(result.Challenge));
+    }
+
+    private static async Task<IResult> ApproveChallengeAsync(
+        Guid challengeId,
+        ApproveChallengeHttpRequest request,
+        ApprovePushChallengeHandler handler,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        Application.Devices.DeviceClientContext deviceContext;
+        try
+        {
+            deviceContext = httpContext.GetRequiredDeviceClientContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return CreateProblem(StatusCodes.Status401Unauthorized, "Authentication failed.", "Authenticated principal is missing device claims.");
+        }
+
+        var result = await handler.HandleAsync(
+            ApproveChallengeRequestMapper.Map(challengeId, request),
+            deviceContext,
+            cancellationToken);
+
+        if (!result.IsSuccess || result.Challenge is null)
+        {
+            return result.ErrorCode switch
+            {
+                ApprovePushChallengeErrorCode.NotFound => CreateProblem(
+                    StatusCodes.Status404NotFound,
+                    "Challenge was not found.",
+                    result.ErrorMessage),
+                ApprovePushChallengeErrorCode.ChallengeExpired => CreateProblem(
+                    StatusCodes.Status410Gone,
+                    "Challenge has expired.",
+                    result.ErrorMessage),
+                ApprovePushChallengeErrorCode.InvalidState or ApprovePushChallengeErrorCode.PolicyDenied => CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    "Challenge cannot be approved.",
+                    result.ErrorMessage),
+                _ => CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid challenge approval request.",
+                    result.ErrorMessage),
+            };
+        }
+
+        return Results.Ok(CreateChallengeRequestMapper.MapResponse(result.Challenge));
+    }
+
+    private static async Task<IResult> DenyChallengeAsync(
+        Guid challengeId,
+        DenyChallengeHttpRequest request,
+        DenyPushChallengeHandler handler,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        Application.Devices.DeviceClientContext deviceContext;
+        try
+        {
+            deviceContext = httpContext.GetRequiredDeviceClientContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return CreateProblem(StatusCodes.Status401Unauthorized, "Authentication failed.", "Authenticated principal is missing device claims.");
+        }
+
+        var result = await handler.HandleAsync(
+            DenyChallengeRequestMapper.Map(challengeId, request),
+            deviceContext,
+            cancellationToken);
+
+        if (!result.IsSuccess || result.Challenge is null)
+        {
+            return result.ErrorCode switch
+            {
+                DenyPushChallengeErrorCode.NotFound => CreateProblem(
+                    StatusCodes.Status404NotFound,
+                    "Challenge was not found.",
+                    result.ErrorMessage),
+                DenyPushChallengeErrorCode.ChallengeExpired => CreateProblem(
+                    StatusCodes.Status410Gone,
+                    "Challenge has expired.",
+                    result.ErrorMessage),
+                DenyPushChallengeErrorCode.InvalidState => CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    "Challenge cannot be denied.",
+                    result.ErrorMessage),
+                _ => CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid challenge denial request.",
                     result.ErrorMessage),
             };
         }

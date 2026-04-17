@@ -222,11 +222,13 @@ Draft
 ## Текущий кодовый прогресс
 
 - в `backend/OtpAuth.Application/Challenges` уже реализованы `CreateChallengeHandler`, `GetChallengeHandler`, `VerifyTotpHandler` и `VerifyBackupCodeHandler`
-- в `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` опубликованы `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}`, `POST /api/v1/challenges/{id}/verify-totp` и `POST /api/v1/challenges/{id}/verify-backup-code`
+- в `backend/OtpAuth.Application/Challenges` теперь также реализованы `ApprovePushChallengeHandler` и `DenyPushChallengeHandler` с device-bound binding, `Policy` и sanitized audit
+- в `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` опубликованы `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}`, `POST /api/v1/challenges/{id}/verify-totp`, `POST /api/v1/challenges/{id}/verify-backup-code`, `POST /api/v1/challenges/{id}/approve` и `POST /api/v1/challenges/{id}/deny`
 - `Challenge` persistence переведена на `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeRepository.cs`
+- `Challenge` persistence теперь также хранит `target_device_id`, `approved_utc` и `denied_utc`, а `CreateChallengeHandler` auto-bind-ит `push` только при единственном active push-capable device
 - `Factor Engine` уже использует enrollment-backed `TOTP` verifier через `backend/OtpAuth.Infrastructure/Factors/PostgresTotpVerifier.cs`
 - `VerifyTotp` пишет append-only записи в `challenge_attempts`
 - `backup codes` теперь имеют отдельный hash-only persistence/verify contour через `backend/OtpAuth.Infrastructure/Factors/PostgresBackupCodeStore.cs`, `PostgresBackupCodeVerifier.cs` и `Pbkdf2BackupCodeHasher.cs`
 - `TOTP` enrollment slice уже реализован через `backend/OtpAuth.Application/Enrollments/*`, `backend/OtpAuth.Api/Endpoints/EnrollmentsEndpoints.cs` и `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentProvisioningStore.cs`
 - канонический design-contract для `Device Registry` теперь зафиксирован в [[Device Lifecycle Design]] и `ADR-030`
-- следующий практический backend шаг после contract sync: реализовать runtime `Device Registry` slice `activate -> refresh -> revoke`, не смешивая его сразу с `push approve`
+- следующий практический backend шаг после device-bound `push approve/deny`: delivery contour для фактической постановки `push` challenge на bound device и явный support path для multi-device routing

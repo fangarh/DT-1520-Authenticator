@@ -26,6 +26,12 @@ internal sealed record ChallengePersistenceModel
 
     public required DateTimeOffset ExpiresAt { get; init; }
 
+    public Guid? TargetDeviceId { get; init; }
+
+    public DateTimeOffset? ApprovedUtc { get; init; }
+
+    public DateTimeOffset? DeniedUtc { get; init; }
+
     public string? CorrelationId { get; init; }
 
     public string? CallbackUrl { get; init; }

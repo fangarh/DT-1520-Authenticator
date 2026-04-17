@@ -65,6 +65,7 @@ public static class CreateChallengeRequestMapper
             OperationType = operationType,
             OperationDisplayName = httpRequest.Operation.DisplayName,
             PreferredFactors = preferredFactors,
+            TargetDeviceId = httpRequest.TargetDeviceId,
             CorrelationId = httpRequest.CorrelationId,
             CallbackUrl = callbackUrl,
         };
@@ -82,6 +83,9 @@ public static class CreateChallengeRequestMapper
             FactorType = MapFactorType(challenge.FactorType),
             Status = MapStatus(challenge.Status),
             ExpiresAt = challenge.ExpiresAt,
+            TargetDeviceId = challenge.TargetDeviceId,
+            ApprovedAt = challenge.ApprovedUtc,
+            DeniedAt = challenge.DeniedUtc,
             CorrelationId = challenge.CorrelationId,
         };
     }

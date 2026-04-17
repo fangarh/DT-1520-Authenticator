@@ -99,6 +99,16 @@ Security behavior:
 - replay или reuse refresh token-а переводит устройство в `blocked` и revoke-ит текущий token family
 - `revoke` устройства обновляет `last_auth_state_changed_utc`, поэтому уже выданные access token-ы перестают быть валидными немедленно, а не только по `exp`
 
+Текущий implementation status:
+
+- runtime `Device Registry` slice уже реализован в backend
+- `POST /api/v1/devices/activate` требует integration scope `devices:write`, валидирует one-time activation artifact и выдает первую пару `device access token + refresh token`
+- activation artifact теперь живет в `auth.device_activation_codes`, хранится hash-only и consume-ится атомарно при successful activation
+- bootstrap/manual activation artifact можно создать explicit командой `seed-bootstrap-device-activation`
+- `POST /api/v1/auth/device-tokens/refresh` работает поверх `auth.device_refresh_tokens`, rotate-ит refresh token на каждый successful refresh и при reuse/expired/revoked token fail-closed блокирует устройство
+- device access token выпускается отдельным JWT contour с отдельным validator-ом; runtime принимает его только пока устройство `active` и `iat >= last_auth_state_changed_utc`
+- `POST /api/v1/devices/{deviceId}/revoke` revoke-ит device lifecycle server-side и инвалидирует уже выданные refresh/access token-ы через persisted state
+
 ## Device lifecycle contour
 
 Канонический design-contract теперь зафиксирован в [[../Architecture/Device Lifecycle Design]].
@@ -120,8 +130,29 @@ Security behavior:
 
 - `auth.devices`
 - `auth.device_refresh_tokens`
+- `auth.device_activation_codes`
 - runtime validation по `last_auth_state_changed_utc`
 - append-only audit событий `device.activated`, `device.token_refreshed`, `device.refresh_reuse_detected`, `device.revoked`, `device.blocked`
+
+Для explicit multi-device support поверх этого теперь дополнительно есть:
+
+- `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true` для trusted integration path, который хочет выбрать конкретный active device
+- optional `targetDeviceId` в `POST /api/v1/challenges`, чтобы ambiguity не resolve-илась неявно на backend
+
+## Push delivery contour
+
+После device-bound `approve/deny` backend теперь делает не только binding, но и фактическую постановку `push` challenge:
+
+1. `CreateChallenge` при выбранном `push` атомарно пишет `challenge` и row в `auth.push_challenge_deliveries`.
+2. `OtpAuth.Worker` job `push_challenge_delivery` lease-ит due rows из `PostgreSQL`.
+3. Worker повторно валидирует `challenge` и bound device перед dispatch.
+4. Gateway получает только sanitized dispatch contract и текущий `pushToken` из `auth.devices`.
+
+Security semantics:
+
+- raw `pushToken` не дублируется в outbox table и не попадает в logs/metrics
+- retry path использует `attempt_count + next_attempt_utc + locked_until_utc`, а не blind resend loop
+- permanent delivery failure не перебрасывает challenge на другой device автоматически
 
 ## Почему не единый auth flow
 

@@ -1,4 +1,6 @@
 using OtpAuth.Api.Auth;
+using OtpAuth.Api.Devices;
+using OtpAuth.Application.Devices;
 using OtpAuth.Application.Integrations;
 
 namespace OtpAuth.Api.Endpoints;
@@ -16,6 +18,9 @@ public static class AuthEndpoints
         app.MapPost("/oauth2/revoke", RevokeIntegrationTokenAsync)
             .AllowAnonymous()
             .WithName("RevokeIntegrationToken");
+        app.MapPost("/api/v1/auth/device-tokens/refresh", RefreshDeviceTokenAsync)
+            .AllowAnonymous()
+            .WithName("RefreshDeviceToken");
 
         return app;
     }
@@ -136,6 +141,34 @@ public static class AuthEndpoints
         }
 
         return Results.Ok();
+    }
+
+    private static async Task<IResult> RefreshDeviceTokenAsync(
+        RefreshDeviceTokenHttpRequest request,
+        RefreshDeviceTokenHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(DeviceRequestMapper.Map(request), cancellationToken);
+        if (!result.IsSuccess || result.Tokens is null)
+        {
+            return result.ErrorCode switch
+            {
+                RefreshDeviceTokenErrorCode.InvalidToken => CreateProblem(
+                    StatusCodes.Status401Unauthorized,
+                    "Device token refresh failed.",
+                    result.ErrorMessage),
+                RefreshDeviceTokenErrorCode.Conflict => CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    "Device token refresh failed.",
+                    result.ErrorMessage),
+                _ => CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid device token refresh request.",
+                    result.ErrorMessage),
+            };
+        }
+
+        return Results.Ok(DeviceRequestMapper.MapTokenResponse(result.Tokens));
     }
 
     private static IResult CreateProblem(int statusCode, string title, string? detail)

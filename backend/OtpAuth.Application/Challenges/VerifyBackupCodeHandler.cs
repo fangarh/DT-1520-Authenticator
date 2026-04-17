@@ -117,7 +117,7 @@ public sealed class VerifyBackupCodeHandler
                 failedChallenge);
         }
 
-        var approvedChallenge = challenge.MarkApproved();
+        var approvedChallenge = challenge.MarkApproved(DateTimeOffset.UtcNow);
         await _challengeRepository.UpdateAsync(approvedChallenge, cancellationToken);
         await RecordAttemptAsync(approvedChallenge.Id, ChallengeAttemptResults.Approved, cancellationToken);
 

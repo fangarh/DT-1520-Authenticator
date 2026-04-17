@@ -339,6 +339,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
   /api/v1/challenges/{challengeId}/deny:
     post:
       tags: [Challenges]
@@ -374,6 +376,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
   /api/v1/enrollments/totp:
     post:
       tags: [Enrollments]
@@ -587,6 +591,44 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+  /api/v1/devices:
+    get:
+      tags: [Devices]
+      summary: List active devices for explicit multi-device routing
+      operationId: listDevices
+      security:
+        - IntegrationOAuth2:
+            - devices:write
+      parameters:
+        - name: externalUserId
+          in: query
+          required: true
+          description: External user identifier whose active devices should be listed.
+          schema:
+            type: string
+            minLength: 1
+        - name: pushCapableOnly
+          in: query
+          required: false
+          description: When `true`, returns only active devices that currently have a push delivery channel.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Active device list
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/v1/devices/{deviceId}/revoke:
     post:
       tags: [Devices]
@@ -972,6 +1014,10 @@ components:
         correlationId:
           type: string
           minLength: 1
+        targetDeviceId:
+          type: string
+          format: uuid
+          description: Optional explicit routing target for `push`; required to disambiguate when multiple active push-capable devices exist.
     FactorType:
       type: string
       enum: [totp, push, backup_code]
@@ -1042,6 +1088,9 @@ components:
         expiresAt:
           type: string
           format: date-time
+        targetDeviceId:
+          type: string
+          format: uuid
         approvedAt:
           type: string
           format: date-time
@@ -1073,18 +1122,22 @@ components:
         deviceId:
           type: string
           format: uuid
+          description: Must match the authenticated device bearer subject and the server-side challenge binding.
         biometricVerified:
           type: boolean
           default: false
+          description: Must be `true` for approve requests after local user-presence verification.
     DenyChallengeRequest:
       type: object
       properties:
         deviceId:
           type: string
           format: uuid
+          description: Optional echo of the authenticated device id; if provided it must match the device bearer subject.
         reason:
           type: string
           maxLength: 256
+          description: Optional operator-facing deny reason. The backend does not persist the raw free-text value in audit payloads.
     RefreshDeviceTokenRequest:
       type: object
       required: [refreshToken]
@@ -1171,6 +1224,9 @@ components:
           $ref: '#/components/schemas/DeviceStatus'
         deviceName:
           type: string
+        isPushCapable:
+          type: boolean
+          description: Indicates whether the backend currently sees a usable push delivery channel for the device.
         attestationStatus:
           $ref: '#/components/schemas/DeviceAttestationStatus'
         activatedAt:

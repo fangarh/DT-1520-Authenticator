@@ -14,5 +14,11 @@ public sealed record ChallengeHttpResponse
 
     public required DateTimeOffset ExpiresAt { get; init; }
 
+    public Guid? TargetDeviceId { get; init; }
+
+    public DateTimeOffset? ApprovedAt { get; init; }
+
+    public DateTimeOffset? DeniedAt { get; init; }
+
     public string? CorrelationId { get; init; }
 }

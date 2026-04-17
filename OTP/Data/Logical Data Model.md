@@ -123,6 +123,7 @@ Rotating refresh token family для device auth contour.
 - `factor_type`
 - `status`
 - `expires_at`
+- `target_device_id`
 - `approved_at`
 - `denied_at`
 - `correlation_id`

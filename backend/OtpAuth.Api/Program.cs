@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Console;
 using Npgsql;
 using OtpAuth.Application.Administration;
 using OtpAuth.Application.Challenges;
+using OtpAuth.Application.Devices;
 using OtpAuth.Application.Enrollments;
 using OtpAuth.Application.Factors;
 using OtpAuth.Application.Integrations;
@@ -15,6 +16,7 @@ using OtpAuth.Api.Authentication;
 using OtpAuth.Api.Endpoints;
 using OtpAuth.Infrastructure.Administration;
 using OtpAuth.Infrastructure.Challenges;
+using OtpAuth.Infrastructure.Devices;
 using OtpAuth.Infrastructure.Factors;
 using OtpAuth.Infrastructure.Integrations;
 using OtpAuth.Infrastructure.Policy;
@@ -38,6 +40,9 @@ if (string.IsNullOrWhiteSpace(postgresConnectionString))
 var bootstrapOAuthOptions = builder.Configuration
     .GetSection("BootstrapOAuth")
     .Get<BootstrapOAuthOptions>() ?? new BootstrapOAuthOptions();
+var deviceTokenOptions = builder.Configuration
+    .GetSection("DeviceTokens")
+    .Get<DeviceTokenOptions>() ?? new DeviceTokenOptions();
 if (!builder.Environment.IsDevelopment() &&
     string.IsNullOrWhiteSpace(bootstrapOAuthOptions.CurrentSigningKey) &&
     string.IsNullOrWhiteSpace(bootstrapOAuthOptions.SigningKey))
@@ -55,6 +60,7 @@ var postgresDataSource = new NpgsqlDataSourceBuilder(postgresConnectionString).B
 var integrationClientStore = new PostgresIntegrationClientStore(postgresDataSource);
 var adminUserStore = new PostgresAdminUserStore(postgresDataSource);
 var accessTokenRevocationStore = new PostgresRevokedIntegrationAccessTokenStore(postgresDataSource);
+var deviceAccessTokenIssuer = new JwtDeviceAccessTokenIssuer(deviceTokenOptions, bootstrapOAuthOptions);
 var accessTokenIssuer = new JwtIntegrationAccessTokenIssuer(
     bootstrapOAuthOptions,
     integrationClientStore,
@@ -66,6 +72,7 @@ var hasConfiguredHttpsEndpoint =
 
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton(bootstrapOAuthOptions);
+builder.Services.AddSingleton(deviceTokenOptions);
 builder.Services.AddSingleton(totpProtectionOptions);
 builder.Services.AddSingleton(postgresDataSource);
 builder.Services.AddSingleton<IClientSecretHasher>(clientSecretHasher);
@@ -79,6 +86,12 @@ builder.Services.AddSingleton(accessTokenIssuer);
 builder.Services.AddSingleton<IIntegrationAccessTokenIssuer>(accessTokenIssuer);
 builder.Services.AddSingleton<IIntegrationAccessTokenIntrospector>(accessTokenIssuer);
 builder.Services.AddSingleton<IIntegrationAccessTokenRuntimeValidator, IntegrationAccessTokenRuntimeValidator>();
+builder.Services.AddSingleton(deviceAccessTokenIssuer);
+builder.Services.AddSingleton<IDeviceAccessTokenIssuer>(deviceAccessTokenIssuer);
+builder.Services.AddSingleton<IDeviceAccessTokenRuntimeValidator, DeviceAccessTokenRuntimeValidator>();
+builder.Services.AddSingleton<IDeviceRegistryStore, PostgresDeviceRegistryStore>();
+builder.Services.AddSingleton<IDeviceRefreshTokenHasher, Pbkdf2DeviceRefreshTokenHasher>();
+builder.Services.AddSingleton<IDeviceLifecycleAuditWriter, DeviceLifecycleAuditWriter>();
 builder.Services.AddSingleton<IntegrationClientLifecycleService>();
 builder.Services.AddAuthentication(options =>
     {
@@ -91,6 +104,8 @@ builder.Services.AddAuthentication(options =>
         options.ForwardDefaultSelector = context =>
             context.Request.Path.StartsWithSegments("/api/v1/admin", StringComparison.OrdinalIgnoreCase)
                 ? AdminAuthenticationDefaults.AuthenticationScheme
+                : IsDeviceChallengeDecisionPath(context.Request.Path)
+                    ? DeviceAuthenticationDefaults.AuthenticationScheme
                 : JwtBearerDefaults.AuthenticationScheme;
     })
     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -106,6 +121,23 @@ builder.Services.AddAuthentication(options =>
                 if (!result.IsValid)
                 {
                     context.Fail(result.ErrorMessage ?? "Integration access token validation failed.");
+                }
+            },
+        };
+    })
+    .AddJwtBearer(DeviceAuthenticationDefaults.AuthenticationScheme, options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = deviceAccessTokenIssuer.CreateTokenValidationParameters();
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var validator = context.HttpContext.RequestServices.GetRequiredService<IDeviceAccessTokenRuntimeValidator>();
+                var result = await validator.ValidateAsync(context.Principal!, context.HttpContext.RequestAborted);
+                if (!result.IsValid)
+                {
+                    context.Fail(result.ErrorMessage ?? "Device access token validation failed.");
                 }
             },
         };
@@ -155,6 +187,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("EnrollmentsWrite", policy =>
         policy.RequireAuthenticatedUser()
             .RequireAssertion(context => HasScope(context.User, IntegrationClientScopes.EnrollmentsWrite)));
+    options.AddPolicy("DevicesWrite", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context => HasScope(context.User, IntegrationClientScopes.DevicesWrite)));
+    options.AddPolicy("DeviceChallengeWrite", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context => HasScope(context.User, DeviceTokenScope.Challenge)));
     options.AddPolicy(AdminAuthenticationDefaults.AuthenticatedPolicy, policy =>
         policy.RequireAuthenticatedUser());
     options.AddPolicy(AdminAuthenticationDefaults.EnrollmentsReadPolicy, policy =>
@@ -181,6 +219,9 @@ builder.Services.AddSingleton<ISecurityAuditStore, PostgresSecurityAuditStore>()
 builder.Services.AddSingleton<SecurityAuditService>();
 builder.Services.AddSingleton<IChallengeRepository, PostgresChallengeRepository>();
 builder.Services.AddSingleton<IChallengeAttemptRecorder, PostgresChallengeAttemptRecorder>();
+builder.Services.AddSingleton<IPushChallengeDeliveryStore, PostgresPushChallengeDeliveryStore>();
+builder.Services.AddSingleton<IPushChallengeDeliveryGateway, LoggingPushChallengeDeliveryGateway>();
+builder.Services.AddSingleton<PushChallengeDeliveryCoordinator>();
 builder.Services.AddSingleton(new Pbkdf2BackupCodeHasher());
 builder.Services.AddSingleton<IBackupCodeStore, PostgresBackupCodeStore>();
 builder.Services.AddSingleton<IBackupCodeVerificationRateLimiter, PostgresBackupCodeVerificationRateLimiter>();
@@ -202,6 +243,13 @@ builder.Services.AddSingleton<CreateChallengeHandler>();
 builder.Services.AddSingleton<GetChallengeHandler>();
 builder.Services.AddSingleton<VerifyBackupCodeHandler>();
 builder.Services.AddSingleton<VerifyTotpHandler>();
+builder.Services.AddSingleton<IChallengeDecisionAuditWriter, PushChallengeDecisionAuditWriter>();
+builder.Services.AddSingleton<ApprovePushChallengeHandler>();
+builder.Services.AddSingleton<DenyPushChallengeHandler>();
+builder.Services.AddSingleton<ActivateDeviceHandler>();
+builder.Services.AddSingleton<ListDevicesForRoutingHandler>();
+builder.Services.AddSingleton<RefreshDeviceTokenHandler>();
+builder.Services.AddSingleton<RevokeDeviceHandler>();
 
 var app = builder.Build();
 
@@ -222,6 +270,7 @@ app.MapAdminEnrollmentReadEndpoints();
 app.MapAdminEnrollmentCommandEndpoints();
 app.MapAuthEndpoints();
 app.MapChallengesEndpoints();
+app.MapDevicesEndpoints();
 app.MapEnrollmentsEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new
@@ -252,6 +301,19 @@ static bool HasScope(ClaimsPrincipal user, string requiredScope)
     return scopeValue
         .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .Contains(requiredScope, StringComparer.Ordinal);
+}
+
+static bool IsDeviceChallengeDecisionPath(PathString path)
+{
+    if (!path.StartsWithSegments("/api/v1/challenges", StringComparison.OrdinalIgnoreCase))
+    {
+        return false;
+    }
+
+    var value = path.Value;
+    return value is not null &&
+           (value.EndsWith("/approve", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith("/deny", StringComparison.OrdinalIgnoreCase));
 }
 
 public partial class Program;

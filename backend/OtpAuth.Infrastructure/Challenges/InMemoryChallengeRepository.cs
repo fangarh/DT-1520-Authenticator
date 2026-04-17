@@ -7,10 +7,21 @@ namespace OtpAuth.Infrastructure.Challenges;
 public sealed class InMemoryChallengeRepository : IChallengeRepository
 {
     private readonly ConcurrentDictionary<Guid, Challenge> _challenges = new();
+    private readonly ConcurrentDictionary<Guid, PushChallengeDelivery> _pushDeliveries = new();
 
     public Task AddAsync(Challenge challenge, CancellationToken cancellationToken)
     {
+        return AddAsync(challenge, pushDelivery: null, cancellationToken);
+    }
+
+    public Task AddAsync(Challenge challenge, PushChallengeDelivery? pushDelivery, CancellationToken cancellationToken)
+    {
         _challenges[challenge.Id] = challenge;
+        if (pushDelivery is not null)
+        {
+            _pushDeliveries[pushDelivery.DeliveryId] = pushDelivery;
+        }
+
         return Task.CompletedTask;
     }
 
@@ -35,5 +46,12 @@ public sealed class InMemoryChallengeRepository : IChallengeRepository
     {
         _challenges[challenge.Id] = challenge;
         return Task.CompletedTask;
+    }
+
+    public IReadOnlyCollection<PushChallengeDelivery> GetPushDeliveries()
+    {
+        return _pushDeliveries.Values
+            .OrderBy(delivery => delivery.CreatedUtc)
+            .ToArray();
     }
 }

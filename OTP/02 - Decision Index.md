@@ -32,6 +32,7 @@
 - `ADR-028`: admin `start` резолвит `applicationClientId` явно или только при единственном активном integration client-е tenant-а
 - `ADR-029`: installer использует script-first engine и отдельный локальный setup UI поверх него
 - `ADR-030`: `Device Registry` использует rotating refresh tokens и auth-state invalidation
+- `ADR-031`: `push` challenge всегда привязан к одному active device и не может подтверждаться другим device bearer
 
 ## Reading Path
 
@@ -66,6 +67,7 @@
 27. [[Decisions/ADR-028 - Admin Start Resolves Application Client Explicitly or Uniquely by Tenant]]
 28. [[Decisions/ADR-029 - Installer Uses Script-First Engine and Separate Local Setup UI]]
 29. [[Decisions/ADR-030 - Device Registry Uses Rotating Refresh Tokens and Auth-State Invalidation]]
+30. [[Decisions/ADR-031 - Push Challenges Are Bound to a Single Active Device]]
 
 Если задача относится к процессу и поддержанию контекста:
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OtpAuth.Application.Integrations;
 using OtpAuth.Infrastructure.Administration;
+using OtpAuth.Infrastructure.Devices;
 using OtpAuth.Infrastructure.Factors;
 using OtpAuth.Infrastructure.Integrations;
 using OtpAuth.Infrastructure.Persistence;
@@ -28,6 +29,7 @@ return command switch
     "seed-bootstrap-clients" => await SeedBootstrapClientsAsync(GetRequiredPostgresConnectionString()),
     "seed-bootstrap-totp-enrollment" => await SeedBootstrapTotpEnrollmentAsync(GetRequiredPostgresConnectionString()),
     "seed-bootstrap-backup-codes" => await SeedBootstrapBackupCodesAsync(GetRequiredPostgresConnectionString()),
+    "seed-bootstrap-device-activation" => await SeedBootstrapDeviceActivationAsync(GetRequiredPostgresConnectionString()),
     "upsert-admin-user" => await UpsertAdminUserAsync(GetRequiredPostgresConnectionString(), args),
     "reencrypt-totp-secrets" => await ReEncryptTotpSecretsAsync(GetRequiredPostgresConnectionString()),
     "cleanup-security-data" => await CleanupSecurityDataAsync(GetRequiredPostgresConnectionString()),
@@ -202,6 +204,22 @@ static async Task<int> SeedBootstrapBackupCodesAsync(string connectionString)
 
     Console.WriteLine(
         $"Seeded {material.Codes.Count} bootstrap backup code(s) for external user '{material.ExternalUserId}'.");
+    return 0;
+}
+
+static async Task<int> SeedBootstrapDeviceActivationAsync(string connectionString)
+{
+    var bootstrapOAuthOptions = LoadBootstrapOAuthOptions();
+    var factory = new BootstrapDeviceActivationSeedFactory(new Pbkdf2DeviceRefreshTokenHasher());
+    var material = factory.Create(bootstrapOAuthOptions);
+
+    await using var dataSource = new Npgsql.NpgsqlDataSourceBuilder(connectionString).Build();
+    var seeder = new PostgresDeviceActivationCodeSeeder(dataSource);
+    await seeder.UpsertAsync(material, CancellationToken.None);
+
+    Console.WriteLine($"Seeded bootstrap device activation for external user '{material.ExternalUserId}' and platform '{material.Platform}'.");
+    Console.WriteLine($"Activation code: {material.ActivationCode}");
+    Console.WriteLine($"Expires at: {material.ExpiresUtc:O}");
     return 0;
 }
 
@@ -598,7 +616,7 @@ static string ResolveApiProjectPath()
 static int ExitWithUsage(string command)
 {
     Console.Error.WriteLine($"Unsupported command '{command}'.");
-    Console.Error.WriteLine("Supported commands: ensure-database, migrate, inspect-signing-key-lifecycle, audit-signing-key-lifecycle, list-signing-key-lifecycle-audit-events [limit], inspect-totp-protection-key-lifecycle, audit-totp-protection-key-lifecycle, list-totp-protection-key-lifecycle-audit-events [limit], list-security-audit-events [limit] [event-type-prefix], list-admin-users, initialize, seed-bootstrap-clients, seed-bootstrap-totp-enrollment, seed-bootstrap-backup-codes, upsert-admin-user <username> <permission> [permission...], reencrypt-totp-secrets, cleanup-security-data, rotate-integration-client-secret <client-id>, deactivate-integration-client <client-id>, activate-integration-client <client-id>, migrate-and-seed-bootstrap-clients");
+    Console.Error.WriteLine("Supported commands: ensure-database, migrate, inspect-signing-key-lifecycle, audit-signing-key-lifecycle, list-signing-key-lifecycle-audit-events [limit], inspect-totp-protection-key-lifecycle, audit-totp-protection-key-lifecycle, list-totp-protection-key-lifecycle-audit-events [limit], list-security-audit-events [limit] [event-type-prefix], list-admin-users, initialize, seed-bootstrap-clients, seed-bootstrap-totp-enrollment, seed-bootstrap-backup-codes, seed-bootstrap-device-activation, upsert-admin-user <username> <permission> [permission...], reencrypt-totp-secrets, cleanup-security-data, rotate-integration-client-secret <client-id>, deactivate-integration-client <client-id>, activate-integration-client <client-id>, migrate-and-seed-bootstrap-clients");
     return 1;
 }
 
