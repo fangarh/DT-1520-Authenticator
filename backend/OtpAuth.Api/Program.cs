@@ -181,6 +181,10 @@ builder.Services.AddSingleton<ISecurityAuditStore, PostgresSecurityAuditStore>()
 builder.Services.AddSingleton<SecurityAuditService>();
 builder.Services.AddSingleton<IChallengeRepository, PostgresChallengeRepository>();
 builder.Services.AddSingleton<IChallengeAttemptRecorder, PostgresChallengeAttemptRecorder>();
+builder.Services.AddSingleton(new Pbkdf2BackupCodeHasher());
+builder.Services.AddSingleton<IBackupCodeStore, PostgresBackupCodeStore>();
+builder.Services.AddSingleton<IBackupCodeVerificationRateLimiter, PostgresBackupCodeVerificationRateLimiter>();
+builder.Services.AddSingleton<IBackupCodeVerifier, PostgresBackupCodeVerifier>();
 builder.Services.AddSingleton<TotpSecretProtector>();
 builder.Services.AddSingleton<ITotpEnrollmentStore, PostgresTotpEnrollmentStore>();
 builder.Services.AddSingleton<ITotpEnrollmentProvisioningStore, PostgresTotpEnrollmentProvisioningStore>();
@@ -196,6 +200,7 @@ builder.Services.AddSingleton<StartTotpEnrollmentHandler>();
 builder.Services.AddSingleton<ConfirmTotpEnrollmentHandler>();
 builder.Services.AddSingleton<CreateChallengeHandler>();
 builder.Services.AddSingleton<GetChallengeHandler>();
+builder.Services.AddSingleton<VerifyBackupCodeHandler>();
 builder.Services.AddSingleton<VerifyTotpHandler>();
 
 var app = builder.Build();

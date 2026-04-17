@@ -22,6 +22,7 @@
 - `OTP/03 - Open Questions.md` — незакрытые вопросы
 - `OTP/Decisions/` — `ADR`
 - `OTP/Architecture/` — канонические архитектурные заметки
+- `OTP/Architecture/Device Lifecycle Design.md` — канонический design-contract для `Device Registry`, device tokens и lifecycle `pending/active/revoked/blocked`
 - `OTP/Security/` — канонические security-ограничения и защитная модель `MVP`
 - `OTP/Data/` — канонические заметки по данным и `ERD`
 - `OTP/Integrations/` — интеграционный слой и `OpenAPI`
@@ -83,6 +84,7 @@
 - `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SharedPreferencesSecureTotpSecretStoreTest.kt` - unit tests для secure storage engine: save/read/list/delete, hashed storage key и corrupted record fail-closed path
 - `mobile/feature/provisioning/src/test/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraftTest.kt` - unit tests для import draft contract
 - `mobile/feature/provisioning/src/test/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowTest.kt` - unit tests для invalid/valid import path, preview state transitions и confirm/save feedback без Compose runtime guessing
+- `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/AndroidBackupSecurityConfigTest.kt` - unit tests для manifest backup posture: `allowBackup=false`, explicit deny-all backup rules и отдельный `device-transfer` deny-list для Android 12+
 - `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodeSummaryTest.kt` - unit tests для runtime code summary contract
 - `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesPresenterTest.kt` - unit tests для runtime presenter: sorting saved accounts, code generation handshake и empty-state contract
 - `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRemovalWorkflowTest.kt` - unit tests для local remove confirm-state без Compose/runtime guessing
@@ -112,10 +114,12 @@
 - `admin/src/app/App.tsx` - runtime `Admin UI MVP` shell: hero/meta chrome, session-aware routing между `LoginPanel` и enrollment workspace
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/MainActivity.kt` - Android entry point; поднимает только app shell без domain/storage логики
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorApp.kt` - composition root для mobile shell поверх `core:ui` и feature modules
+- `mobile/app/src/main/res/xml/backup_rules.xml` - explicit deny-all backup rules для Android 11- и defense-in-depth вокруг локального `TOTP-first` secret storage
+- `mobile/app/src/main/res/xml/data_extraction_rules.xml` - explicit deny-all rules для Android 12+ cloud backup и `device-transfer`, чтобы секреты не мигрировали на новое устройство через system transfer path
 - `mobile/core/ui/src/main/java/ru/dt1520/security/authenticator/core/ui/AppSection.kt` - базовый UI container для feature placeholders и следующих mobile screens
 - `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningRoute.kt` - provisioning shell: masked URI/manual inputs, preview/confirm/save orchestration и secure-save callback boundary
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowState.kt` - pure workflow state/reducer; whitelist-ит safe validation copy и не пропускает неожиданный текст исключения в UI error path
 - `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraft.kt` - pure input model для `otpauth://` import и manual fallback, без прямой зависимости от storage
-- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowState.kt` - pure workflow state/reducer для preview/save feedback и invalid/valid import path
 - `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningImportPreview.kt` - preview contract между provisioning feature и app wiring без раскрытия secret material в UI copy
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorSecretCatalog.kt` - app-side helpers для fail-closed refresh secure store snapshot-а и safe mapping preview -> stored secret без удержания provisioning preview после save
 - `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRoute.kt` - runtime offline codes screen: account cards, current code, countdown и explicit remove confirm flow
@@ -177,6 +181,7 @@
 - `backend/OtpAuth.Application/Challenges/CreateChallengeHandler.cs` - create use case с вызовом `Policy`
 - `backend/OtpAuth.Application/Challenges/GetChallengeHandler.cs` - read use case для retrieval по `challengeId`
 - `backend/OtpAuth.Application/Challenges/VerifyTotpHandler.cs` - verify use case с переводом `Challenge` в `approved`, `failed` или `expired`
+- `backend/OtpAuth.Application/Challenges/VerifyBackupCodeHandler.cs` - verify use case для `backup_code` challenge с rate limiting, one-time consume semantics и переводом `Challenge` в `approved`, `failed` или `expired`
 - `backend/OtpAuth.Application/Enrollments/StartTotpEnrollmentHandler.cs` - start use case для admin/trusted-integration `TOTP` enrollment с `Policy`, provisioning artifact и audit
 - `backend/OtpAuth.Application/Enrollments/GetTotpEnrollmentHandler.cs` - scoped read use case для enrollment status без повторной выдачи provisioning artifacts
 - `backend/OtpAuth.Application/Enrollments/ConfirmTotpEnrollmentHandler.cs` - confirm use case для `TOTP` enrollment с brute-force protection по persisted attempt counter
@@ -193,6 +198,9 @@
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentProvisioningStore.cs` - start/read/confirm/replace/revoke lifecycle для `TOTP` enrollment, включая admin lookup по `tenantId + externalUserId` и by-id admin lookup
 - `backend/OtpAuth.Infrastructure/Factors/TotpSecretProtector.cs` - rotation-ready key ring для `TOTP`: current + legacy keys по `key version`
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpVerifier.cs` - enrollment-backed `TOTP` verification
+- `backend/OtpAuth.Infrastructure/Factors/PostgresBackupCodeStore.cs` - `PostgreSQL`-backed hash-only storage для активных `backup codes` и atomic mark-used path
+- `backend/OtpAuth.Infrastructure/Factors/PostgresBackupCodeVerifier.cs` - hash-only verification для `backup_code` challenge c one-time consume semantics
+- `backend/OtpAuth.Infrastructure/Factors/Pbkdf2BackupCodeHasher.cs` - PBKDF2 hasher для `backup codes`; low-entropy коды не хранятся в открытом виде
 - `backend/OtpAuth.Infrastructure/Factors/TotpEnrollmentAuditWriter.cs` - sanitized enrollment lifecycle audit events в unified append-only trail
 - `backend/OtpAuth.Infrastructure/Factors/TotpEnrollmentAuditWriter.cs` - sanitized enrollment lifecycle audit events, включая revoke и replace
 - `backend/OtpAuth.Infrastructure/Factors/PostgresTotpReplayProtector.cs` - persistent anti-replay reservation для использованных `TOTP` time step
@@ -301,3 +309,11 @@
 - `2026-04-17`: карта дополнена `Step 5` mobile-трека: `feature:provisioning` теперь имеет masked URI/manual import flow, preview/save reducer, secure-save callback boundary и unit tests; `app` wired к `AndroidKeystoreSecureTotpSecretStore`
 - `2026-04-17`: карта дополнена `Step 6` mobile-трека: `feature:totp-codes` теперь содержит runtime presenter/remove workflow, `AuthenticatorApp` обновляет secure store snapshot без удержания preview credential, а live verification подтверждена на `emulator-5554`
 - `2026-04-17`: карта дополнена `Step 7` mobile-трека: добавлена каноническая заметка `OTP/Integrations/TOTP Provisioning Contract.md`, `OpenAPI` теперь явно помечает `secretUri/qrCodePayload` как artifact-only поля, а следующий mobile focus смещен на `Compose` UI/instrumented tests для provisioning/runtime screens
+- `2026-04-17`: карта дополнена `P0` mobile hardening: `AndroidManifest` теперь запрещает backup, `backup_rules.xml` и `data_extraction_rules.xml` явно deny-all для cloud/D2D, а provisioning validation copy проходит через whitelist вместо проброса сырого exception message
+- `2026-04-17`: карта дополнена mobile instrumented regression contour: `mobile/app/src/androidTest/.../ProvisioningRouteUiTest.kt` усиливает save-error sanitization path, `TotpCodesRouteUiTest.kt` покрывает sorted runtime summaries и stable remove callback, а новый `AuthenticatorAppUiTest.kt` закрывает app-level flow `manual import -> preview -> save -> remove -> empty state`
+- `2026-04-17`: live rerun через `the_android_mcp` после instrumented contour не считается закрытым: на `emulator-5554` зафиксирована environment failure `UiAutomationService ... already registered` с последующим `Process system isn't responding`, поэтому следующий Android continuation должен начинаться с clean emulator restart и повторной MCP-проверки, а не с перепроверки уже зеленых `androidTest`
+- `2026-04-17`: карта дополнена фактическим cleanup/runbook шагом для Android live verification: перед повторной MCP-проверкой нужно срезать все следы `emulator/qemu/adb/java`, убедиться в `NO_DEVICES_FOUND`, затем поднимать чистый `Pixel_10_Pro`; этот clean-restart path успешно снял предыдущий `UiAutomation` conflict
+- `2026-04-17`: live verification после clean emulator restart закрыта на `emulator-5554` без дополнительных code changes: visual MCP contour подтвердил `manual import -> preview -> save secure secret -> runtime code/countdown -> remove confirm -> empty state`
+- `2026-04-17`: `Android TOTP-first` закрыт как локальный mobile slice; следующий рабочий фокус после mobile DoD closure смещен на device lifecycle design/contracts
+- `2026-04-17`: карта дополнена первым `backup codes` backend slice: `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` теперь публикует `POST /api/v1/challenges/{id}/verify-backup-code`, `backend/OtpAuth.Migrations/Migrations/202604170001_CreateBackupCodes.cs` создает `auth.backup_codes`, а migration runner получил explicit `seed-bootstrap-backup-codes`
+- `2026-04-17`: зафиксирован канонический `device lifecycle` contract: добавлены `ADR-030`, `OTP/Architecture/Device Lifecycle Design.md`, storage policy для rotating hash-only refresh tokens и sync `OpenAPI/Auth/Security/Data` под следующий runtime slice `activate -> refresh -> revoke`

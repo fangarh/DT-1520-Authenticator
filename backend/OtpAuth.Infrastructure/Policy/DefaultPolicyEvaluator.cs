@@ -163,11 +163,15 @@ public sealed class DefaultPolicyEvaluator : IPolicyEvaluator
             denyReason = $"Requested factor '{requestedFactor}' is not allowed.";
         }
 
+        var preferredFactor = context.RequestedFactor is { } preferredRequestedFactor && allowedFactors.Contains(preferredRequestedFactor)
+            ? preferredRequestedFactor
+            : ResolvePreferredFactor(allowedFactors);
+
         return new PolicyDecision
         {
             RequiresSecondFactor = requiresSecondFactor,
             AllowedFactors = allowedFactors,
-            PreferredFactor = ResolvePreferredFactor(allowedFactors),
+            PreferredFactor = preferredFactor,
             PushAllowed = pushAllowed,
             TotpAllowed = totpAllowed,
             BackupCodeAllowed = backupCodeAllowed,

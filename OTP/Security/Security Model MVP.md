@@ -62,6 +62,8 @@ Draft
 - интеграционные клиенты используют только short-lived bearer token
 - device access token и refresh token живут отдельно от integration auth model
 - refresh token устройства должен быть revocable
+- refresh token устройства должен храниться только как hash и rotate-иться на каждый successful refresh
+- reused refresh token рассматривается как replay signal и должен приводить к revoke/block server-side lifecycle
 - токены не логируются и не возвращаются повторно в telemetry
 - integration access token должен поддерживать revocation и introspection до перехода к полноценному auth subsystem
 - lifecycle integration client должен инвалидировать уже выданные access token-ы после rotate/deactivate/reactivate
@@ -88,6 +90,7 @@ Draft
 - `TOTP` verify защищается rate limit и anti-replay правилами
 - device activation защищается ограничением количества попыток и сроком жизни activation artifact
 - refresh token flow имеет защиту от replay и возможность принудительного revoke
+- refresh token reuse должен считаться security incident, а не обычным `401`
 - polling и status endpoints ограничиваются по клиенту и tenant
 - повторное использование уже принятого `TOTP` time step запрещается persistent reservation-слоем
 - при превышении лимита verify-flow возвращает `429` и `Retry-After`, не раскрывая внутренние счетчики
@@ -95,6 +98,7 @@ Draft
 ### Audit
 
 - аудируются: token issuance, token refresh, enrollment start/confirm, device activation, approve, deny, revoke, admin policy change
+- отдельно фиксируются device-specific события `device.refresh_reuse_detected` и `device.blocked`
 - audit payload редактирует или исключает секреты, коды, токены и `PII`, если она не нужна для расследования
 - audit trail должен быть append-oriented на уровне процесса
 
@@ -136,6 +140,9 @@ Draft
 - signing key lifecycle и `TOTP` protection key lifecycle уже пишут sanitized snapshot-ы через unified append-only trail `auth.security_audit_events`
 - integration client lifecycle (`rotate/deactivate/reactivate`) теперь тоже пишет sanitized append-only events в `auth.security_audit_events`
 - audit payload для lifecycle-событий не содержит signing material, `TOTP` key bytes, ciphertext, `client_secret` или `client_secret_hash`
+- `backup codes` теперь хранятся hash-only в `auth.backup_codes`; verify-path не читает открытые коды из persistence и потребляет код атомарно через single-use `mark used`
+- bootstrap `backup codes` seed вынесен в отдельную explicit команду migration runner-а; новые коды не сидятся автоматически на старте `Api` и не печатаются обратно в лог/report
+- после `ADR-030` storage policy для device auth зафиксирована: `auth.devices` хранит `last_auth_state_changed_utc`, а refresh tokens живут как opaque hash-only rotating family в отдельной persistence модели
 
 ## MVP security gates для backend
 
@@ -173,8 +180,8 @@ Draft
 
 ## Минимальный security backlog перед первым vertical slice
 
-1. Зафиксировать storage policy для `backup codes`, refresh tokens и будущих device tokens.
+1. Реализовать runtime `Device Registry` contour для activation, rotating refresh tokens, revoke/block и auth-state invalidation.
 2. Описать security profile для future air-gapped enterprise режима.
-3. Расширить unified audit trail с key/client/enrollment lifecycle на token issuance, device activation и admin policy changes.
+3. Расширить unified audit trail implementation с key/client/enrollment lifecycle на token issuance, device activation и admin policy changes.
 4. Добавить admin/API contour для integration client lifecycle поверх уже существующего operational workflow.
 5. Реализовать admin auth contour и admin read model для enrollment management поверх уже принятых решений.

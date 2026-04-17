@@ -53,6 +53,23 @@ public sealed class CreateChallengeHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CreatesBackupCodeChallenge_WhenBackupCodeIsRequested()
+    {
+        var handler = CreateHandler();
+        var request = CreateValidRequest() with
+        {
+            OperationType = OperationType.BackupCodeRecovery,
+            PreferredFactors = [FactorType.BackupCode],
+        };
+
+        var result = await handler.HandleAsync(request, CreateClientContext(request), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Challenge);
+        Assert.Equal(FactorType.BackupCode, result.Challenge!.FactorType);
+    }
+
+    [Fact]
     public async Task HandleAsync_RejectsInsecureCallbackUrl()
     {
         var handler = CreateHandler();

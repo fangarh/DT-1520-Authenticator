@@ -151,29 +151,63 @@ Status:
 
 Цель этого плана: закрыть `Definition of Done` для `Android TOTP-first`, не смешивая текущий локальный `TOTP` slice с `push`, device lifecycle и mobile token/session contour.
 
-### 1. Compose UI test contour
+Фактическое уточнение на момент продолжения:
 
-- добавить instrumented/UI tests для provisioning route: invalid input, preview, confirm/save feedback
-- добавить instrumented/UI tests для runtime codes route: list render, remove confirm state и safe empty-state
-- не дублировать domain/storage unit tests в UI-слое; UI tests должны проверять wiring и отсутствие регрессии на реальном Compose surface
+- базовый `androidTest` contour уже существует в `mobile/app/src/androidTest/*`
+- следующий шаг больше не формулируется как "написать UI tests с нуля"
+- следующий шаг формулируется как `verify -> gap fix -> security closure -> vault sync`
 
-### 2. Mobile hardening verification
+### P0
 
-- прогнать полный mobile contour: `:app:testDebugUnitTest`, feature/storage/domain tests и `:core:ui:assembleDebug`
-- прогнать новый `androidTest` contour для provisioning/runtime screens
-- повторить live verification на `emulator-5554` или эквивалентном эмуляторе: import -> preview -> save -> runtime code -> remove confirm
+- сверить vault и фактическое mobile-состояние: в коде уже существуют `ProvisioningRouteUiTest` и `TotpCodesRouteUiTest`, поэтому рабочий план должен опираться на реальные gaps, а не на предположение об их отсутствии
+- закрыть `Android` backup/security gap: текущий scaffold все еще держит `android:allowBackup="true"` и шаблонные `backup`/`data extraction` rules, что для локального `TOTP-first` фактора считается незакрытым security-вопросом
+- проверить, что secret-bearing preview/state не переживает `save/reload` path дольше необходимого и не утекает в UI/error path
 
-### 3. Security closure
+Файлы:
 
-- проверить, что secret-bearing inputs и preview state не переживают save/reload path дольше необходимого
-- проверить, что UI/instrumented tests и live flow не выявляют утечки secret material в logs, crash output и persistent caches
-- если найдены новые ограничения для mobile shell, обновить [[../Security/Security Model MVP]] и related notes сразу в рамках этого трека
+- `OTP/01 - Current State.md`
+- `OTP/Agent/Implementation Map.md`
+- `OTP/Sessions/2026-04-14 - Session Log.md`
+- `mobile/app/src/main/AndroidManifest.xml`
+- `mobile/app/src/main/res/xml/backup_rules.xml`
+- `mobile/app/src/main/res/xml/data_extraction_rules.xml`
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorApp.kt`
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningRoute.kt`
 
-### 4. TOTP-first closure
+### P1
 
-- после прохождения UI/instrumented tests и live verification обновить `Current State`, `Implementation Map` и session log
-- пометить `Android TOTP-first` как закрытый локальный slice
-- только после этого переходить к следующему уровню mobile/backlog work: `backup codes` backend slice, device lifecycle design/contracts, затем `push`
+- добить `Provisioning` UI contour: проверить `save failure`, стабильный feedback и отсутствие повторного показа secret material после preview/save
+- добить `Runtime codes` UI contour: проверить рендер runtime code, countdown и сценарий с несколькими аккаунтами, а не только `empty/remove`
+- добавить один app-level instrumented flow `import -> preview -> save -> runtime refresh -> remove -> empty state`
+- если для app-level flow потребуется testability refactor, инъецировать store/time source вместо жесткого создания `AndroidKeystoreSecureTotpSecretStore` внутри shell
+
+Файлы:
+
+- `mobile/app/src/androidTest/java/ru/dt1520/security/authenticator/app/ProvisioningRouteUiTest.kt`
+- `mobile/app/src/androidTest/java/ru/dt1520/security/authenticator/app/TotpCodesRouteUiTest.kt`
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraftForm.kt`
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningPreviewCard.kt`
+- `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningTestTags.kt`
+- `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRoute.kt`
+- `mobile/feature/totp-codes/src/main/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesTestTags.kt`
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorApp.kt`
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorSecretCatalog.kt`
+- `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/AuthenticatorModuleWiringTest.kt`
+
+### P2
+
+Status:
+
+- completed on `2026-04-17`
+
+Выход:
+
+- локальный `unit/build` contour подтвержден для `:app`, `:feature:provisioning`, `:feature:totp-codes`, `:security:storage`, `:totp-domain` и `:core:ui`
+- instrumented contour закрыт через точечные прогоны `ProvisioningRouteUiTest`, `TotpCodesRouteUiTest` и `AuthenticatorAppUiTest` на `emulator-5554`; long-running общий `:app:connectedDebugAndroidTest` осознанно не использовался из-за ложных зависаний без промежуточной телеметрии
+- после cleanup грязного emulator state финальная live verification повторно пройдена на чистом `emulator-5554`: `import -> preview -> save -> runtime code/countdown -> remove confirm -> empty state`
+- `Current State`, `Implementation Map` и session log обновлены, а `Android TOTP-first` помечен как закрытый локальный slice
+
+Следующий уровень mobile/backlog work после закрытия этого плана: runtime `Device Registry` slice `activate -> refresh -> revoke`, а затем `push`
 
 ## Definition of Done для `Android TOTP-first`
 
@@ -181,6 +215,10 @@ Status:
 - приложение генерирует корректный `TOTP` офлайн
 - есть unit tests для domain/storage и базовые UI tests для provisioning/runtime screens
 - security review не находит утечек secret material в логах, error payloads и постоянном клиентском кэше
+
+Статус:
+
+- closed on `2026-04-17`
 
 ## Checkpoint for Context Reset
 
@@ -195,3 +233,10 @@ Status:
 5. прочитать [[../Integrations/TOTP Provisioning Contract]] и не предполагать повторную выдачу artifact вне `start/replace`
 6. продолжать с `План добивания mobile после Step 7`, а не возвращаться к уже закрытым `Step 1-7`
 7. не смешивать `push`, device lifecycle и `Bootstrap Agent` в этот mobile slice
+8. если в момент mobile-проверки эмулятор не запущен, сначала поднять его через доступный `Android` tooling/MCP и только потом выполнять `androidTest` и live verification
+
+### Готовый prompt после очистки сессии
+
+После reset можно сразу писать так:
+
+`Прочитай OTP/01 - Current State.md, OTP/Agent/Implementation Map.md, OTP/Product/Android TOTP-First Plan.md и сразу приступай к P0 из Android TOTP-First Plan. Начни с vault/code gap check и Android backup/security hardening для mobile app.`

@@ -46,8 +46,11 @@ Draft
 - `CreateChallenge`
 - `GetChallengeStatus`
 - `VerifyTotp`
+- `VerifyBackupCode`
 - `StartTotpEnrollment`
 - `ActivateDevice`
+- `RefreshDeviceToken`
+- `RevokeDevice`
 
 ### Не должен делать
 
@@ -100,8 +103,10 @@ Draft
 ### Ответственность
 
 - activation flow
+- refresh token rotation
 - хранение delivery tokens
 - revoke и trust status
+- auth-state invalidation для уже выданных device access token-ов
 - привязка устройства к пользователю
 
 ### Состояния устройства
@@ -216,10 +221,12 @@ Draft
 
 ## Текущий кодовый прогресс
 
-- в `backend/OtpAuth.Application/Challenges` уже реализованы `CreateChallengeHandler`, `GetChallengeHandler` и `VerifyTotpHandler`
-- в `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` опубликованы `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}` и `POST /api/v1/challenges/{id}/verify-totp`
+- в `backend/OtpAuth.Application/Challenges` уже реализованы `CreateChallengeHandler`, `GetChallengeHandler`, `VerifyTotpHandler` и `VerifyBackupCodeHandler`
+- в `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` опубликованы `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}`, `POST /api/v1/challenges/{id}/verify-totp` и `POST /api/v1/challenges/{id}/verify-backup-code`
 - `Challenge` persistence переведена на `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeRepository.cs`
 - `Factor Engine` уже использует enrollment-backed `TOTP` verifier через `backend/OtpAuth.Infrastructure/Factors/PostgresTotpVerifier.cs`
 - `VerifyTotp` пишет append-only записи в `challenge_attempts`
+- `backup codes` теперь имеют отдельный hash-only persistence/verify contour через `backend/OtpAuth.Infrastructure/Factors/PostgresBackupCodeStore.cs`, `PostgresBackupCodeVerifier.cs` и `Pbkdf2BackupCodeHasher.cs`
 - `TOTP` enrollment slice уже реализован через `backend/OtpAuth.Application/Enrollments/*`, `backend/OtpAuth.Api/Endpoints/EnrollmentsEndpoints.cs` и `backend/OtpAuth.Infrastructure/Factors/PostgresTotpEnrollmentProvisioningStore.cs`
-- следующий практический шаг для enrollment/domain management: добавить отдельный admin auth contour и current-enrollment read model для operator-facing management API/UI
+- канонический design-contract для `Device Registry` теперь зафиксирован в [[Device Lifecycle Design]] и `ADR-030`
+- следующий практический backend шаг после contract sync: реализовать runtime `Device Registry` slice `activate -> refresh -> revoke`, не смешивая его сразу с `push approve`

@@ -31,6 +31,7 @@
 - `ADR-027`: `Admin UI` использует current enrollment read model по `tenantId + externalUserId`, а не строится вокруг одного `enrollmentId`
 - `ADR-028`: admin `start` резолвит `applicationClientId` явно или только при единственном активном integration client-е tenant-а
 - `ADR-029`: installer использует script-first engine и отдельный локальный setup UI поверх него
+- `ADR-030`: `Device Registry` использует rotating refresh tokens и auth-state invalidation
 
 ## Reading Path
 
@@ -64,6 +65,7 @@
 26. [[Decisions/ADR-027 - Admin UI Uses Current Enrollment Read Model by User]]
 27. [[Decisions/ADR-028 - Admin Start Resolves Application Client Explicitly or Uniquely by Tenant]]
 28. [[Decisions/ADR-029 - Installer Uses Script-First Engine and Separate Local Setup UI]]
+29. [[Decisions/ADR-030 - Device Registry Uses Rotating Refresh Tokens and Auth-State Invalidation]]
 
 Если задача относится к процессу и поддержанию контекста:
 

@@ -85,4 +85,22 @@ class ProvisioningWorkflowTest {
         assertNull(nextState.errorMessage)
         assertNull(nextState.successMessage)
     }
+
+    @Test
+    fun sanitizePreviewValidationMessageFallsBackToGenericCopyForUnexpectedErrors() {
+        val errorMessage = ProvisioningWorkflow.sanitizePreviewValidationMessage(
+            "otpauth://totp/DT1520:user?secret=LEAKME"
+        )
+
+        assertEquals("Проверьте provisioning input и повторите импорт.", errorMessage)
+    }
+
+    @Test
+    fun sanitizePreviewValidationMessageKeepsWhitelistedValidationCopy() {
+        val errorMessage = ProvisioningWorkflow.sanitizePreviewValidationMessage(
+            "TOTP secret is required."
+        )
+
+        assertEquals("TOTP secret is required.", errorMessage)
+    }
 }

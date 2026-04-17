@@ -94,6 +94,37 @@ class ProvisioningRouteUiTest {
         composeRule.onNodeWithText("Source: Manual fallback").assertExists()
     }
 
+    @Test
+    fun saveFailureShowsGenericErrorWithoutLeakingThrownMessage() {
+        setProvisioningContent(
+            onSaveImport = {
+                throw IllegalStateException("keystore failure secret=JBSWY3DPEHPK3PXP")
+            }
+        )
+
+        composeRule.onNodeWithTag(ProvisioningTestTags.ManualIssuerField)
+            .performTextInput("Contoso")
+        composeRule.onNodeWithTag(ProvisioningTestTags.ManualAccountField)
+            .performTextInput("operator@example.local")
+        composeRule.onNodeWithTag(ProvisioningTestTags.ManualSecretField)
+            .performTextInput("JBSWY3DPEHPK3PXP")
+        composeRule.onNodeWithTag(ProvisioningTestTags.PreviewManualButton)
+            .performClick()
+        composeRule.onNodeWithTag(ProvisioningTestTags.SaveButton)
+            .performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag(ProvisioningTestTags.ErrorMessage)
+            .assertExists()
+            .assertTextContains(
+                "Не удалось сохранить секрет в защищенное хранилище. Проверьте состояние Android Keystore."
+            )
+        composeRule.onNodeWithText("keystore failure secret=JBSWY3DPEHPK3PXP")
+            .assertDoesNotExist()
+        composeRule.onNodeWithTag(ProvisioningTestTags.PreviewCard)
+            .assertExists()
+    }
+
     private fun setProvisioningContent(
         onSaveImport: suspend (ProvisioningImportPreview) -> Unit = {}
     ) {

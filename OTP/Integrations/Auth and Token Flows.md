@@ -85,6 +85,44 @@ Security behavior:
 2. В ответе устройство получает первую пару токенов.
 3. Для продления доступа используется `POST /api/v1/auth/device-tokens/refresh`.
 
+После `ADR-030` для этого flow дополнительно зафиксированы обязательные security semantics:
+
+- device access token и refresh token остаются отдельным auth contour относительно integration `OAuth`
+- device access token short-lived и валиден только пока:
+  - устройство находится в `active`
+  - `iat >= last_auth_state_changed_utc`
+- refresh token устройства:
+  - opaque
+  - hash-only в persistence
+  - rotate-ится на каждый successful refresh
+  - не переиспользуется
+- replay или reuse refresh token-а переводит устройство в `blocked` и revoke-ит текущий token family
+- `revoke` устройства обновляет `last_auth_state_changed_utc`, поэтому уже выданные access token-ы перестают быть валидными немедленно, а не только по `exp`
+
+## Device lifecycle contour
+
+Канонический design-contract теперь зафиксирован в [[../Architecture/Device Lifecycle Design]].
+
+Ключевые состояния:
+
+- `pending`
+- `active`
+- `revoked`
+- `blocked`
+
+Минимальный `MVP` API contour остается таким:
+
+- `POST /api/v1/devices/activate`
+- `POST /api/v1/auth/device-tokens/refresh`
+- `POST /api/v1/devices/{deviceId}/revoke`
+
+Но теперь он интерпретируется не как draft без storage semantics, а как будущий runtime slice поверх:
+
+- `auth.devices`
+- `auth.device_refresh_tokens`
+- runtime validation по `last_auth_state_changed_utc`
+- append-only audit событий `device.activated`, `device.token_refreshed`, `device.refresh_reuse_detected`, `device.revoked`, `device.blocked`
+
 ## Почему не единый auth flow
 
 - интеграционный клиент и мобильное устройство имеют разную модель доверия

@@ -1,7 +1,9 @@
 package ru.dt1520.security.authenticator.app
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
@@ -14,8 +16,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import ru.dt1520.security.authenticator.core.ui.theme.DT1520AuthenticatorTheme
 import ru.dt1520.security.authenticator.feature.totpcodes.TotpCodesRoute
+import ru.dt1520.security.authenticator.feature.totpcodes.TotpCodeSummary
 import ru.dt1520.security.authenticator.feature.totpcodes.TotpCodesTestTags
 import ru.dt1520.security.authenticator.totp.domain.TotpAccountDescriptor
+import ru.dt1520.security.authenticator.totp.domain.TotpCodeGenerator
 import ru.dt1520.security.authenticator.totp.domain.TotpCredential
 import ru.dt1520.security.authenticator.totp.domain.TotpSecret
 
@@ -72,11 +76,42 @@ class TotpCodesRouteUiTest {
             .performClick()
         composeRule.onNodeWithTag(TotpCodesTestTags.ConfirmRemoveButton)
             .performClick()
-        composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            removedAccount != null
+        }
 
         assertEquals(credential.account, removedAccount)
         composeRule.onNodeWithTag(TotpCodesTestTags.ConfirmRemoveButton)
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun runtimeSummariesRenderSortedAccountsCodesAndCountdown() {
+        val alpha = TotpCredential(
+            account = TotpAccountDescriptor(
+                issuer = "Alpha",
+                accountName = "operator@example.local"
+            ),
+            secret = TotpSecret.fromBase32("JBSWY3DPEHPK3PXP")
+        )
+        val zeta = TotpCredential(
+            account = TotpAccountDescriptor(
+                issuer = "Zeta",
+                accountName = "operator@example.local"
+            ),
+            secret = TotpSecret.fromBase32("KRUGS4ZANFZSAYJA")
+        )
+        val expectedAlphaCode = formatCode(alpha, epochSeconds = 59L)
+        val expectedZetaCode = formatCode(zeta, epochSeconds = 59L)
+
+        setTotpCodesContent(credentials = listOf(zeta, alpha))
+
+        composeRule.onNodeWithText("Alpha (operator@example.local)").assertExists()
+        composeRule.onNodeWithText("Zeta (operator@example.local)").assertExists()
+        composeRule.onNodeWithText(expectedAlphaCode).assertExists()
+        composeRule.onNodeWithText(expectedZetaCode).assertExists()
+        composeRule.onAllNodesWithText("Обновится через 1с")
+            .assertCountEquals(2)
     }
 
     private fun setTotpCodesContent(
@@ -101,4 +136,17 @@ class TotpCodesRouteUiTest {
         ),
         secret = TotpSecret.fromBase32("JBSWY3DPEHPK3PXP")
     )
+
+    private fun formatCode(
+        credential: TotpCredential,
+        epochSeconds: Long
+    ): String {
+        val codeState = TotpCodeGenerator.generate(credential, epochSeconds = epochSeconds)
+
+        return TotpCodeSummary(
+            account = credential.account,
+            code = codeState.code,
+            remainingSeconds = codeState.remainingSeconds
+        ).formattedCode
+    }
 }

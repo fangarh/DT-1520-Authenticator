@@ -93,6 +93,22 @@ public sealed class DefaultPolicyEvaluatorTests
         Assert.DoesNotContain(FactorType.Push, decision.AllowedFactors);
     }
 
+    [Fact]
+    public void Evaluate_PrefersRequestedBackupCode_WhenItIsAllowed()
+    {
+        var context = CreateValidContext() with
+        {
+            RequestedFactor = FactorType.BackupCode,
+            PushChannelAvailable = false,
+        };
+
+        var decision = _evaluator.Evaluate(context);
+
+        Assert.False(decision.IsDenied);
+        Assert.True(decision.BackupCodeAllowed);
+        Assert.Equal(FactorType.BackupCode, decision.PreferredFactor);
+    }
+
     private static PolicyContext CreateValidContext()
     {
         return new PolicyContext

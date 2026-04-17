@@ -23,12 +23,17 @@ import ru.dt1520.security.authenticator.core.ui.theme.DT1520AuthenticatorTheme
 import ru.dt1520.security.authenticator.feature.provisioning.ProvisioningRoute
 import ru.dt1520.security.authenticator.feature.totpcodes.TotpCodesRoute
 import ru.dt1520.security.authenticator.security.storage.AndroidKeystoreSecureTotpSecretStore
+import ru.dt1520.security.authenticator.security.storage.SecureTotpSecretStore
 import ru.dt1520.security.authenticator.security.storage.StoredTotpSecret
 
 @Composable
-fun AuthenticatorApp() {
+fun AuthenticatorApp(
+    secureStoreOverride: SecureTotpSecretStore? = null,
+    currentEpochSecondsProvider: () -> Long = { System.currentTimeMillis() / 1_000 },
+    clockTickDelayMillis: Long = 1_000L
+) {
     val context = LocalContext.current
-    val secureStore = remember(context) {
+    val secureStore = secureStoreOverride ?: remember(context) {
         AndroidKeystoreSecureTotpSecretStore.create(context)
     }
     var storedSecrets by remember {
@@ -38,7 +43,7 @@ fun AuthenticatorApp() {
         mutableStateOf<String?>(null)
     }
     var currentEpochSeconds by remember {
-        mutableStateOf(System.currentTimeMillis() / 1_000)
+        mutableStateOf(currentEpochSecondsProvider())
     }
 
     suspend fun refreshStoredSecrets() {
@@ -61,10 +66,10 @@ fun AuthenticatorApp() {
         refreshStoredSecrets()
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(currentEpochSecondsProvider, clockTickDelayMillis) {
         while (true) {
-            currentEpochSeconds = System.currentTimeMillis() / 1_000
-            delay(1_000)
+            currentEpochSeconds = currentEpochSecondsProvider()
+            delay(clockTickDelayMillis)
         }
     }
 

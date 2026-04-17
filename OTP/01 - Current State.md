@@ -117,12 +117,14 @@
 - в `mobile/feature:provisioning` реализован `Step 5` из `Android TOTP-first`: masked `otpauth://` import, manual fallback, preview/confirm/save flow и app wiring в secure storage без прямой зависимости feature-модуля от `Keystore`
 - в `mobile/feature:totp-codes` реализован `Step 6` из `Android TOTP-first`: runtime list of saved accounts, offline `TOTP` code + countdown, explicit remove confirm flow и scroll-safe app shell для реального Android viewport
 - завершен `Step 7` из `Android TOTP-first`: stable provisioning contract зафиксирован в vault, `OpenAPI` явно описывает artifact-only поля `secretUri/qrCodePayload`, а mobile/admin/security notes синхронизированы с backend contract
+- реализован первый backend slice для `backup codes`: `auth.backup_codes`, `POST /api/v1/challenges/{id}/verify-backup-code`, hash-only storage, one-time consume semantics и explicit bootstrap seeding через migration runner
+- зафиксирован канонический design-contract для `Device Registry`: `ADR-030`, `Device Lifecycle Design`, rotating hash-only refresh tokens, `last_auth_state_changed_utc` и обновленный `OpenAPI`/vault sync под будущий runtime slice
 
 Пока не реализовано:
 
 - production-ready backend за пределами bootstrap `Challenges` slice
 - mobile app
-- для закрытия текущего `Android TOTP-first` slice все еще нужны базовые `Compose` UI/instrumented tests для provisioning/runtime screens, повторный live verification contour и финальное DoD closure в vault
+- следующим backend/product блоком после design-contract sync является runtime `Device Registry` slice `activate -> refresh -> revoke`
 - `API`
 - отдельный `Bootstrap Agent`
 - полноценное integration/contract/e2e покрытие за пределами текущего bootstrap backend slice
@@ -172,7 +174,7 @@
 
 ## Рабочий статус scaffold-ов
 
-- `mobile` существует как multi-module Android workspace и готов к следующему `TOTP-first` slice
+- `mobile` существует как multi-module Android workspace; локальный `Android TOTP-first` slice закрыт и подтвержден через unit/UI/live verification
 - `admin` существует, зависимости установлены, build проходит
 - `admin` имеет runtime shell поверх `/api/v1/admin/*`, helper/API/component tests и локальный `Vite` proxy на backend
 - `installer-ui` существует как отдельный local setup shell: loopback-only bridge, typed React/Vite UI, unit tests и checked-in `Playwright` regression на mock bridge
@@ -280,4 +282,14 @@
 - `2026-04-17`: завершен `Step 4` mobile-трека: в `totp-domain` добавлены `otpauth://` parser, validation `issuer/label/secret/digits/period/algorithm`, redacted secret-bearing domain types, RFC-backed `TOTP` code generation, countdown/state model и unit tests; mobile unit contour проходит
 - `2026-04-17`: завершен `Step 5` mobile-трека: в `feature:provisioning` добавлены masked import forms для `otpauth://` и manual fallback, preview/confirm/save flow, app wiring в secure storage и unit tests; `security:storage` snapshot расширен до `digits + algorithm`, а полный mobile contour проходит
 - `2026-04-17`: завершен `Step 6` mobile-трека: `feature:totp-codes` теперь рендерит список сохраненных аккаунтов, текущий офлайн-код, countdown и explicit remove confirm flow; `AuthenticatorApp` больше не держит secret-bearing preview после save, а live verification подтверждена на `emulator-5554`
-- `2026-04-17`: завершен `Step 7` mobile-трека: добавлена каноническая заметка `OTP/Integrations/TOTP Provisioning Contract.md`, artifact visibility для `secretUri/qrCodePayload` синхронизирована между `OpenAPI`, `Product`, `Delivery` и `Security`, а следующим незакрытым блоком для `Android TOTP-first` остаются базовые `Compose` UI/instrumented tests и финальное DoD closure
+- `2026-04-17`: завершен `Step 7` mobile-трека: добавлена каноническая заметка `OTP/Integrations/TOTP Provisioning Contract.md`, artifact visibility для `secretUri/qrCodePayload` синхронизирована между `OpenAPI`, `Product`, `Delivery` и `Security`, после чего mobile-трек был доведен через `P0/P1/P2` до финального DoD closure
+- `2026-04-17`: начат `P0` из `Android TOTP-First Plan`: vault/code gap check подтвердил, что `ProvisioningRouteUiTest` и `TotpCodesRouteUiTest` уже существуют, `mobile` больше не держит `android:allowBackup="true"`, а backup/data transfer hardening теперь закрыт через explicit deny-all `fullBackupContent` и `dataExtractionRules` для cloud backup и `device-transfer`
+- `2026-04-17`: `feature:provisioning` дополнительно усилен sanitization boundary для validation errors: UI показывает только whitelist-нутые сообщения, а неожиданный текст исключения теперь схлопывается в generic copy без риска вывести сырой provisioning input
+- `2026-04-17`: проверка после `P0` hardening проходит локально: `:app:testDebugUnitTest`, `:feature:provisioning:testDebugUnitTest` и `:app:assembleDebug` зеленые; для следующего instrumented/live прогона зафиксировано правило: если `the_android_mcp` возвращает `NO_DEVICES_FOUND`, нужно сначала запустить эмулятор, а не пропускать `MCP`-проверку
+- `2026-04-17`: mobile instrumented contour расширен до `ProvisioningRouteUiTest`, `TotpCodesRouteUiTest` и нового `AuthenticatorAppUiTest`; на `emulator-5554` точечно подтверждены `save-error sanitization`, runtime rendering/remove flow и полный app-level сценарий `manual import -> preview -> save -> remove -> empty state`
+- `2026-04-17`: финальная live MCP-проверка после instrumented прогона повторно попытана на `emulator-5554`, но заблокирована нестабильностью окружения: `the_android_mcp`/`uiautomator dump` ловят `UiAutomationService ... already registered`, после чего эмулятор уходит в `Process system isn't responding`/black screen; это оставляет открытым только environment-level rerun, а не code-level mobile gap
+- `2026-04-17`: после полного срезания следов эмулятора (`emulator/qemu/adb/java`) и cold restart `Pixel_10_Pro` live MCP verification успешно повторена на чистом `emulator-5554`: `manual import -> preview -> save -> runtime code/remove -> confirm remove -> empty state` подтверждены визуально
+- `2026-04-17`: предыдущий `UiAutomationService ... already registered` оказался environment artifact грязного emulator state; после clean restart он не воспроизводится, поэтому mobile P0/P1 verification больше не имеет открытого runtime blocker
+- `2026-04-17`: `Android TOTP-first` закрыт как локальный slice: backup hardening, UI/instrumented contour и финальная live MCP-проверка подтверждены; следующий приоритетный backend/product шаг смещен на device lifecycle design/contracts
+- `2026-04-17`: `ADR-030` и `Device Lifecycle Design` зафиксировали contract для `Device Registry`: lifecycle `pending/active/revoked/blocked`, opaque rotating refresh tokens, `last_auth_state_changed_utc`, fail-closed replay handling и sync `OpenAPI/Auth/Security/Data`; следующий practical backend step теперь смещен на runtime slice `activate -> refresh -> revoke`
+- `2026-04-17`: реализован первый `backup codes` backend slice: добавлены таблица `auth.backup_codes`, `verify-backup-code` challenge endpoint, hash-only verifier с one-time consume semantics, explicit bootstrap seed command и unit coverage; фактор больше не ограничен enum/policy-декларацией

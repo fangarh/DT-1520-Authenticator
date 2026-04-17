@@ -27,6 +27,7 @@ return command switch
     "list-admin-users" => await ListAdminUsersAsync(GetRequiredPostgresConnectionString()),
     "seed-bootstrap-clients" => await SeedBootstrapClientsAsync(GetRequiredPostgresConnectionString()),
     "seed-bootstrap-totp-enrollment" => await SeedBootstrapTotpEnrollmentAsync(GetRequiredPostgresConnectionString()),
+    "seed-bootstrap-backup-codes" => await SeedBootstrapBackupCodesAsync(GetRequiredPostgresConnectionString()),
     "upsert-admin-user" => await UpsertAdminUserAsync(GetRequiredPostgresConnectionString(), args),
     "reencrypt-totp-secrets" => await ReEncryptTotpSecretsAsync(GetRequiredPostgresConnectionString()),
     "cleanup-security-data" => await CleanupSecurityDataAsync(GetRequiredPostgresConnectionString()),
@@ -186,6 +187,21 @@ static async Task<int> SeedBootstrapTotpEnrollmentAsync(string connectionString)
     await seeder.UpsertAsync(material, CancellationToken.None);
 
     Console.WriteLine($"Seeded bootstrap TOTP enrollment for external user '{material.ExternalUserId}'.");
+    return 0;
+}
+
+static async Task<int> SeedBootstrapBackupCodesAsync(string connectionString)
+{
+    var bootstrapOAuthOptions = LoadBootstrapOAuthOptions();
+    var factory = new BootstrapBackupCodeSeedFactory();
+    var material = factory.Create(bootstrapOAuthOptions);
+
+    await using var dataSource = new Npgsql.NpgsqlDataSourceBuilder(connectionString).Build();
+    var seeder = new PostgresBackupCodeSeeder(dataSource, new Pbkdf2BackupCodeHasher());
+    await seeder.ReplaceActiveAsync(material, CancellationToken.None);
+
+    Console.WriteLine(
+        $"Seeded {material.Codes.Count} bootstrap backup code(s) for external user '{material.ExternalUserId}'.");
     return 0;
 }
 
@@ -582,7 +598,7 @@ static string ResolveApiProjectPath()
 static int ExitWithUsage(string command)
 {
     Console.Error.WriteLine($"Unsupported command '{command}'.");
-    Console.Error.WriteLine("Supported commands: ensure-database, migrate, inspect-signing-key-lifecycle, audit-signing-key-lifecycle, list-signing-key-lifecycle-audit-events [limit], inspect-totp-protection-key-lifecycle, audit-totp-protection-key-lifecycle, list-totp-protection-key-lifecycle-audit-events [limit], list-security-audit-events [limit] [event-type-prefix], list-admin-users, initialize, seed-bootstrap-clients, seed-bootstrap-totp-enrollment, upsert-admin-user <username> <permission> [permission...], reencrypt-totp-secrets, cleanup-security-data, rotate-integration-client-secret <client-id>, deactivate-integration-client <client-id>, activate-integration-client <client-id>, migrate-and-seed-bootstrap-clients");
+    Console.Error.WriteLine("Supported commands: ensure-database, migrate, inspect-signing-key-lifecycle, audit-signing-key-lifecycle, list-signing-key-lifecycle-audit-events [limit], inspect-totp-protection-key-lifecycle, audit-totp-protection-key-lifecycle, list-totp-protection-key-lifecycle-audit-events [limit], list-security-audit-events [limit] [event-type-prefix], list-admin-users, initialize, seed-bootstrap-clients, seed-bootstrap-totp-enrollment, seed-bootstrap-backup-codes, upsert-admin-user <username> <permission> [permission...], reencrypt-totp-secrets, cleanup-security-data, rotate-integration-client-secret <client-id>, deactivate-integration-client <client-id>, activate-integration-client <client-id>, migrate-and-seed-bootstrap-clients");
     return 1;
 }
 

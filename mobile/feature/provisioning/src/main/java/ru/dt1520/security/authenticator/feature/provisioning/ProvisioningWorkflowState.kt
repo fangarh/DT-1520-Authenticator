@@ -9,6 +9,26 @@ data class ProvisioningWorkflowState(
 )
 
 object ProvisioningWorkflow {
+    private val safePreviewValidationMessages = setOf(
+        "Invalid otpauth URI.",
+        "Unsupported provisioning URI scheme.",
+        "Unsupported provisioning URI type.",
+        "TOTP secret is required.",
+        "Provisioning label is required.",
+        "Provisioning issuer is required.",
+        "Provisioning issuer must be consistent.",
+        "Duplicate otpauth query parameter is not allowed.",
+        "Invalid otpauth query parameter.",
+        "Invalid percent-encoded value.",
+        "Unsupported TOTP algorithm.",
+        "Invalid Base32 secret.",
+        "digits must not be blank.",
+        "digits must be numeric.",
+        "period must not be blank.",
+        "period must be numeric.",
+        "Manual import requires issuer, account name and secret."
+    )
+
     fun updateDraft(
         state: ProvisioningWorkflowState,
         draft: ProvisioningDraft
@@ -55,8 +75,7 @@ object ProvisioningWorkflow {
         } catch (exception: IllegalArgumentException) {
             return state.copy(
                 preview = null,
-                errorMessage = exception.message?.takeIf(String::isNotBlank)
-                    ?: "Проверьте provisioning input и повторите импорт.",
+                errorMessage = sanitizePreviewValidationMessage(exception.message),
                 successMessage = null,
                 isSaving = false
             )
@@ -69,4 +88,8 @@ object ProvisioningWorkflow {
             isSaving = false
         )
     }
+
+    internal fun sanitizePreviewValidationMessage(rawMessage: String?): String =
+        rawMessage?.takeIf { it in safePreviewValidationMessages }
+            ?: "Проверьте provisioning input и повторите импорт."
 }

@@ -17,6 +17,10 @@ public static class ChallengesEndpoints
             .RequireAuthorization("ChallengesWrite")
             .WithName("VerifyTotp");
 
+        app.MapPost("/api/v1/challenges/{challengeId:guid}/verify-backup-code", VerifyBackupCodeAsync)
+            .RequireAuthorization("ChallengesWrite")
+            .WithName("VerifyBackupCode");
+
         app.MapPost("/api/v1/challenges", CreateChallengeAsync)
             .RequireAuthorization("ChallengesWrite")
             .WithName("CreateChallenge");
@@ -168,6 +172,63 @@ public static class ChallengesEndpoints
         return Results.Ok(CreateChallengeRequestMapper.MapResponse(result.Challenge));
     }
 
+    private static async Task<IResult> VerifyBackupCodeAsync(
+        Guid challengeId,
+        VerifyBackupCodeHttpRequest request,
+        VerifyBackupCodeHandler handler,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        IntegrationClientContext clientContext;
+        try
+        {
+            clientContext = httpContext.GetRequiredIntegrationClientContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return CreateProblem(StatusCodes.Status401Unauthorized, "Authentication failed.", "Authenticated principal is missing integration client claims.");
+        }
+
+        var result = await handler.HandleAsync(
+            VerifyBackupCodeRequestMapper.Map(challengeId, request),
+            clientContext,
+            cancellationToken);
+
+        if (!result.IsSuccess || result.Challenge is null)
+        {
+            return result.ErrorCode switch
+            {
+                VerifyBackupCodeErrorCode.AccessDenied => CreateProblem(
+                    StatusCodes.Status403Forbidden,
+                    "Access denied.",
+                    result.ErrorMessage),
+                VerifyBackupCodeErrorCode.NotFound => CreateProblem(
+                    StatusCodes.Status404NotFound,
+                    "Challenge was not found.",
+                    result.ErrorMessage),
+                VerifyBackupCodeErrorCode.InvalidCode => CreateProblem(
+                    StatusCodes.Status422UnprocessableEntity,
+                    "Challenge verification failed.",
+                    result.ErrorMessage),
+                VerifyBackupCodeErrorCode.RateLimited => CreateRateLimitedProblem(httpContext, result),
+                VerifyBackupCodeErrorCode.ChallengeExpired => CreateProblem(
+                    StatusCodes.Status410Gone,
+                    "Challenge has expired.",
+                    result.ErrorMessage),
+                VerifyBackupCodeErrorCode.InvalidState => CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    "Challenge is not in a verifiable state.",
+                    result.ErrorMessage),
+                _ => CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid backup code verification request.",
+                    result.ErrorMessage),
+            };
+        }
+
+        return Results.Ok(CreateChallengeRequestMapper.MapResponse(result.Challenge));
+    }
+
     private static IResult CreateProblem(int statusCode, string title, string? detail, int? retryAfterSeconds = null)
     {
         var extensions = retryAfterSeconds.HasValue
@@ -186,6 +247,20 @@ public static class ChallengesEndpoints
     }
 
     private static IResult CreateRateLimitedProblem(HttpContext httpContext, VerifyTotpResult result)
+    {
+        if (result.RetryAfterSeconds.HasValue)
+        {
+            httpContext.Response.Headers["Retry-After"] = result.RetryAfterSeconds.Value.ToString();
+        }
+
+        return CreateProblem(
+            StatusCodes.Status429TooManyRequests,
+            "Too many verification attempts.",
+            result.ErrorMessage,
+            result.RetryAfterSeconds);
+    }
+
+    private static IResult CreateRateLimitedProblem(HttpContext httpContext, VerifyBackupCodeResult result)
     {
         if (result.RetryAfterSeconds.HasValue)
         {

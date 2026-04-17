@@ -77,14 +77,37 @@
 Поля:
 
 - `id`
-- `user_id`
+- `tenant_id`
+- `application_client_id`
+- `external_user_id`
 - `platform`
+- `installation_id`
 - `device_name`
+- `status`
 - `push_token`
 - `public_key`
 - `attestation_status`
+- `activated_at`
 - `last_seen_at`
+- `last_auth_state_changed_at`
 - `revoked_at`
+- `blocked_at`
+
+### DeviceRefreshToken
+
+Rotating refresh token family для device auth contour.
+
+Поля:
+
+- `id`
+- `device_id`
+- `token_family_id`
+- `token_hash`
+- `issued_at`
+- `expires_at`
+- `consumed_at`
+- `revoked_at`
+- `replaced_by_token_id`
 
 ### Challenge
 

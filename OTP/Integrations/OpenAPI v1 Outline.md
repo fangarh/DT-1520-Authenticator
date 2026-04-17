@@ -37,6 +37,8 @@
 - `OpenAPI 3.1`
 - `OAuth 2.0 client credentials` для интеграционного клиента
 - bearer token flow для мобильного устройства
+- отдельный `DeviceTokenResponse`, не смешанный с integration `OAuth` response
+- rotating refresh token contract для mobile device auth
 - единая схема ошибок `Problem`
 - top-level `webhooks`
 - operation-level `callbacks` для `createChallenge`
@@ -66,7 +68,9 @@
 - `challenge.approved`
 - `challenge.denied`
 - `challenge.expired`
-- `device.enrolled`
+- `device.activated`
+- `device.revoked`
+- `device.blocked`
 - `factor.revoked`
 
 ## Следующий шаг
@@ -74,3 +78,5 @@
 Канонический machine-readable черновик лежит в [[openapi-v1.yaml]].
 
 Для `TOTP-first` enrollment artifact visibility и семантика `secretUri`/`qrCodePayload` отдельно зафиксированы в [[TOTP Provisioning Contract]].
+
+Для mobile auth/runtime contract каноническая детализация теперь лежит в [[../Architecture/Device Lifecycle Design]].
