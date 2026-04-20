@@ -8,8 +8,7 @@ data class PendingPushApproval(
     val operationType: String,
     val operationDisplayName: String? = null,
     val username: String? = null,
-    val expiresAt: Instant,
-    val correlationId: String? = null
+    val expiresAt: Instant
 ) {
     init {
         require(operationType.isNotBlank()) {

@@ -16,7 +16,6 @@ public static class DeviceChallengeResponseMapper
             OperationDisplayName = challenge.OperationDisplayName,
             Username = challenge.Username,
             ExpiresAt = challenge.ExpiresAt,
-            CorrelationId = challenge.CorrelationId,
         };
     }
 

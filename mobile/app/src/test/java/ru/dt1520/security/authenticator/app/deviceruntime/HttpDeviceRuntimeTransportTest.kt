@@ -72,8 +72,7 @@ class HttpDeviceRuntimeTransportTest {
                         "operationType": "login",
                         "operationDisplayName": "Approve sign in",
                         "username": "push.api",
-                        "expiresAt": "2026-04-17T12:00:00Z",
-                        "correlationId": "corr-1"
+                        "expiresAt": "2026-04-17T12:00:00Z"
                       }
                     ]
                 """.trimIndent()

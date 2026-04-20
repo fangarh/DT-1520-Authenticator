@@ -29,15 +29,10 @@ object PushApprovalsPresenter {
     }
 
     private fun buildSupportingText(challenge: PendingPushApproval): String {
-        val parts = buildList {
-            challenge.username?.takeIf { it.isNotBlank() }?.let { add("Пользователь: $it") }
-            challenge.correlationId?.takeIf { it.isNotBlank() }?.let { add("Correlation: $it") }
-        }
-
-        return if (parts.isEmpty()) {
+        return challenge.username?.takeIf { it.isNotBlank() }?.let { username ->
+            "Пользователь: $username"
+        } ?: run {
             "Запрос уже привязан к текущему устройству."
-        } else {
-            parts.joinToString(separator = " • ")
         }
     }
 }

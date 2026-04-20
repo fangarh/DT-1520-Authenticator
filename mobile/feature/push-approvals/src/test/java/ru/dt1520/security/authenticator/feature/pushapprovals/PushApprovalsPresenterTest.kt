@@ -36,15 +36,13 @@ class PushApprovalsPresenterTest {
             operationType = "step_up",
             operationDisplayName = "VPN access",
             username = "operator@example.local",
-            expiresAt = now.plusSeconds(45),
-            correlationId = "corr-002"
+            expiresAt = now.plusSeconds(45)
         )
         val login = PendingPushApproval(
             id = UUID.randomUUID(),
             operationType = "login",
             username = "operator@example.local",
-            expiresAt = now.plusSeconds(90),
-            correlationId = "corr-001"
+            expiresAt = now.plusSeconds(90)
         )
 
         val state = PushApprovalsPresenter.present(
@@ -57,6 +55,5 @@ class PushApprovalsPresenterTest {
         assertEquals("VPN access", state.summaries[0].title)
         assertEquals("Подтверждение входа", state.summaries[1].title)
         assertTrue(state.summaries[0].supportingText.contains("operator@example.local"))
-        assertTrue(state.summaries[0].supportingText.contains("corr-002"))
     }
 }

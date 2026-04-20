@@ -15,6 +15,4 @@ public sealed record PendingDeviceChallengeHttpResponse
     public string? Username { get; init; }
 
     public required DateTimeOffset ExpiresAt { get; init; }
-
-    public string? CorrelationId { get; init; }
 }

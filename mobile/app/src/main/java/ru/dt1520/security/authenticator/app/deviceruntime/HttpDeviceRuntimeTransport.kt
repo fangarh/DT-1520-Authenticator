@@ -188,8 +188,7 @@ internal class HttpDeviceRuntimeTransport(
                         operationType = item.requireString("operationType"),
                         operationDisplayName = item.optionalTrimmedString("operationDisplayName"),
                         username = item.optionalTrimmedString("username"),
-                        expiresAt = item.requireInstant("expiresAt"),
-                        correlationId = item.optionalTrimmedString("correlationId")
+                        expiresAt = item.requireInstant("expiresAt")
                     )
                 )
             }
