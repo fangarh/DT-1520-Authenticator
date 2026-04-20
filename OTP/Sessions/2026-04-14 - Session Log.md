@@ -277,3 +277,8 @@
 - считать `P0` и `P1` закрытыми, не возвращаться к refactor/security-pass без нового факта
 - следующий рабочий шаг: `P2` как чистая фиксация рабочего дерева, review diff и разделение commit-ов на `backend/mobile` и `OTP/AGENTS`
 - `P2` закрыт: review рабочего дерева подтвердил, что в diff нет посторонних файлов или generated artifacts, а фиксация готовится двумя логическими commit-ами: сначала `backend/mobile` код + тесты, затем синхронизация `OTP` по `P0/P1`.
+- `P2` завершен полностью: рабочее дерево чистое, `backend/mobile` зафиксированы коммитом `b7e1eba` (`Refactor and harden Android push approvals runtime`), а vault sync зафиксирован коммитом `1c13c6c` (`Sync vault for Android push runtime hardening`).
+- Continuation checkpoint после очистки контекста:
+- считать `Android Push Runtime` локально закрытым до нового факта; не возвращаться к `P0/P1/P2`
+- начинать следующий рабочий цикл не с cleanup, а с нового roadmap-трека
+- ближайший логичный приоритет: `push delivery observability/hardening` в backend contour (`webhook/events`, observability/alerts, pilot integration scenario, replay/delivery hardening)
