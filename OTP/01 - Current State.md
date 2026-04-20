@@ -129,6 +129,7 @@
 - завершена `Iteration 2` `Android Push Runtime`: в `mobile` добавлен `:feature:push-approvals` с empty/runtime shell для pending `push` cards, testable presenter/workflow и app wiring через injected read-model/decision callbacks без HTTP/token storage coupling
 - завершена `Iteration 3` `Android Push Runtime`: в `mobile` добавлены secure device session storage, controlled refresh orchestration и HTTP transport для `activate/refresh/pending/approve/deny`, а `AuthenticatorApp` теперь умеет runtime sync pending approvals через persisted device session без fail-open reuse просроченных credentials
 - завершена `Iteration 4` `Android Push Runtime`: approve теперь проходит через локальный `BiometricPrompt` gate, решения пишутся в encrypted sanitized local history, `push` UI показывает recent decisions, а mobile verification закрыта через `unit + connectedDebugAndroidTest + live MCP`
+- device-facing pending `push` inbox дополнительно ужесточен: `GET /api/v1/devices/me/challenges/pending` и mobile UI больше не раскрывают internal tracing identifier `correlationId`
 - локальная mobile-проверка после `Iteration 3` проходит: `:security:storage:testDebugUnitTest`, `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest`, `:app:assembleDebug` зеленые; live MCP verification на `emulator-5554` подтверждает успешный app start и отсутствие runtime errors в `logcat`
 
 Пока не реализовано:

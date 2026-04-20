@@ -1307,8 +1307,6 @@ components:
         expiresAt:
           type: string
           format: date-time
-        correlationId:
-          type: string
     ChallengeWebhookEvent:
       type: object
       required: [eventId, eventType, occurredAt, challenge]
