@@ -138,6 +138,7 @@ Security behavior:
 
 - `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true` для trusted integration path, который хочет выбрать конкретный active device
 - optional `targetDeviceId` в `POST /api/v1/challenges`, чтобы ambiguity не resolve-илась неявно на backend
+- `GET /api/v1/devices/me/challenges/pending` для device runtime path, который читает только pending `push` challenges, already bound к authenticated device bearer
 
 ## Push delivery contour
 
@@ -147,6 +148,7 @@ Security behavior:
 2. `OtpAuth.Worker` job `push_challenge_delivery` lease-ит due rows из `PostgreSQL`.
 3. Worker повторно валидирует `challenge` и bound device перед dispatch.
 4. Gateway получает только sanitized dispatch contract и текущий `pushToken` из `auth.devices`.
+5. Device runtime читает свои pending approvals через `GET /api/v1/devices/me/challenges/pending`, не получая чужие challenge records даже внутри того же `tenant/application client`.
 
 Security semantics:
 

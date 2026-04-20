@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using OtpAuth.Api.Challenges;
+using OtpAuth.Api.Devices;
 using OtpAuth.Domain.Challenges;
 using OtpAuth.Domain.Devices;
 using OtpAuth.Domain.Policy;
@@ -10,6 +11,99 @@ namespace OtpAuth.Infrastructure.Tests.Challenges;
 
 public sealed class PushChallengeApiTests
 {
+    [Fact]
+    public async Task ListPending_ReturnsUnauthorized_WhenRequestIsUnauthenticated()
+    {
+        await using var factory = new PushChallengeApiTestFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/devices/me/challenges/pending");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListPending_ReturnsForbidden_WhenScopeIsMissing()
+    {
+        await using var seeded = CreateBoundFactory();
+        using var client = seeded.Factory.CreateAuthorizedClient(PushChallengeApiTestFactory.MissingScopeScenario);
+
+        var response = await client.GetAsync("/api/v1/devices/me/challenges/pending");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListPending_ReturnsOnlyPendingChallengesForAuthenticatedDevice()
+    {
+        await using var seeded = CreateBoundFactory();
+        var factory = seeded.Factory;
+        using var client = factory.CreateAuthorizedClient();
+
+        var laterChallenge = new Challenge
+        {
+            Id = Guid.NewGuid(),
+            TenantId = PushChallengeApiTestContext.TenantId,
+            ApplicationClientId = PushChallengeApiTestContext.ApplicationClientId,
+            ExternalUserId = "user-api",
+            Username = "push.api",
+            OperationType = OperationType.StepUp,
+            OperationDisplayName = "Approve payroll step-up",
+            FactorType = FactorType.Push,
+            Status = ChallengeStatus.Pending,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(6),
+            TargetDeviceId = PushChallengeApiTestContext.DeviceId,
+            CorrelationId = "push-api-002",
+        };
+        await factory.GetChallengeRepository().AddAsync(laterChallenge, CancellationToken.None);
+        await factory.GetChallengeRepository().AddAsync(
+            laterChallenge with
+            {
+                Id = Guid.NewGuid(),
+                TargetDeviceId = Guid.NewGuid(),
+                CorrelationId = "push-api-other-device",
+            },
+            CancellationToken.None);
+        await factory.GetChallengeRepository().AddAsync(
+            laterChallenge with
+            {
+                Id = Guid.NewGuid(),
+                Status = ChallengeStatus.Denied,
+                DeniedUtc = DateTimeOffset.UtcNow,
+                CorrelationId = "push-api-denied",
+            },
+            CancellationToken.None);
+        await factory.GetChallengeRepository().AddAsync(
+            laterChallenge with
+            {
+                Id = Guid.NewGuid(),
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+                CorrelationId = "push-api-expired",
+            },
+            CancellationToken.None);
+
+        var response = await client.GetAsync("/api/v1/devices/me/challenges/pending");
+        var body = await response.Content.ReadFromJsonAsync<PendingDeviceChallengeHttpResponse[]>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Collection(
+            body!,
+            first =>
+            {
+                Assert.Equal(seeded.SeededChallenge.Id, first.Id);
+                Assert.Equal("push", first.FactorType);
+                Assert.Equal("pending", first.Status);
+                Assert.Equal("login", first.OperationType);
+            },
+            second =>
+            {
+                Assert.Equal(laterChallenge.Id, second.Id);
+                Assert.Equal("step_up", second.OperationType);
+                Assert.Equal("Approve payroll step-up", second.OperationDisplayName);
+            });
+    }
+
     [Fact]
     public async Task Approve_ReturnsUnauthorized_WhenRequestIsUnauthenticated()
     {

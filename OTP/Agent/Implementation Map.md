@@ -7,9 +7,9 @@
 ## Текущее содержимое репозитория
 
 - `OTP/` — knowledge vault проекта и основная точка входа для контекста
-- `backend/` — backend scaffold на `.NET`
-- `mobile/` — Android scaffold на `Kotlin`
-- `admin/` — admin scaffold на `React + Vite`
+- `backend/` — основной backend runtime на `.NET`
+- `mobile/` — Android workspace на `Kotlin` с локально закрытыми `TOTP-first` и `push runtime` slices
+- `admin/` — runtime `Admin UI MVP` на `React + Vite`
 - `installer-ui/` — отдельный local setup shell на `React + Vite` с loopback-only bridge к installer engine
 - `infra/` — packaging-корень для `on-prem` runtime contour и installer-артефактов
 - `config/mcp/` — локальные примеры MCP-конфигов
@@ -28,6 +28,7 @@
 - `OTP/Integrations/` — интеграционный слой и `OpenAPI`
 - `OTP/Integrations/TOTP Provisioning Contract.md` — каноническая заметка о contract visibility и семантике `secretUri/qrCodePayload`
 - `OTP/Product/` — продуктовые заметки и мобильный контур
+- `OTP/Product/Android Push Runtime Plan.md` — канонический план и статус закрытия device-bound `push` runtime для `Android`
 - `OTP/Delivery/` — план внедрения и коробочная поставка
 - `OTP/2FA/` — исторический набор исходных заметок по теме
 - `OTP/Sessions/` — краткие записи по сессиям
@@ -39,7 +40,7 @@
 - `mobile` - Android project
 - `backend/OtpAuth.sln` - основной backend solution entry point
 - `admin/package.json` - admin workspace entry point
-- `mobile/settings.gradle.kts` - Android workspace entry point; объявляет `:app`, `:core:ui`, `:feature:provisioning`, `:feature:totp-codes`, `:security:storage`, `:totp-domain`
+- `mobile/settings.gradle.kts` - Android workspace entry point; объявляет `:app`, `:core:ui`, `:feature:provisioning`, `:feature:push-approvals`, `:feature:totp-codes`, `:security:storage`, `:totp-domain`
 - `installer-ui/package.json` - local installer UI shell entry point
 - `infra/docker-compose.yml` - базовый compose package для `postgres + redis + api + worker + admin` и optional `bootstrap` profile
 - `infra/README.md` - runbook первого packaging slice: env contract, bootstrap happy path и validation команды
@@ -53,12 +54,12 @@
 
 Текущее состояние entry points:
 
-- `mobile` - проект создан в Android Studio
-- `backend/OtpAuth.sln` - restore/build проходят
-- `admin/package.json` - install/test/build проходят
+- `mobile` - multi-module `Android` workspace; локально закрыты `TOTP-first` и `Android Push Runtime Iteration 1-4`
+- `backend/OtpAuth.sln` - restore/build проходят; backend runtime уже включает `TOTP`, `backup codes`, `Device Registry`, device-bound `push approve/deny` и delivery contour
+- `admin/package.json` - install/test/build проходят; runtime `Admin UI MVP` уже закрывает `TOTP` operator flow
 - `installer-ui/package.json` - install/test/build проходят; `npm run test:e2e` гоняет mock bridge browser regression для полного `install/update/recover` happy path
 
-Когда появится больше кода, сюда нужно добавить:
+Дальше сюда нужно добавлять:
 
 - путь к миграциям и схемам данных
 - список ключевых entry points по модулям
@@ -82,12 +83,17 @@
 - `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SecureTotpSecretRecordTest.kt` - unit tests для validation публичных storage value objects и encrypted record contract
 - `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SecureTotpSecretRecordSerializerTest.kt` - unit tests для serialization roundtrip encrypted record и snapshot payload без Android runtime
 - `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SharedPreferencesSecureTotpSecretStoreTest.kt` - unit tests для secure storage engine: save/read/list/delete, hashed storage key и corrupted record fail-closed path
+- `mobile/security/storage/src/test/java/ru/dt1520/security/authenticator/security/storage/SharedPreferencesSecureDeviceSessionStoreTest.kt` - unit tests для secure device session store: encrypted installation/session persistence, session clear без потери installation identity и corrupted-record fail-closed path
 - `mobile/feature/provisioning/src/test/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraftTest.kt` - unit tests для import draft contract
 - `mobile/feature/provisioning/src/test/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowTest.kt` - unit tests для invalid/valid import path, preview state transitions и confirm/save feedback без Compose runtime guessing
 - `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/AndroidBackupSecurityConfigTest.kt` - unit tests для manifest backup posture: `allowBackup=false`, explicit deny-all backup rules и отдельный `device-transfer` deny-list для Android 12+
+- `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/deviceruntime/DeviceRuntimeSessionManagerTest.kt` - unit tests для device session orchestration: activate persistence, proactive refresh, retry-after-401 и fail-closed session reset при refresh conflict
+- `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/deviceruntime/HttpDeviceRuntimeTransportTest.kt` - unit tests для runtime HTTP transport: request auth headers, JSON parsing pending/activation response и typed problem mapping для refresh errors
 - `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodeSummaryTest.kt` - unit tests для runtime code summary contract
 - `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesPresenterTest.kt` - unit tests для runtime presenter: sorting saved accounts, code generation handshake и empty-state contract
 - `mobile/feature/totp-codes/src/test/java/ru/dt1520/security/authenticator/feature/totpcodes/TotpCodesRemovalWorkflowTest.kt` - unit tests для local remove confirm-state без Compose/runtime guessing
+- `mobile/feature/push-approvals/src/test/java/ru/dt1520/security/authenticator/feature/pushapprovals/PushApprovalsPresenterTest.kt` - unit tests для mobile push shell presenter: filtering expired cards, ordering и fallback display mapping поверх stable pending challenge contract
+- `mobile/feature/push-approvals/src/test/java/ru/dt1520/security/authenticator/feature/pushapprovals/PushApprovalDecisionWorkflowTest.kt` - unit tests для approve/deny workflow state: in-flight decision flags и generic fail-closed error copy без transport detail leakage
 - `mobile/app/src/test/java/ru/dt1520/security/authenticator/app/AuthenticatorModuleWiringTest.kt` - unit tests для app-side secure store catalog wiring, fail-closed refresh и safe preview-to-store mapping
 - `infra/tests/packaging.contract.tests.ps1` - automated contract checks для packaging slice: обязательные файлы, compose services, `bootstrap` profile, env contract и `HTTPS` admin edge
 - `infra/tests/installer.common.tests.ps1` - unit-style tests для installer helpers: env parsing, structured config validation, execution plans, worker wait-step, structured diagnostics и secret-safe JSON-report для `install/update/recover`
@@ -105,6 +111,7 @@
 - `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceAccessTokenRuntimeValidatorTests.cs` - unit tests для device JWT runtime validation: claim mismatch, inactive device и `last_auth_state_changed_utc`
 - `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDecisionHandlerTests.cs` - unit tests для device-bound `push approve/deny`: binding, `biometricVerified`, policy fallback, expired/not-found paths и sanitized audit
 - `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeApiTests.cs` - endpoint-level tests для `POST /api/v1/challenges/{id}/approve|deny` под `DeviceBearer`
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/ListPendingPushChallengesForDeviceHandlerTests.cs` - unit tests для device-facing read contour `GET /api/v1/devices/me/challenges/pending`: scope boundary, filtering и ordering только active pending `push` challenges
 - `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDeliveryCoordinatorTests.cs` - unit tests для outbox-driven `push` delivery: `delivered`, `rescheduled`, `failed` без provider-specific transport
 - `backend/OtpAuth.Infrastructure.Tests` - unit tests для `Policy`, `Challenge` handlers, persistence, bootstrap OAuth, `TOTP` crypto/verifier и `VerifyTotp` runtime protection
 - `backend/OtpAuth.Infrastructure.Tests/Enrollments/EnrollmentApiTests.cs` - endpoint-level tests для `TOTP` enrollment management через `WebApplicationFactory` и in-memory provisioning store
@@ -121,9 +128,19 @@
 - `admin/src/app/App.tsx` - runtime `Admin UI MVP` shell: hero/meta chrome, session-aware routing между `LoginPanel` и enrollment workspace
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/MainActivity.kt` - Android entry point; поднимает только app shell без domain/storage логики
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorApp.kt` - composition root для mobile shell поверх `core:ui` и feature modules
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/deviceruntime/DeviceRuntimeSessionManager.kt` - app-side orchestration для persisted device session: installation identity, proactive/401-driven refresh, fail-closed invalidation и runtime pending sync
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/deviceruntime/HttpDeviceRuntimeTransport.kt` - HTTP transport для `activate/refresh/pending/approve/deny` поверх backend runtime contour с typed problem mapping
 - `mobile/app/src/main/res/xml/backup_rules.xml` - explicit deny-all backup rules для Android 11- и defense-in-depth вокруг локального `TOTP-first` secret storage
 - `mobile/app/src/main/res/xml/data_extraction_rules.xml` - explicit deny-all rules для Android 12+ cloud backup и `device-transfer`, чтобы секреты не мигрировали на новое устройство через system transfer path
 - `mobile/core/ui/src/main/java/ru/dt1520/security/authenticator/core/ui/AppSection.kt` - базовый UI container для feature placeholders и следующих mobile screens
+- `mobile/feature/push-approvals/src/main/java/ru/dt1520/security/authenticator/feature/pushapprovals/PushApprovalsRoute.kt` - pending push approvals shell: pending cards, local history section, typed safe decision results и локальный action-state без прямой зависимости от HTTP/token storage
+- `mobile/feature/push-approvals/src/main/java/ru/dt1520/security/authenticator/feature/pushapprovals/PushApprovalsPresenter.kt` - pure presenter для pending `push` inbox: filter active challenges, sort by expiry и строит operator-friendly card copy
+- `mobile/feature/push-approvals/src/main/java/ru/dt1520/security/authenticator/feature/pushapprovals/PushApprovalDecisionWorkflow.kt` - pure workflow state для local approve/deny transitions и generic fail-closed transport error surface
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/pushapprovals/PushApprovalDecisionCoordinator.kt` - app-side orchestration для approve/deny: biometric gate, sanitized local history, safe failure mapping и отсутствие coupling feature <-> transport/storage
+- `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/pushapprovals/AndroidBiometricPushApprovalGate.kt` - AndroidX `BiometricPrompt` wrapper с `BIOMETRIC_STRONG | DEVICE_CREDENTIAL`, fail-closed unavailable/cancel handling и без knowledge про backend transport
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/SecureDeviceSessionStore.kt` - secure local contract для encrypted `installationId + device session` без reuse `TOTP`-specific storage API
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/AndroidKeystoreSecureDeviceSessionStore.kt` - Android `Keystore`-backed device session store поверх `SharedPreferences + AES/GCM`
+- `mobile/security/storage/src/main/java/ru/dt1520/security/authenticator/security/storage/SecurePushDecisionHistoryStore.kt` - encrypted local store для sanitized recent push decisions c trim-limit semantics и без transport secrets
 - `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningRoute.kt` - provisioning shell: masked URI/manual inputs, preview/confirm/save orchestration и secure-save callback boundary
 - `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningWorkflowState.kt` - pure workflow state/reducer; whitelist-ит safe validation copy и не пропускает неожиданный текст исключения в UI error path
 - `mobile/feature/provisioning/src/main/java/ru/dt1520/security/authenticator/feature/provisioning/ProvisioningDraft.kt` - pure input model для `otpauth://` import и manual fallback, без прямой зависимости от storage
@@ -226,7 +243,7 @@
 - `backend/OtpAuth.Infrastructure/Integrations/IntegrationClientLifecycleAuditFactory.cs` - sanitized audit entries для integration client lifecycle без secret material
 - `backend/OtpAuth.Infrastructure/Integrations/PostgresRevokedIntegrationAccessTokenStore.cs` - persistent revoked-token store для integration access tokens
 - `backend/OtpAuth.Infrastructure/Integrations/IntegrationAccessTokenRuntimeValidator.cs` - runtime enforcement revoked/inactive integration tokens
-- `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - integration-authenticated device lifecycle API: `activate` и `revoke`
+- `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - integration-authenticated device lifecycle API (`activate`, `revoke`) и device-authenticated pending inbox read path `GET /api/v1/devices/me/challenges/pending`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - anonymous `POST /api/v1/auth/device-tokens/refresh` рядом с bootstrap OAuth endpoints
 - `backend/OtpAuth.Application/Devices/ActivateDeviceHandler.cs` - orchestrates one-time activation artifact validation, device record creation и initial token pair issuance
 - `backend/OtpAuth.Application/Devices/RefreshDeviceTokenHandler.cs` - hash-only rotating refresh flow с fail-closed replay detection и `blocked` transition
@@ -251,8 +268,10 @@
 - `backend/OtpAuth.Worker/PostgresSecurityDataCleanupRunner.cs` - isolated runner для cleanup use case без падения worker startup на отсутствующей DB-конфигурации
 - `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJobOptions.cs` - config contract для scheduling job-а `security_data_cleanup`
 - `backend/OtpAuth.Application/Challenges/PushChallengeDeliveryCoordinator.cs` - application orchestration для фактической постановки `push` challenge на bound device через lease-able delivery store и gateway
+- `backend/OtpAuth.Application/Challenges/ListPendingPushChallengesForDeviceHandler.cs` - device-facing read model для pending `push` challenges, already bound к authenticated device bearer
 - `backend/OtpAuth.Application/Challenges/PushChallengeDeliveryContracts.cs` - delivery contracts: queued delivery model, store/gateway interfaces и dispatch result
 - `backend/OtpAuth.Application/Devices/ListDevicesForRoutingHandler.cs` - integration support read path для active devices по `externalUserId` c optional `pushCapableOnly`
+- `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeRepository.cs` - теперь также умеет list pending `push` challenges по bound `target_device_id` для mobile runtime inbox
 - `backend/OtpAuth.Infrastructure/Challenges/PostgresPushChallengeDeliveryStore.cs` - `PostgreSQL` store для `auth.push_challenge_deliveries`: atomic lease/update status/retry metadata
 - `backend/OtpAuth.Infrastructure/Challenges/LoggingPushChallengeDeliveryGateway.cs` - текущий sanitized delivery gateway stub; не хранит и не логирует raw `pushToken`
 - `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - теперь также публикует `GET /api/v1/devices` как support path для multi-device routing
@@ -350,3 +369,7 @@
 - `2026-04-17`: карта дополнена реализованным runtime `Device Registry` slice: backend теперь публикует `activate/refresh/revoke`, хранит one-time activation artifacts в `auth.device_activation_codes`, rotate-ит hash-only refresh tokens в `auth.device_refresh_tokens`, блокирует устройство при refresh replay и покрыт dedicated unit + endpoint tests
 - `2026-04-17`: карта дополнена device-bound `push approve/deny` slice: challenge теперь хранит `target_device_id + approved_utc + denied_utc`, `CreateChallenge` auto-bind-ит `push` только при единственном active push-capable device, а backend публикует `approve/deny` под `DeviceBearer` с policy/binding checks и dedicated tests
 - `2026-04-17`: карта дополнена `push delivery + routing` slice: `CreateChallenge` теперь поддерживает explicit `targetDeviceId`, `GET /api/v1/devices` дает active routing candidates, `auth.push_challenge_deliveries` хранит queued delivery rows, а `OtpAuth.Worker` dispatch-ит их через job `push_challenge_delivery`
+- `2026-04-17`: карта дополнена `Android Push Runtime` checkpoint note и завершенной `Iteration 1`: backend device contour теперь включает `GET /api/v1/devices/me/challenges/pending`, `PostgresChallengeRepository` умеет list pending bound challenges, а tests закрывают ordering/filtering/scope boundary
+- `2026-04-17`: карта дополнена завершенной `Iteration 2` `Android Push Runtime`: `mobile` получил новый модуль `:feature:push-approvals`, `AuthenticatorApp` wired к injected pending read-model/decision callbacks, а локальная проверка `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest` и `:app:assembleDebug` проходит
+- `2026-04-17`: карта дополнена завершенной `Iteration 3` `Android Push Runtime`: `mobile/security:storage` теперь хранит encrypted device session и installation identity, `mobile/app` получил `DeviceRuntimeSessionManager + HttpDeviceRuntimeTransport`, а локальная проверка `:security:storage:testDebugUnitTest`, `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest`, `:app:assembleDebug` и live MCP start-check на `emulator-5554` подтверждены
+- `2026-04-17`: карта дополнена завершенной `Iteration 4` `Android Push Runtime`: `mobile/app` теперь держит separate push decision coordinator и `BiometricPrompt` gate, `mobile/security:storage` получил encrypted recent-decision history, `mobile/app/src/androidTest/.../PushApprovalsUiTest.kt` закрывает app-level approve/history UX, а локальная проверка `:security:storage:testDebugUnitTest`, `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest` и live MCP verification пустых push/history states на `emulator-5554` подтверждены

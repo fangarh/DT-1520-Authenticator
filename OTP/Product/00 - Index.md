@@ -10,6 +10,7 @@
 - [[Mobile App]]
 - [[Android App Bootstrap]]
 - [[Android TOTP-First Plan]]
+- [[Android Push Runtime Plan]]
 - [[../Delivery/Admin and Android Readiness Gates]]
 - [[../Delivery/Implementation Plan 8-12 Weeks]]
 - [[../Architecture/Technology Baseline]]

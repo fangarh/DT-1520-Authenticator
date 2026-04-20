@@ -1,5 +1,6 @@
 using OtpAuth.Api.Authentication;
 using OtpAuth.Api.Devices;
+using OtpAuth.Application.Challenges;
 using OtpAuth.Application.Devices;
 using OtpAuth.Application.Integrations;
 
@@ -9,6 +10,10 @@ public static class DevicesEndpoints
 {
     public static IEndpointRouteBuilder MapDevicesEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/v1/devices/me/challenges/pending", ListPendingChallengesAsync)
+            .RequireAuthorization("DeviceChallengeRead")
+            .WithName("ListPendingDeviceChallenges");
+
         app.MapGet("/api/v1/devices", ListDevicesAsync)
             .RequireAuthorization("DevicesWrite")
             .WithName("ListDevices");
@@ -22,6 +27,40 @@ public static class DevicesEndpoints
             .WithName("RevokeDevice");
 
         return app;
+    }
+
+    private static async Task<IResult> ListPendingChallengesAsync(
+        ListPendingPushChallengesForDeviceHandler handler,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        DeviceClientContext deviceContext;
+        try
+        {
+            deviceContext = httpContext.GetRequiredDeviceClientContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return CreateProblem(StatusCodes.Status401Unauthorized, "Authentication failed.", "Authenticated principal is missing device claims.");
+        }
+
+        var result = await handler.HandleAsync(deviceContext, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            return result.ErrorCode switch
+            {
+                ListPendingPushChallengesForDeviceErrorCode.AccessDenied => CreateProblem(
+                    StatusCodes.Status403Forbidden,
+                    "Access denied.",
+                    result.ErrorMessage),
+                _ => CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid device challenge request.",
+                    result.ErrorMessage),
+            };
+        }
+
+        return Results.Ok(result.Challenges.Select(DeviceChallengeResponseMapper.MapPendingChallenge));
     }
 
     private static async Task<IResult> ListDevicesAsync(

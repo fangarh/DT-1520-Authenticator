@@ -41,6 +41,8 @@
 
 ## Сейчас главное
 
-На текущем этапе репозиторий служит как проектный каркас для будущей `2FA/MFA` платформы с опорой на `TOTP`, `push approval` и `backup codes`.
+На текущем этапе репозиторий уже не только проектный каркас: в коде есть рабочие backend, mobile, admin и installer slices для `MVP` вокруг `TOTP`, `push approval` и `backup codes`.
+
+Основной незакрытый объем смещен из bootstrap/scaffold-фазы в `productization`, integration closure, observability и hardening.
 
 Исторические исходные заметки сохранены в `OTP/2FA/`, но каноническое чтение теперь начинается с доменных индексов.

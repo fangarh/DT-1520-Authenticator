@@ -104,7 +104,7 @@ builder.Services.AddAuthentication(options =>
         options.ForwardDefaultSelector = context =>
             context.Request.Path.StartsWithSegments("/api/v1/admin", StringComparison.OrdinalIgnoreCase)
                 ? AdminAuthenticationDefaults.AuthenticationScheme
-                : IsDeviceChallengeDecisionPath(context.Request.Path)
+                : IsDeviceAuthenticatedPath(context.Request.Path)
                     ? DeviceAuthenticationDefaults.AuthenticationScheme
                 : JwtBearerDefaults.AuthenticationScheme;
     })
@@ -193,6 +193,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("DeviceChallengeWrite", policy =>
         policy.RequireAuthenticatedUser()
             .RequireAssertion(context => HasScope(context.User, DeviceTokenScope.Challenge)));
+    options.AddPolicy("DeviceChallengeRead", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context => HasScope(context.User, DeviceTokenScope.Challenge)));
     options.AddPolicy(AdminAuthenticationDefaults.AuthenticatedPolicy, policy =>
         policy.RequireAuthenticatedUser());
     options.AddPolicy(AdminAuthenticationDefaults.EnrollmentsReadPolicy, policy =>
@@ -241,6 +244,7 @@ builder.Services.AddSingleton<StartTotpEnrollmentHandler>();
 builder.Services.AddSingleton<ConfirmTotpEnrollmentHandler>();
 builder.Services.AddSingleton<CreateChallengeHandler>();
 builder.Services.AddSingleton<GetChallengeHandler>();
+builder.Services.AddSingleton<ListPendingPushChallengesForDeviceHandler>();
 builder.Services.AddSingleton<VerifyBackupCodeHandler>();
 builder.Services.AddSingleton<VerifyTotpHandler>();
 builder.Services.AddSingleton<IChallengeDecisionAuditWriter, PushChallengeDecisionAuditWriter>();
@@ -303,8 +307,13 @@ static bool HasScope(ClaimsPrincipal user, string requiredScope)
         .Contains(requiredScope, StringComparer.Ordinal);
 }
 
-static bool IsDeviceChallengeDecisionPath(PathString path)
+static bool IsDeviceAuthenticatedPath(PathString path)
 {
+    if (path.StartsWithSegments("/api/v1/devices/me/challenges", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
     if (!path.StartsWithSegments("/api/v1/challenges", StringComparison.OrdinalIgnoreCase))
     {
         return false;

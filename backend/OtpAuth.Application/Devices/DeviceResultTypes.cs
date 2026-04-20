@@ -135,3 +135,36 @@ public sealed record ListDevicesForRoutingResult
         ErrorMessage = errorMessage,
     };
 }
+
+public enum ListPendingPushChallengesForDeviceErrorCode
+{
+    None = 0,
+    AccessDenied = 1,
+}
+
+public sealed record ListPendingPushChallengesForDeviceResult
+{
+    public bool IsSuccess { get; init; }
+
+    public ListPendingPushChallengesForDeviceErrorCode ErrorCode { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public IReadOnlyCollection<Domain.Challenges.Challenge> Challenges { get; init; } = Array.Empty<Domain.Challenges.Challenge>();
+
+    public static ListPendingPushChallengesForDeviceResult Success(
+        IReadOnlyCollection<Domain.Challenges.Challenge> challenges) => new()
+    {
+        IsSuccess = true,
+        Challenges = challenges,
+    };
+
+    public static ListPendingPushChallengesForDeviceResult Failure(
+        ListPendingPushChallengesForDeviceErrorCode errorCode,
+        string errorMessage) => new()
+    {
+        IsSuccess = false,
+        ErrorCode = errorCode,
+        ErrorMessage = errorMessage,
+    };
+}

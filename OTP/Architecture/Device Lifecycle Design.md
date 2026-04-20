@@ -4,7 +4,7 @@
 
 Accepted working contract
 
-Implementation status on `2026-04-17`: runtime slice `activate -> refresh -> revoke` implemented in backend with `auth.devices`, `auth.device_refresh_tokens`, `auth.device_activation_codes`, separate device JWT validator and unit/endpoint coverage. Device-bound `push approve/deny` contour тоже реализован поверх `DeviceBearer`: challenge хранит `target_device_id`, approve/deny валидируют binding + `Policy`, а create-path auto-bind-ит `push` только при единственном active push-capable device. Delivery slice поверх этого тоже реализован: `push` challenge atomically пишет row в `auth.push_challenge_deliveries`, worker lease-ит queued delivery через `PostgreSQL`, а trusted integration path теперь умеет deterministic routing через explicit `targetDeviceId` и `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true`.
+Implementation status on `2026-04-17`: runtime slice `activate -> refresh -> revoke` implemented in backend with `auth.devices`, `auth.device_refresh_tokens`, `auth.device_activation_codes`, separate device JWT validator and unit/endpoint coverage. Device-bound `push approve/deny` contour тоже реализован поверх `DeviceBearer`: challenge хранит `target_device_id`, approve/deny валидируют binding + `Policy`, а create-path auto-bind-ит `push` только при единственном active push-capable device. Delivery slice поверх этого тоже реализован: `push` challenge atomically пишет row в `auth.push_challenge_deliveries`, worker lease-ит queued delivery через `PostgreSQL`, а trusted integration path теперь умеет deterministic routing через explicit `targetDeviceId` и `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true`. Первый device-facing runtime read contour тоже закрыт: `GET /api/v1/devices/me/challenges/pending` возвращает sanitized pending `push` challenges, already bound к authenticated device bearer.
 
 ## Цель
 
@@ -279,10 +279,10 @@ Audit payload не должен содержать:
 
 ## Следующий runtime slice после этого design step
 
-Этот runtime slice реализован на `2026-04-17`.
+Этот runtime slice реализован на `2026-04-17`, включая mobile-side pending inbox, biometric gate и device-bound `approve/deny` UX.
 
 Следующий practical step поверх него:
 
-1. mobile/runtime read path для pending `push` challenge на самом device
-2. provider-specific adapter вместо текущего gateway-stub без изменения outbox/runtime contract
-3. future activation/admin support surface без ослабления уже принятых replay/revoke invariants
+1. довести provider-specific adapter и внешний delivery/`webhook` contour без изменения `Device Registry` и outbox contract
+2. добавить operator/support flows вокруг device lifecycle и explicit device management beyond текущего runtime API
+3. закрыть observability/hardening вокруг `push` delivery, refresh replay и pilot integration scenario

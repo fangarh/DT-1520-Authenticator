@@ -2,6 +2,7 @@ using Dapper;
 using Npgsql;
 using OtpAuth.Application.Challenges;
 using OtpAuth.Domain.Challenges;
+using OtpAuth.Domain.Policy;
 
 namespace OtpAuth.Infrastructure.Challenges;
 
@@ -118,6 +119,62 @@ public sealed class PostgresChallengeRepository : IChallengeRepository
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<Challenge>> ListPendingPushByTargetDeviceAsync(
+        Guid targetDeviceId,
+        Guid tenantId,
+        Guid applicationClientId,
+        DateTimeOffset utcNow,
+        int maxResults,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        var persistenceModels = await connection.QueryAsync<ChallengePersistenceModel>(new CommandDefinition(
+            """
+            select
+                id as Id,
+                tenant_id as TenantId,
+                application_client_id as ApplicationClientId,
+                external_user_id as ExternalUserId,
+                username as Username,
+                operation_type as OperationType,
+                operation_display_name as OperationDisplayName,
+                factor_type as FactorType,
+                status as Status,
+                expires_at as ExpiresAt,
+                target_device_id as TargetDeviceId,
+                approved_utc as ApprovedUtc,
+                denied_utc as DeniedUtc,
+                correlation_id as CorrelationId,
+                callback_url as CallbackUrl
+            from auth.challenges
+            where tenant_id = @TenantId
+              and application_client_id = @ApplicationClientId
+              and target_device_id = @TargetDeviceId
+              and factor_type = @FactorType
+              and status = @Status
+              and expires_at > @UtcNow
+            order by expires_at asc, id asc
+            limit @MaxResults;
+            """,
+            new
+            {
+                TargetDeviceId = targetDeviceId,
+                TenantId = tenantId,
+                ApplicationClientId = applicationClientId,
+                FactorType = FactorType.Push,
+                Status = ChallengeStatus.Pending,
+                UtcNow = utcNow,
+                MaxResults = maxResults,
+            },
+            cancellationToken: cancellationToken));
+
+        return persistenceModels
+            .Select(ChallengeDataMapper.ToDomainModel)
+            .ToArray();
     }
 
     public async Task<Challenge?> GetByIdAsync(

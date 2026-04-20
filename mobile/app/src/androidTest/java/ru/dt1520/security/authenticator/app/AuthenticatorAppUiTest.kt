@@ -52,9 +52,14 @@ class AuthenticatorAppUiTest {
 
         composeRule.onNodeWithTag(ProvisioningTestTags.PreviewCard).assertExists()
         composeRule.onNodeWithTag(ProvisioningTestTags.SaveButton)
+            .performScrollTo()
             .performClick()
         composeRule.waitForIdle()
 
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(ProvisioningTestTags.PreviewCard)
+                .fetchSemanticsNodes().isEmpty()
+        }
         composeRule.onNodeWithTag(ProvisioningTestTags.PreviewCard).assertDoesNotExist()
         composeRule.onNodeWithTag(ProvisioningTestTags.SuccessMessage).assertExists()
         composeRule.onNodeWithText("Contoso (operator@example.local)").assertExists()

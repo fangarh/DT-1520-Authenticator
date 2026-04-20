@@ -629,6 +629,29 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/devices/me/challenges/pending:
+    get:
+      tags: [Devices]
+      summary: List pending push challenges for the authenticated device
+      operationId: listPendingDeviceChallenges
+      security:
+        - DeviceBearerAuth: []
+      responses:
+        '200':
+          description: Pending push challenges bound to the authenticated device
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingDeviceChallenge'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/devices/{deviceId}/revoke:
     post:
       tags: [Devices]
@@ -885,6 +908,15 @@ components:
                 traceId: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"
     Unauthorized:
       description: Authentication failed
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Access denied
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'
@@ -1249,6 +1281,34 @@ components:
           $ref: '#/components/schemas/Device'
         tokens:
           $ref: '#/components/schemas/DeviceTokenResponse'
+    PendingDeviceChallenge:
+      type: object
+      required:
+        - id
+        - factorType
+        - status
+        - operationType
+        - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        factorType:
+          $ref: '#/components/schemas/FactorType'
+        status:
+          $ref: '#/components/schemas/ChallengeStatus'
+        operationType:
+          type: string
+          enum: [login, step_up, backup_code_recovery, device_activation, totp_enrollment]
+        operationDisplayName:
+          type: string
+        username:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
     ChallengeWebhookEvent:
       type: object
       required: [eventId, eventType, occurredAt, challenge]

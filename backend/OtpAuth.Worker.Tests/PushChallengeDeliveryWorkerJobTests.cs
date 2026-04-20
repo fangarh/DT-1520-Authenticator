@@ -111,6 +111,18 @@ public sealed class PushChallengeDeliveryWorkerJobTests
 
         public Task AddAsync(Challenge challenge, PushChallengeDelivery? pushDelivery, CancellationToken cancellationToken) => Task.CompletedTask;
 
+        public Task<IReadOnlyCollection<Challenge>> ListPendingPushByTargetDeviceAsync(
+            Guid targetDeviceId,
+            Guid tenantId,
+            Guid applicationClientId,
+            DateTimeOffset utcNow,
+            int maxResults,
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<Challenge> challenges = [challenge];
+            return Task.FromResult(challenges);
+        }
+
         public Task<Challenge?> GetByIdAsync(
             Guid challengeId,
             Guid tenantId,

@@ -25,6 +25,30 @@ public sealed class InMemoryChallengeRepository : IChallengeRepository
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyCollection<Challenge>> ListPendingPushByTargetDeviceAsync(
+        Guid targetDeviceId,
+        Guid tenantId,
+        Guid applicationClientId,
+        DateTimeOffset utcNow,
+        int maxResults,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyCollection<Challenge> challenges = _challenges.Values
+            .Where(challenge =>
+                challenge.TenantId == tenantId &&
+                challenge.ApplicationClientId == applicationClientId &&
+                challenge.FactorType == Domain.Policy.FactorType.Push &&
+                challenge.Status == ChallengeStatus.Pending &&
+                challenge.TargetDeviceId == targetDeviceId &&
+                challenge.ExpiresAt > utcNow)
+            .OrderBy(challenge => challenge.ExpiresAt)
+            .ThenBy(challenge => challenge.Id)
+            .Take(maxResults)
+            .ToArray();
+
+        return Task.FromResult(challenges);
+    }
+
     public Task<Challenge?> GetByIdAsync(
         Guid challengeId,
         Guid tenantId,

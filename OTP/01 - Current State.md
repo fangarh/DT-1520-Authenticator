@@ -2,7 +2,7 @@
 
 ## Статус проекта
 
-Проект находится на стадии архитектурного проектирования.
+Проект находится на стадии активной реализации `MVP`: базовые backend, mobile, admin и installer контуры уже собраны и локально проверены, а основной незакрытый объем смещен в `productization`, integration closure и hardening.
 
 Реализовано сейчас:
 
@@ -22,10 +22,10 @@
 - утвержден `Android-first` подход для мобильного фактора
 - зафиксированы bootstrap-параметры `Android`-проекта
 - утверждена новая корневая структура репозитория без верхнего `src/`
-- создан Android scaffold в `mobile`
-- создан backend scaffold в `backend`
-- создан admin scaffold в `admin`
-- создан installer UI scaffold в `installer-ui`
+- `mobile` вырос из стартового scaffold в multi-module `Android` workspace
+- `backend` вырос из стартового scaffold в рабочий `.NET` runtime contour
+- `admin` вырос из стартового scaffold в runtime `Admin UI MVP`
+- `installer-ui` вырос из стартового scaffold в отдельный local setup shell
 - добавлены локальные примеры `MCP`-конфигов в `config/mcp`
 - `admin` проходит `npm run build`
 - `backend` проходит `dotnet restore` и `dotnet build`
@@ -113,6 +113,7 @@
 - зафиксирован отдельный рабочий план `Android TOTP-first` с checkpoint-ами для промежуточной очистки контекста
 - `mobile` переведен с single-module scaffold на clean multi-module layout: `app`, `core:ui`, `feature:provisioning`, `feature:totp-codes`, `security:storage`, `totp-domain`
 - в `mobile/security:storage` реализован secure storage abstraction для `TOTP-first`: `SecureTotpSecretStore`, `SharedPreferences + Android Keystore AES/GCM`, hashed storage keys и fail-closed restore path
+- в `mobile/security:storage` реализован отдельный secure storage contour для device session: encrypted `installationId + device token pair`, fail-closed restore path и explicit session clear без потери installation identity
 - в `mobile/totp-domain` реализован `Step 4` из `Android TOTP-first`: `otpauth://` parser, strict validation `issuer/label/secret/digits/period/algorithm`, RFC-backed `TOTP` code generation и countdown/state model без Android-зависимостей
 - в `mobile/feature:provisioning` реализован `Step 5` из `Android TOTP-first`: masked `otpauth://` import, manual fallback, preview/confirm/save flow и app wiring в secure storage без прямой зависимости feature-модуля от `Keystore`
 - в `mobile/feature:totp-codes` реализован `Step 6` из `Android TOTP-first`: runtime list of saved accounts, offline `TOTP` code + countdown, explicit remove confirm flow и scroll-safe app shell для реального Android viewport
@@ -123,15 +124,22 @@
 - `CreateChallenge` теперь auto-bind-ит `push` только при единственном active push-capable device пользователя; при multi-device ambiguity integration может передать explicit `targetDeviceId`, а без него runtime fail-closed уходит в безопасный fallback на `TOTP`
 - реализован delivery slice для фактической постановки `push` challenge: `CreateChallenge` атомарно пишет row в `auth.push_challenge_deliveries`, `OtpAuth.Worker` обрабатывает queued delivery через job `push_challenge_delivery`, а dispatch идет через sanitized gateway contract без дублирования raw `pushToken` в outbox table
 - реализован explicit support path для multi-device routing: `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true` возвращает active device list c `isPushCapable`, после чего integration может создать `push` challenge с explicit `targetDeviceId`
+- зафиксирован отдельный рабочий план `Android Push Runtime` с итерациями для pending inbox, mobile shell, device session transport и biometric closure
+- завершена `Iteration 1` `Android Push Runtime`: backend теперь публикует `GET /api/v1/devices/me/challenges/pending` под `DeviceBearer` и возвращает только active pending `push` challenges, already bound к authenticated device
+- завершена `Iteration 2` `Android Push Runtime`: в `mobile` добавлен `:feature:push-approvals` с empty/runtime shell для pending `push` cards, testable presenter/workflow и app wiring через injected read-model/decision callbacks без HTTP/token storage coupling
+- завершена `Iteration 3` `Android Push Runtime`: в `mobile` добавлены secure device session storage, controlled refresh orchestration и HTTP transport для `activate/refresh/pending/approve/deny`, а `AuthenticatorApp` теперь умеет runtime sync pending approvals через persisted device session без fail-open reuse просроченных credentials
+- завершена `Iteration 4` `Android Push Runtime`: approve теперь проходит через локальный `BiometricPrompt` gate, решения пишутся в encrypted sanitized local history, `push` UI показывает recent decisions, а mobile verification закрыта через `unit + connectedDebugAndroidTest + live MCP`
+- локальная mobile-проверка после `Iteration 3` проходит: `:security:storage:testDebugUnitTest`, `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest`, `:app:assembleDebug` зеленые; live MCP verification на `emulator-5554` подтверждает успешный app start и отсутствие runtime errors в `logcat`
 
 Пока не реализовано:
 
 - production-ready backend за пределами bootstrap `Challenges` slice
-- mobile app
-- следующим backend/product блоком после delivery/routing slice является mobile/runtime read path для pending `push` challenge на самом device и provider-specific adapter поверх уже готового outbox contract
-- `API`
+- полный public/operator API surface для remaining `MVP` flows
 - отдельный `Bootstrap Agent`
-- полноценное integration/contract/e2e покрытие за пределами текущего bootstrap backend slice
+- provider-facing `webhook/events` contour и финальный integration delivery contract
+- метрики, алерты и единый observability baseline для runtime `push/TOTP/device lifecycle`
+- operator/support flows вокруг device lifecycle beyond текущих `TOTP` admin actions
+- полноценный pilot integration scenario и финальный hardening run по `rate limiting`, backup/restore и rotation runbooks
 - bootstrap OAuth теперь читает integration clients из `PostgreSQL`; operational secret rotation, client activation lifecycle и единый security audit trail уже реализованы, но полноценный management API/UI еще не готовы
 - без конфигурации signing key bootstrap OAuth по-прежнему может использовать process-local ephemeral key, но теперь это разрешено только в `Development`
 - `TOTP` enrollment storage уже persistent и шифруется at rest, но пока опирается на env-managed protection key, а не на `Vault/KMS`
@@ -176,7 +184,7 @@
 1. что уже реально существует в репозитории
 2. в какой стадии находится продукт и его реализация
 
-## Рабочий статус scaffold-ов
+## Рабочий статус основных корней
 
 - `mobile` существует как multi-module Android workspace; локальный `Android TOTP-first` slice закрыт и подтвержден через unit/UI/live verification
 - `admin` существует, зависимости установлены, build проходит
@@ -197,7 +205,7 @@
 - для backend restore/build в этой среде потребовался запуск вне sandbox
 - `mobile` требует настроенный `JAVA_HOME` в shell или IDE; локальный `Android OpenJDK` на машине доступен
 - старый верхний `src/`, внутренний `backend/src/` и generated-cache хвосты удалены
-- в рабочем дереве остались только канонические корни и исходные scaffold-файлы
+- в рабочем дереве канонические рабочие корни совпадают с vault-first структурой: `OTP`, `mobile`, `backend`, `admin`, `installer-ui`, `infra`
 
 ## Текущее расположение архитектурных заметок
 
@@ -304,3 +312,8 @@
 - `2026-04-17`: реализован `push delivery` slice: `CreateChallenge` принимает optional `targetDeviceId`, атомарно пишет `push` challenge + row в `auth.push_challenge_deliveries`, а `OtpAuth.Worker` job `push_challenge_delivery` lease-ит due rows, dispatch-ит sanitized request в gateway и пишет `delivered/rescheduled/failed` status без хранения raw `pushToken` в outbox table
 - `2026-04-17`: реализован explicit support path для multi-device routing: `GET /api/v1/devices?externalUserId=...&pushCapableOnly=true` возвращает active devices с `isPushCapable`, а create-path теперь допускает deterministic `push` routing через explicit `targetDeviceId`
 - `2026-04-17`: локальная backend-проверка после `push delivery + routing` проходит: `verify-backend.ps1` зеленый, `OtpAuth.Infrastructure.Tests` зеленый (`217/217`), `OtpAuth.Worker.Tests` зеленый (`15/15`)
+- `2026-04-17`: зафиксирован канонический `Android Push Runtime Plan` как продолжение после закрытия `TOTP-first`; первый срез ограничен backend/device contract для pending `push` inbox, чтобы не строить mobile runtime на временном API
+- `2026-04-17`: завершена `Iteration 1` `Android Push Runtime`: backend публикует `GET /api/v1/devices/me/challenges/pending`, device read path отдает только active pending `push` challenges для authenticated device bearer, `OpenAPI/Auth and Token Flows/Device Lifecycle Design` синхронизированы, а unit + endpoint tests закрывают filter/scope behavior
+- `2026-04-17`: завершена `Iteration 2` `Android Push Runtime`: в `mobile` добавлен модуль `:feature:push-approvals` с `PendingPushApproval`, presenter/workflow contracts, empty/runtime Compose shell и app wiring через injected callbacks; локальная проверка `:feature:push-approvals:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug` зеленая
+- `2026-04-17`: завершена `Iteration 3` `Android Push Runtime`: в `mobile/security:storage` добавлены encrypted `installationId + device session`, в `mobile/app` собраны `DeviceRuntimeSessionManager + HttpDeviceRuntimeTransport`, `AuthenticatorApp` wired к persisted pending sync, локальная проверка `:security:storage:testDebugUnitTest :feature:push-approvals:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug` зеленая, а live MCP verification на `emulator-5554` подтверждает успешный app start без runtime errors
+- `2026-04-17`: завершена `Iteration 4` `Android Push Runtime`: `mobile/app` получил decision coordinator и `BiometricPrompt` gate для approve, `mobile/security:storage` теперь хранит encrypted sanitized history последних решений, `mobile/feature:push-approvals` рендерит history section и typed safe failures; локально зелены `:security:storage:testDebugUnitTest :feature:push-approvals:testDebugUnitTest :app:testDebugUnitTest`, `:app:connectedDebugAndroidTest`, а live MCP verification на `emulator-5554` подтверждает обычный app launch и новые push empty/history states на свежем `app-debug.apk`

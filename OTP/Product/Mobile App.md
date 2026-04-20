@@ -23,7 +23,13 @@
 4. Приложение привязывает устройство.
 5. Устройство появляется в `Device Registry`.
 
-Для текущего `Android TOTP-first` слайса канонический provisioning contract зафиксирован в [[../Integrations/TOTP Provisioning Contract]].
+Для закрытого `Android TOTP-first` слайса канонический provisioning contract зафиксирован в [[../Integrations/TOTP Provisioning Contract]].
+
+План и checkpoint-ы `Android Push Runtime`, которым был закрыт следующий mobile push track после `TOTP-first`, зафиксированы в [[Android Push Runtime Plan]].
+
+На `2026-04-17` `Android Push Runtime` закрыт через `Iteration 1-4`: реализованы pending inbox, secure device session storage, transport для `activate/refresh/pending/approve/deny`, локальный `BiometricPrompt` gate перед approve и encrypted sanitized history последних решений.
+
+Следующий mobile/product шаг больше не в закрытии самого push runtime, а в смежных enrollment/support/ops сценариях, если они будут подтверждены отдельным продуктовым решением.
 
 ## Безопасность
 
@@ -42,4 +48,4 @@ Bootstrap-параметры проекта зафиксированы в [[Andr
 
 Для планирования старта работ по `admin UI` и `Android` readiness gates зафиксированы в [[../Delivery/Admin and Android Readiness Gates]].
 
-Пошаговый рабочий трек для ближайшей реализации зафиксирован в [[Android TOTP-First Plan]].
+Исторический пошаговый трек, через который закрывался локальный `TOTP-first` slice, зафиксирован в [[Android TOTP-First Plan]].

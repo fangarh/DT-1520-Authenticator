@@ -8,6 +8,14 @@ public interface IChallengeRepository
 
     Task AddAsync(Challenge challenge, PushChallengeDelivery? pushDelivery, CancellationToken cancellationToken);
 
+    Task<IReadOnlyCollection<Challenge>> ListPendingPushByTargetDeviceAsync(
+        Guid targetDeviceId,
+        Guid tenantId,
+        Guid applicationClientId,
+        DateTimeOffset utcNow,
+        int maxResults,
+        CancellationToken cancellationToken);
+
     Task<Challenge?> GetByIdAsync(
         Guid challengeId,
         Guid tenantId,
