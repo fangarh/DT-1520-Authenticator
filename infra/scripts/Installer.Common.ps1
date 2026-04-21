@@ -30,6 +30,7 @@ function Read-InstallerEnvironmentFile {
 function Get-InstallerRequiredEnvironmentKeys {
     return @(
         'ConnectionStrings__Postgres',
+        'OTPAUTH_REDIS_PASSWORD',
         'BootstrapOAuth__CurrentSigningKeyId',
         'BootstrapOAuth__CurrentSigningKey',
         'TotpProtection__CurrentKeyVersion',

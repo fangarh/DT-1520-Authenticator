@@ -48,6 +48,7 @@ Set-Content -LiteralPath $tlsKeyPath -Value 'key' -Encoding Ascii
 $envFilePath = Join-Path $runtimeRoot 'runtime.env'
 @"
 ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=otpauth;Username=otpauth;Password=secret;SSL Mode=Disable
+OTPAUTH_REDIS_PASSWORD=redis-secret
 BootstrapOAuth__CurrentSigningKeyId=current
 BootstrapOAuth__CurrentSigningKey=signing-key
 TotpProtection__CurrentKeyVersion=1
@@ -344,6 +345,7 @@ Assert-True $threwForRepoLocalEnv 'Installer config should reject env files stor
 $missingKeyEnvPath = Join-Path $runtimeRoot 'runtime-missing.env'
 @"
 ConnectionStrings__Postgres=Host=postgres
+OTPAUTH_REDIS_PASSWORD=redis-secret
 BootstrapOAuth__CurrentSigningKeyId=current
 TotpProtection__CurrentKeyVersion=1
 TotpProtection__CurrentKey=totp-key
@@ -359,6 +361,26 @@ $missingKeyIssues = @(Get-InstallerConfigurationValidationIssues `
     -BootstrapAdminPermissions @('enrollments.read'))
 
 Assert-True (@($missingKeyIssues | Where-Object Code -eq 'env_key_missing' | Where-Object Field -eq 'BootstrapOAuth__CurrentSigningKey').Count -eq 1) 'Missing required env keys should be returned as structured validation issues.'
+
+$missingRedisEnvPath = Join-Path $runtimeRoot 'runtime-missing-redis.env'
+@"
+ConnectionStrings__Postgres=Host=postgres
+BootstrapOAuth__CurrentSigningKeyId=current
+BootstrapOAuth__CurrentSigningKey=signing-key
+TotpProtection__CurrentKeyVersion=1
+TotpProtection__CurrentKey=totp-key
+OTPAUTH_TLS_CERT_PATH=$tlsCertPath
+OTPAUTH_TLS_KEY_PATH=$tlsKeyPath
+"@ | Set-Content -LiteralPath $missingRedisEnvPath -Encoding Ascii
+
+$missingRedisIssues = @(Get-InstallerConfigurationValidationIssues `
+    -RepositoryRoot $repoRoot `
+    -ComposeFilePath (Join-Path $repoRoot 'infra\docker-compose.yml') `
+    -EnvFilePath $missingRedisEnvPath `
+    -BootstrapAdminUsername 'operator' `
+    -BootstrapAdminPermissions @('enrollments.read'))
+
+Assert-True (@($missingRedisIssues | Where-Object Code -eq 'env_key_missing' | Where-Object Field -eq 'OTPAUTH_REDIS_PASSWORD').Count -eq 1) 'Missing Redis password should be returned as a structured validation issue.'
 
 Remove-Item -LiteralPath $tempRoot -Recurse -Force
 Write-Host 'Installer helper tests passed.'
