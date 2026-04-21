@@ -1,5 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using OtpAuth.Api.Admin;
 using OtpAuth.Application.Administration;
 using Xunit;
@@ -145,6 +150,39 @@ public sealed class AdminAuthApiTests
         Assert.Contains(csrfResponse.Headers.GetValues("Set-Cookie"), value => value.Contains("secure", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
         Assert.Contains(loginResponse.Headers.GetValues("Set-Cookie"), value => value.Contains("secure", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ForwardedHeadersMiddleware_PromotesRequestToHttps_WhenProxyIsTrusted()
+    {
+        var options = new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+            ForwardLimit = 2,
+            RequireHeaderSymmetry = false,
+        };
+        options.KnownProxies.Add(IPAddress.Loopback);
+
+        string? observedScheme = null;
+        var middleware = new ForwardedHeadersMiddleware(
+            context =>
+            {
+                observedScheme = context.Request.Scheme;
+                return Task.CompletedTask;
+            },
+            NullLoggerFactory.Instance,
+            Options.Create(options));
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Forwarded-Proto"] = "https";
+        httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.10";
+        httpContext.Connection.RemoteIpAddress = IPAddress.Loopback;
+        httpContext.Request.Scheme = Uri.UriSchemeHttp;
+
+        await middleware.Invoke(httpContext);
+
+        Assert.Equal(Uri.UriSchemeHttps, observedScheme);
+        Assert.True(httpContext.Request.IsHttps);
     }
 
     private static async Task<string> GetCsrfTokenAsync(HttpClient client)

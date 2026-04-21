@@ -18,6 +18,7 @@ namespace OtpAuth.Infrastructure.Tests.Administration;
 public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
 {
     private readonly string _environmentName;
+    private readonly bool _enableTrustedProxyForwarding;
 
     static AdminAuthApiTestFactory()
     {
@@ -27,9 +28,10 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("TotpProtection__CurrentKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
     }
 
-    public AdminAuthApiTestFactory(string environmentName = "Development")
+    public AdminAuthApiTestFactory(string environmentName = "Development", bool enableTrustedProxyForwarding = false)
     {
         _environmentName = environmentName;
+        _enableTrustedProxyForwarding = enableTrustedProxyForwarding;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -37,13 +39,21 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         builder.UseEnvironment(_environmentName);
         builder.ConfigureAppConfiguration((_, configBuilder) =>
         {
-            configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] = "Host=localhost;Database=otpauth-tests;Username=test;Password=test",
                 ["BootstrapOAuth:CurrentSigningKey"] = new string('t', 32),
                 ["TotpProtection:CurrentKeyVersion"] = "1",
                 ["TotpProtection:CurrentKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
-            });
+            };
+            if (_enableTrustedProxyForwarding)
+            {
+                settings["ReverseProxy:Enabled"] = "true";
+                settings["ReverseProxy:KnownProxies:0"] = "127.0.0.1";
+                settings["ReverseProxy:KnownProxies:1"] = "::1";
+            }
+
+            configBuilder.AddInMemoryCollection(settings);
         });
 
         builder.ConfigureServices(services =>

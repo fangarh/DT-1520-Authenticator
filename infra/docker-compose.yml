@@ -77,6 +77,8 @@ services:
       TotpProtection__CurrentKeyVersion: ${TotpProtection__CurrentKeyVersion:?Set TotpProtection__CurrentKeyVersion in your runtime env file.}
       TotpProtection__CurrentKey: ${TotpProtection__CurrentKey:?Set TotpProtection__CurrentKey in your runtime env file.}
       Redis__ConnectionString: redis:6379,password=${OTPAUTH_REDIS_PASSWORD:?Set OTPAUTH_REDIS_PASSWORD in your runtime env file.}
+      ReverseProxy__Enabled: ${ReverseProxy__Enabled:-true}
+      ReverseProxy__KnownNetworks__0: ${OTPAUTH_RUNTIME_NETWORK_CIDR:-172.29.152.0/24}
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,3 +152,6 @@ volumes:
 networks:
   runtime:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${OTPAUTH_RUNTIME_NETWORK_CIDR:-172.29.152.0/24}
