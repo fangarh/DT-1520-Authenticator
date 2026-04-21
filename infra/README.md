@@ -24,6 +24,7 @@
 - runtime secrets не хранятся в git-tracked файлах
 - `admin` публикуется только по `HTTPS`, чтобы cookie-based admin contour не ломался на `Secure` cookies
 - `api` остается внутренним сервисом compose-сети; `admin` в этом первом slice выступает HTTPS edge и проксирует `/api/*` и `/oauth2/*`
+- `api` принимает `X-Forwarded-Proto` только от доверенной runtime-сети `OTPAUTH_RUNTIME_NETWORK_CIDR`, чтобы `Secure` cookies и antiforgery корректно работали за reverse proxy без trust-all proxy режима
 - install-time bootstrap вынесен в отдельный `bootstrap` profile и использует уже существующий `OtpAuth.Migrations`, а не runtime `Admin UI`
 
 ## Happy path

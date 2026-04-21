@@ -15,6 +15,7 @@ using OtpAuth.Application.Policy;
 using OtpAuth.Application.Webhooks;
 using OtpAuth.Api.Authentication;
 using OtpAuth.Api.Endpoints;
+using OtpAuth.Api.Hosting;
 using OtpAuth.Infrastructure.Administration;
 using OtpAuth.Infrastructure.Challenges;
 using OtpAuth.Infrastructure.Devices;
@@ -71,6 +72,7 @@ var hasConfiguredHttpsEndpoint =
     (builder.Configuration["ASPNETCORE_URLS"]?.Contains("https://", StringComparison.OrdinalIgnoreCase) ?? false) ||
     !string.IsNullOrWhiteSpace(builder.Configuration["HTTPS_PORT"]) ||
     !string.IsNullOrWhiteSpace(builder.Configuration["ASPNETCORE_HTTPS_PORT"]);
+var reverseProxyOptions = builder.AddConfiguredReverseProxyForwarding();
 
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton(bootstrapOAuthOptions);
@@ -279,6 +281,7 @@ builder.Services.AddSingleton<RefreshDeviceTokenHandler>();
 builder.Services.AddSingleton<RevokeDeviceHandler>();
 
 var app = builder.Build();
+app.UseConfiguredReverseProxyForwarding(reverseProxyOptions);
 
 if (app.Environment.IsDevelopment())
 {

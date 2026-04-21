@@ -77,6 +77,9 @@ Assert-FileContains $composePath "BootstrapOAuth__CurrentSigningKey"
 Assert-FileContains $composePath "TotpProtection__CurrentKey"
 Assert-FileContains $composePath "WorkerDiagnostics__HeartbeatFilePath"
 Assert-FileContains $composePath "find /tmp/otpauth-worker/heartbeat\.json -mmin -2"
+Assert-FileContains $composePath "ReverseProxy__Enabled"
+Assert-FileContains $composePath "ReverseProxy__KnownNetworks__0"
+Assert-FileContains $composePath "OTPAUTH_RUNTIME_NETWORK_CIDR"
 
 $ghostringComposePath = Join-Path $repoRoot "infra/docker-compose.ghostring.yml"
 Assert-FileContains $ghostringComposePath "(?ms)services:\s+redis:"
@@ -89,6 +92,8 @@ Assert-FileContains $ghostringComposePath "127\.0\.0\.1:\$\{OTPAUTH_GHOSTRING_AD
 Assert-FileContains $ghostringComposePath "ChallengeCallbacks__SigningKey"
 Assert-FileContains $ghostringComposePath "Webhooks__SigningKey"
 Assert-FileContains $ghostringComposePath "PushDelivery__Provider"
+Assert-FileContains $ghostringComposePath "ReverseProxy__KnownNetworks__0"
+Assert-FileContains $ghostringComposePath "OTPAUTH_RUNTIME_NETWORK_CIDR"
 
 $nginxConfigPath = Join-Path $repoRoot "infra/nginx/admin.conf"
 Assert-FileContains $nginxConfigPath "listen 8443 ssl;"
@@ -107,6 +112,12 @@ Assert-FileContains $ghostringEnvPath "ConnectionStrings__Postgres=Host=127\.0\.
 Assert-FileContains $ghostringEnvPath "ChallengeCallbacks__SigningKey"
 Assert-FileContains $ghostringEnvPath "Webhooks__SigningKey"
 Assert-FileContains $ghostringEnvPath "OTPAUTH_GHOSTRING_ADMIN_HTTPS_PORT=18443"
+Assert-FileContains $ghostringEnvPath "OTPAUTH_RUNTIME_NETWORK_CIDR=172\.29\.152\.0/24"
+Assert-FileContains $ghostringEnvPath "ReverseProxy__Enabled=true"
+
+$runtimeEnvPath = Join-Path $repoRoot "infra/env/runtime.env.example"
+Assert-FileContains $runtimeEnvPath "OTPAUTH_RUNTIME_NETWORK_CIDR=172\.29\.152\.0/24"
+Assert-FileContains $runtimeEnvPath "ReverseProxy__Enabled=true"
 
 $adminDockerfilePath = Join-Path $repoRoot "infra/docker/admin.Dockerfile"
 Assert-FileContains $adminDockerfilePath "nginx-unprivileged"

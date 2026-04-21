@@ -54,6 +54,7 @@ Accepted working note
 - TLS termination: existing host `nginx`
 - `admin` container слушает только internal port / docker network
 - host `nginx` reverse-proxy-ит `admin.ghostring.ru` на новый runtime contour
+- `api` принимает forwarded HTTPS semantics только от доверенной runtime-сети `OTPAUTH_RUNTIME_NETWORK_CIDR`, а не в trust-all proxy режиме
 
 Это означает, что checked-in `infra/nginx/admin.conf` и default `8443` exposure не являются каноническим public ingress для этого сервера.
 
