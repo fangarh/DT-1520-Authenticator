@@ -127,6 +127,5 @@ Accepted working note
 
 Следующий практический шаг после этой фиксации:
 
-- заполнить runtime env и подготовить internal TLS material
-- установить `docker compose`, если он еще не установлен
-- выполнить controlled pre-deploy checklist и только потом переходить к реальному rollout
+- считать server-side pilot runtime поднятым и verified через [[Ghostring Runtime Runbook]]
+- использовать live runtime как target для `ProjectManager` pilot integration

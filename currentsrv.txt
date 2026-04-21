@@ -1,0 +1,2 @@
+  - логин: operator
+  - пароль: yQZ8QYSUq3nt8uA8019MlDTEt1aKdbOp

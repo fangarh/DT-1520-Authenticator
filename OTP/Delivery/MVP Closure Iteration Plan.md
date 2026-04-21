@@ -37,6 +37,12 @@ Accepted working plan
 
 `Iteration 4` не нужна для формального `MVP`, если `Iteration 1-3` закрыты.
 
+Обязательный follow-up сразу после первого подтвержденного ручного pilot-теста:
+
+- [[Admin Client Management Follow-Up]]
+
+Это не блокирует формальное прохождение `Iteration 3`, но является обязательным следующим productization step после ручного pilot proof.
+
 ## Working Rules
 
 - Не брать новый transport, новый factor или новый public product surface, пока не закрыт текущий iteration exit.
@@ -322,3 +328,7 @@ Status on `2026-04-21`:
 ## Current Next Step
 
 Следующий continuation point: `Iteration 3 / Slice 3B` — hardening review поверх уже зафиксированного `ProjectManager` pilot scenario.
+
+Обязательный шаг после первого успешного ручного pilot-теста:
+
+- перейти к [[Admin Client Management Follow-Up]]
