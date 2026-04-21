@@ -1273,6 +1273,46 @@ components:
         blockedAt:
           type: string
           format: date-time
+    WebhookDevice:
+      type: object
+      required: [id, tenantId, applicationClientId, externalUserId, platform, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        applicationClientId:
+          type: string
+          format: uuid
+        externalUserId:
+          type: string
+          minLength: 1
+        platform:
+          type: string
+          enum: [ios, android]
+        status:
+          $ref: '#/components/schemas/DeviceStatus'
+        deviceName:
+          type: string
+        isPushCapable:
+          type: boolean
+          description: Indicates whether the backend currently sees a usable push delivery channel for the device.
+        attestationStatus:
+          $ref: '#/components/schemas/DeviceAttestationStatus'
+        activatedAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        blockedAt:
+          type: string
+          format: date-time
     DeviceActivation:
       type: object
       required: [device, tokens]
@@ -1339,7 +1379,7 @@ components:
           type: string
           format: date-time
         device:
-          $ref: '#/components/schemas/Device'
+          $ref: '#/components/schemas/WebhookDevice'
     FactorWebhookEvent:
       type: object
       required: [eventId, eventType, occurredAt, factorType, subject]

@@ -55,6 +55,7 @@ public sealed class RevokeDeviceHandler
             var revoked = await _deviceRegistryStore.RevokeDeviceAsync(
                 revokedDevice,
                 revokedDevice.LastAuthStateChangedUtc,
+                DeviceLifecycleSideEffects.CreateFor(revokedDevice, revokedDevice.LastAuthStateChangedUtc),
                 cancellationToken);
             if (!revoked)
             {

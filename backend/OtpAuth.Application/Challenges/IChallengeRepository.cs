@@ -23,4 +23,9 @@ public interface IChallengeRepository
         CancellationToken cancellationToken);
 
     Task UpdateAsync(Challenge challenge, CancellationToken cancellationToken);
+
+    Task UpdateAsync(
+        Challenge challenge,
+        ChallengeUpdateSideEffects? sideEffects,
+        CancellationToken cancellationToken);
 }

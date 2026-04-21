@@ -36,6 +36,7 @@ public interface IDeviceRegistryStore
         DeviceRefreshTokenRecord refreshToken,
         Guid activationCodeId,
         DateTimeOffset activatedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
         CancellationToken cancellationToken);
 
     Task<bool> RotateRefreshTokenAsync(
@@ -44,7 +45,15 @@ public interface IDeviceRegistryStore
         DateTimeOffset lastSeenUtc,
         CancellationToken cancellationToken);
 
-    Task<bool> RevokeDeviceAsync(RegisteredDevice device, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken);
+    Task<bool> RevokeDeviceAsync(
+        RegisteredDevice device,
+        DateTimeOffset revokedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
+        CancellationToken cancellationToken);
 
-    Task<bool> BlockDeviceAsync(RegisteredDevice device, DateTimeOffset blockedAtUtc, CancellationToken cancellationToken);
+    Task<bool> BlockDeviceAsync(
+        RegisteredDevice device,
+        DateTimeOffset blockedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
+        CancellationToken cancellationToken);
 }

@@ -87,8 +87,12 @@ public sealed class DenyPushChallengeHandler
 
         if (challenge.ExpiresAt <= DateTimeOffset.UtcNow)
         {
+            var expiredAtUtc = DateTimeOffset.UtcNow;
             var expiredChallenge = challenge.MarkExpired();
-            await _challengeRepository.UpdateAsync(expiredChallenge, cancellationToken);
+            await _challengeRepository.UpdateAsync(
+                expiredChallenge,
+                ChallengeUpdateSideEffects.CreateForTerminalState(expiredChallenge, expiredAtUtc),
+                cancellationToken);
             await RecordAttemptAsync(expiredChallenge.Id, ChallengeAttemptTypes.PushDeny, ChallengeAttemptResults.Expired, cancellationToken);
 
             return DenyPushChallengeResult.Failure(
@@ -97,8 +101,12 @@ public sealed class DenyPushChallengeHandler
                 expiredChallenge);
         }
 
-        var deniedChallenge = challenge.MarkDenied(DateTimeOffset.UtcNow);
-        await _challengeRepository.UpdateAsync(deniedChallenge, cancellationToken);
+        var deniedAtUtc = DateTimeOffset.UtcNow;
+        var deniedChallenge = challenge.MarkDenied(deniedAtUtc);
+        await _challengeRepository.UpdateAsync(
+            deniedChallenge,
+            ChallengeUpdateSideEffects.CreateForTerminalState(deniedChallenge, deniedAtUtc),
+            cancellationToken);
         await RecordAttemptAsync(deniedChallenge.Id, ChallengeAttemptTypes.PushDeny, ChallengeAttemptResults.Denied, cancellationToken);
         await _auditWriter.WriteDeniedAsync(
             deniedChallenge,

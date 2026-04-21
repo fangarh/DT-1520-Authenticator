@@ -29,6 +29,12 @@ Scope-ы текущего draft:
 - browser UI не должен получать `client_secret`
 - admin actions должны аудироваться и авторизоваться отдельно от machine-to-machine flows
 
+Текущие operator permissions в runtime contour:
+
+- `devices.read` / `devices.write`
+- `enrollments.read` / `enrollments.write`
+- `webhooks.read` / `webhooks.write`
+
 ## Текущий bootstrap implementation status
 
 В коде backend уже есть рабочий bootstrap `client_credentials` flow:
@@ -150,11 +156,37 @@ Security behavior:
 4. Gateway получает только sanitized dispatch contract и текущий `pushToken` из `auth.devices`.
 5. Device runtime читает свои pending approvals через `GET /api/v1/devices/me/challenges/pending`, не получая чужие challenge records даже внутри того же `tenant/application client`.
 
+Provider adapter status:
+
+- provider выбирается через `PushDelivery:Provider`
+- `logging` остается default/fallback path для dev, `on-prem` без внешнего push и air-gapped профилей
+- первый production-oriented provider — `FCM HTTP v1`
+- `FCM` использует `OAuth 2.0` service account credentials из `Base64`-строки или внешнего файла и reject-ит non-`service_account` credential types fail-closed
+- `FCM` payload остается sanitized: в `data` уходят только `challengeId` и `operationType`, без `externalUserId` и `correlationId`
+- transient provider failures (`timeout`, transport error, `QUOTA_EXCEEDED`, `UNAVAILABLE`, `INTERNAL`) считаются retryable; `UNREGISTERED` и provider auth/rejection paths закрываются non-retryable `failed`
+
 Security semantics:
 
 - raw `pushToken` не дублируется в outbox table и не попадает в logs/metrics
 - retry path использует `attempt_count + next_attempt_utc + locked_until_utc`, а не blind resend loop
 - permanent delivery failure не перебрасывает challenge на другой device автоматически
+
+## Operation-level challenge callbacks
+
+Для `CreateChallenge` с `callback.url` backend теперь поддерживает первый внешний callback contour поверх challenge lifecycle:
+
+1. terminal state transitions `challenge.approved`, `challenge.denied` и `challenge.expired` атомарно пишут row в `auth.challenge_callback_deliveries` вместе с update самого `challenge`
+2. `OtpAuth.Worker` job `challenge_callback_delivery` lease-ит due rows из `PostgreSQL`
+3. outbound gateway доставляет `HTTPS` JSON payload с `eventId`, `eventType`, `occurredAt` и sanitized snapshot `challenge`
+4. callback подписывается `X-OTPAuth-Signature` через `HMAC-SHA256` по raw request body
+5. `429`, `5xx` и timeout считаются retryable; `4xx` кроме `429` считаются non-retryable и fail-closed закрывают delivery row как `failed`
+
+Security semantics:
+
+- `callbackUrl` по-прежнему требует `HTTPS`, а create-path теперь дополнительно reject-ит `localhost` и private-network IP literals как obvious SSRF path
+- gateway не логирует полный callback URL и не хранит secret material в outbox/payload
+- outbox не разрешает несколько delivery rows для одного `challenge + event_type`
+- synchronous integration flows не зависят от callback success: callback contour остается внешним notification path, а не частью approve/verify transaction result
 
 ## Почему не единый auth flow
 
@@ -162,6 +194,29 @@ Security semantics:
 - для внешних систем удобнее и понятнее `OAuth 2.0 client credentials`
 - для устройства нужен lifecycle, завязанный на `Device Registry`
 - для `Admin UI` нужен отдельный human-operator auth contour, а не reuse integration auth
+
+## Pilot step-up integration pattern
+
+Для `MVP Closure / Iteration 3 / Slice 3A` выбран канонический pilot pattern:
+
+- внешнее приложение сохраняет свой existing primary auth contour
+- `Authenticator` добавляется только как step-up `MFA` для sensitive operation
+- integration идет backend-to-backend через `client_credentials`
+- operator browser/session не получает integration `client_secret`
+
+Первый зафиксированный pilot app:
+
+- `ProjectManager`
+
+Для него canonical mapping такой:
+
+- primary auth source: `Keycloak`
+- canonical `externalUserId`: `Keycloak sub`
+- первая protected operation: create/update `VCS instance` credentials
+- primary completion signal: signed `challenge callback`
+- optional resilience fallback: `GET /api/v1/challenges/{id}` без fail-open commit path
+
+Этот pattern зафиксирован отдельно в [[../Delivery/ProjectManager Pilot Integration Story]] и поддержан решением [[../Decisions/ADR-034 - Pilot Integrations Keep Existing Primary Auth and Use Step-Up MFA]].
 
 ## Callback and webhook model
 
@@ -171,3 +226,34 @@ Security semantics:
 - operation-level `callbacks` в `POST /api/v1/challenges`, если клиент передает callback URL
 
 Это позволяет поддержать и продуктовый event model, и per-request callback сценарий.
+
+Текущий implementation status:
+
+- operation-level `challenge callbacks` для `approved/denied/expired` уже реализованы как signed outbox-driven delivery contour
+- top-level `webhooks` теперь тоже имеют отдельный backend contour:
+  - `auth.webhook_subscriptions`
+  - `auth.webhook_subscription_event_types`
+  - `auth.webhook_event_deliveries`
+  - worker job `webhook_event_delivery`
+  - signed outbound `HTTPS` delivery с `X-OTPAuth-Signature`
+- текущий top-level implementation slice уже публикует:
+  - `challenge.approved`, `challenge.denied`, `challenge.expired`
+  - `device.activated`, `device.revoked`, `device.blocked`
+  - `factor.revoked` для `TOTP` enrollment revoke-path
+- bootstrap registration path по-прежнему остается operational fallback:
+  - `list-webhook-subscriptions`
+  - `upsert-webhook-subscription <client-id> <endpoint-url> <event-type> [event-type...]`
+- runtime management path для operator/admin contour теперь тоже реализован:
+  - `GET /api/v1/admin/tenants/{tenantId}/webhook-subscriptions?applicationClientId=...`
+  - `POST /api/v1/admin/webhook-subscriptions`
+  - permissions `webhooks.read` / `webhooks.write`
+  - admin audit events `admin_webhook_subscription.upserted|deactivated`
+- runtime device support path для operator/admin contour теперь тоже реализован:
+  - `GET /api/v1/admin/tenants/{tenantId}/users/{externalUserId}/devices`
+  - `POST /api/v1/admin/tenants/{tenantId}/users/{externalUserId}/devices/{deviceId}/revoke`
+  - permissions `devices.read` / `devices.write`
+  - revoke требует `CSRF` и fail-closed валидирует `tenantId + externalUserId + deviceId`, чтобы stale/wrong device binding не приводил к cross-user state change
+  - operator action дополнительно пишет sanitized admin audit event `admin_device.revoked`, не меняя existing `device.revoked` lifecycle/webhook semantics
+- endpoint validation для subscription URL повторяет callback hardening: обязательный `HTTPS`, reject `localhost` и private-network IP literals
+- `factor.revoked` теперь тоже публикуется через тот же subscription/outbox contour, причем revoke `TOTP` enrollment-а делает это атомарно с persisted state change без отдельного transport-а
+- management API/UI для subscriptions и operator device support contour больше не являются gap; следующий logical step смещается на pilot scenario definition и final hardening

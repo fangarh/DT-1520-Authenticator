@@ -14,12 +14,12 @@ public sealed class AdminUserBootstrapMaterialFactoryTests
         var material = _factory.Create(
             " operator ",
             "super-secret-123",
-            [AdminPermissions.EnrollmentsWrite, AdminPermissions.EnrollmentsRead, AdminPermissions.EnrollmentsRead]);
+            [AdminPermissions.EnrollmentsWrite, AdminPermissions.DevicesWrite, AdminPermissions.EnrollmentsRead, AdminPermissions.EnrollmentsRead]);
 
         Assert.Equal("operator", material.Username);
         Assert.Equal("OPERATOR", material.NormalizedUsername);
         Assert.Equal(
-            [AdminPermissions.EnrollmentsRead, AdminPermissions.EnrollmentsWrite],
+            [AdminPermissions.DevicesWrite, AdminPermissions.EnrollmentsRead, AdminPermissions.EnrollmentsWrite],
             material.Permissions);
         Assert.DoesNotContain("super-secret-123", material.PasswordHash, StringComparison.Ordinal);
         Assert.True(new Pbkdf2AdminPasswordHasher().Verify("super-secret-123", material.PasswordHash));

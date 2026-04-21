@@ -6,8 +6,12 @@ public sealed class AdminUserBootstrapMaterialFactory
 {
     private static readonly HashSet<string> AllowedPermissions =
     [
+        AdminPermissions.DevicesRead,
+        AdminPermissions.DevicesWrite,
         AdminPermissions.EnrollmentsRead,
         AdminPermissions.EnrollmentsWrite,
+        AdminPermissions.WebhooksRead,
+        AdminPermissions.WebhooksWrite,
     ];
 
     private readonly IAdminPasswordHasher _passwordHasher;

@@ -222,7 +222,7 @@ public sealed class StartTotpEnrollmentHandlerTests
             throw new NotSupportedException();
         }
 
-        public Task<bool> RevokeAsync(Guid enrollmentId, DateTimeOffset revokedAt, CancellationToken cancellationToken)
+        public Task<bool> RevokeAsync(Guid enrollmentId, DateTimeOffset revokedAt, FactorRevocationSideEffects? sideEffects, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
         }

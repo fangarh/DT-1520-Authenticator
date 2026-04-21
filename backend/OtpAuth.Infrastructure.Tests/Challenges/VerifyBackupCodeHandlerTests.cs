@@ -33,6 +33,8 @@ public sealed class VerifyBackupCodeHandlerTests
         Assert.Equal(ChallengeStatus.Approved, result.Challenge!.Status);
         Assert.NotNull(result.Challenge.ApprovedUtc);
         Assert.Equal(ChallengeAttemptResults.Approved, Assert.Single(recorder.Attempts).Result);
+        var callbackDelivery = Assert.Single(repository.GetCallbackDeliveries());
+        Assert.Equal(ChallengeCallbackEventType.Approved, callbackDelivery.EventType);
     }
 
     [Fact]
@@ -112,6 +114,8 @@ public sealed class VerifyBackupCodeHandlerTests
         Assert.NotNull(result.Challenge);
         Assert.Equal(ChallengeStatus.Expired, result.Challenge!.Status);
         Assert.Equal(ChallengeAttemptResults.Expired, Assert.Single(recorder.Attempts).Result);
+        var callbackDelivery = Assert.Single(repository.GetCallbackDeliveries());
+        Assert.Equal(ChallengeCallbackEventType.Expired, callbackDelivery.EventType);
     }
 
     [Fact]

@@ -1,8 +1,10 @@
 using Dapper;
 using Npgsql;
 using OtpAuth.Application.Challenges;
+using OtpAuth.Application.Webhooks;
 using OtpAuth.Domain.Challenges;
 using OtpAuth.Domain.Policy;
+using OtpAuth.Infrastructure.Webhooks;
 
 namespace OtpAuth.Infrastructure.Challenges;
 
@@ -225,11 +227,20 @@ public sealed class PostgresChallengeRepository : IChallengeRepository
 
     public async Task UpdateAsync(Challenge challenge, CancellationToken cancellationToken)
     {
+        await UpdateAsync(challenge, sideEffects: null, cancellationToken);
+    }
+
+    public async Task UpdateAsync(
+        Challenge challenge,
+        ChallengeUpdateSideEffects? sideEffects,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(challenge);
 
         var persistenceModel = ChallengeDataMapper.ToPersistenceModel(challenge);
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var rowsAffected = await connection.ExecuteAsync(new CommandDefinition(
             """
             update auth.challenges
@@ -250,6 +261,7 @@ public sealed class PostgresChallengeRepository : IChallengeRepository
               and application_client_id = @ApplicationClientId;
             """,
             persistenceModel,
+            transaction: transaction,
             cancellationToken: cancellationToken));
 
         if (rowsAffected != 1)
@@ -257,5 +269,63 @@ public sealed class PostgresChallengeRepository : IChallengeRepository
             throw new InvalidOperationException(
                 $"Challenge '{challenge.Id}' could not be updated in PostgreSQL storage.");
         }
+
+        if (sideEffects?.CallbackDelivery is not null)
+        {
+            var callbackDeliveryModel = ChallengeCallbackDeliveryDataMapper.ToPersistenceModel(sideEffects.CallbackDelivery);
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                insert into auth.challenge_callback_deliveries (
+                    id,
+                    challenge_id,
+                    tenant_id,
+                    application_client_id,
+                    callback_url,
+                    event_type,
+                    occurred_utc,
+                    status,
+                    attempt_count,
+                    next_attempt_utc,
+                    last_attempt_utc,
+                    delivered_utc,
+                    last_error_code,
+                    locked_until_utc,
+                    created_utc,
+                    updated_utc
+                ) values (
+                    @Id,
+                    @ChallengeId,
+                    @TenantId,
+                    @ApplicationClientId,
+                    @CallbackUrl,
+                    @EventType,
+                    @OccurredUtc,
+                    @Status,
+                    @AttemptCount,
+                    @NextAttemptUtc,
+                    @LastAttemptUtc,
+                    @DeliveredUtc,
+                    @LastErrorCode,
+                    @LockedUntilUtc,
+                    @CreatedUtc,
+                    timezone('utc', now())
+                )
+                on conflict (challenge_id, event_type) do nothing;
+                """,
+                callbackDeliveryModel,
+                transaction: transaction,
+                cancellationToken: cancellationToken));
+        }
+
+        if (sideEffects?.WebhookEvent is not null)
+        {
+            await PostgresWebhookEventPublicationWriter.QueueAsync(
+                connection,
+                transaction,
+                sideEffects.WebhookEvent,
+                cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 }

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using OtpAuth.Api.Enrollments;
 using OtpAuth.Application.Enrollments;
 using OtpAuth.Application.Factors;
+using OtpAuth.Application.Webhooks;
 using Xunit;
 
 namespace OtpAuth.Infrastructure.Tests.Enrollments;
@@ -203,6 +204,36 @@ public sealed class EnrollmentApiTests
         Assert.False(body.HasPendingReplacement);
         Assert.Null(body.SecretUri);
         Assert.Null(body.QrCodePayload);
+    }
+
+    [Fact]
+    public async Task RevokeEnrollment_EnqueuesFactorRevokedWebhook_ForMatchingSubscription()
+    {
+        await using var factory = new EnrollmentApiTestFactory();
+        var store = factory.GetStore();
+        var enrollment = store.SeedConfirmed("user-factor-webhook");
+        store.SeedWebhookSubscription(new WebhookSubscription
+        {
+            SubscriptionId = Guid.NewGuid(),
+            TenantId = enrollment.TenantId,
+            ApplicationClientId = enrollment.ApplicationClientId,
+            EndpointUrl = new Uri("https://crm.example.com/webhooks/factors"),
+            IsActive = true,
+            EventTypes = [WebhookEventTypeNames.FactorRevoked],
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        using var client = factory.CreateAuthorizedClient();
+
+        var response = await client.PostAsync($"/api/v1/enrollments/totp/{enrollment.EnrollmentId}/revoke", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var delivery = Assert.Single(store.GetWebhookDeliveries());
+        Assert.Equal(WebhookEventTypeNames.FactorRevoked, delivery.EventType);
+        Assert.Equal(WebhookResourceTypeNames.Factor, delivery.ResourceType);
+        Assert.Equal(enrollment.EnrollmentId, delivery.ResourceId);
+        Assert.Equal("https://crm.example.com/webhooks/factors", delivery.EndpointUrl.ToString());
+        Assert.Contains("\"factorType\":\"totp\"", delivery.PayloadJson);
+        Assert.Contains("\"externalUserId\":\"user-factor-webhook\"", delivery.PayloadJson);
     }
 
     private static string GenerateCurrentCode(string secretUri)

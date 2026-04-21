@@ -52,6 +52,11 @@
   gap: 14px;
 }
 
+.workspaceStack {
+  display: grid;
+  gap: 28px;
+}
+
 .metaCard {
   display: grid;
   gap: 8px;

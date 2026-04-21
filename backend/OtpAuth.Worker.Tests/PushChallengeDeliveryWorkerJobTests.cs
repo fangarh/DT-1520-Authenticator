@@ -133,6 +133,11 @@ public sealed class PushChallengeDeliveryWorkerJobTests
         }
 
         public Task UpdateAsync(Challenge challenge, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task UpdateAsync(
+            Challenge challenge,
+            ChallengeUpdateSideEffects? sideEffects,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubDeviceRegistryStore(RegisteredDevice device) : IDeviceRegistryStore
@@ -149,13 +154,27 @@ public sealed class PushChallengeDeliveryWorkerJobTests
 
         public Task<DeviceRefreshTokenRecord?> GetRefreshTokenByIdAsync(Guid tokenId, CancellationToken cancellationToken) => Task.FromResult<DeviceRefreshTokenRecord?>(null);
 
-        public Task<bool> ActivateAsync(RegisteredDevice device, DeviceRefreshTokenRecord refreshToken, Guid activationCodeId, DateTimeOffset activatedAtUtc, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<bool> ActivateAsync(
+            RegisteredDevice device,
+            DeviceRefreshTokenRecord refreshToken,
+            Guid activationCodeId,
+            DateTimeOffset activatedAtUtc,
+            DeviceLifecycleSideEffects? sideEffects,
+            CancellationToken cancellationToken) => Task.FromResult(true);
 
         public Task<bool> RotateRefreshTokenAsync(DeviceRefreshRotation rotation, Guid deviceId, DateTimeOffset lastSeenUtc, CancellationToken cancellationToken) => Task.FromResult(true);
 
-        public Task<bool> RevokeDeviceAsync(RegisteredDevice device, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<bool> RevokeDeviceAsync(
+            RegisteredDevice device,
+            DateTimeOffset revokedAtUtc,
+            DeviceLifecycleSideEffects? sideEffects,
+            CancellationToken cancellationToken) => Task.FromResult(true);
 
-        public Task<bool> BlockDeviceAsync(RegisteredDevice device, DateTimeOffset blockedAtUtc, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<bool> BlockDeviceAsync(
+            RegisteredDevice device,
+            DateTimeOffset blockedAtUtc,
+            DeviceLifecycleSideEffects? sideEffects,
+            CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private sealed class StubPushChallengeDeliveryGateway : IPushChallengeDeliveryGateway

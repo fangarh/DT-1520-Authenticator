@@ -28,17 +28,30 @@ function Assert-FileContains {
     Assert-True ($content -match $Pattern) "Expected file '$Path' to match pattern '$Pattern'."
 }
 
+function Assert-FileNotContains {
+    param(
+        [string]$Path,
+        [string]$Pattern
+    )
+
+    $content = Get-Content -Raw -LiteralPath $Path
+    Assert-True (-not ($content -match $Pattern)) "Expected file '$Path' not to match pattern '$Pattern'."
+}
+
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 $requiredFiles = @(
     ".dockerignore",
     "infra/docker-compose.yml",
+    "infra/docker-compose.ghostring.yml",
     "infra/docker/api.Dockerfile",
     "infra/docker/worker.Dockerfile",
     "infra/docker/bootstrap.Dockerfile",
     "infra/docker/admin.Dockerfile",
     "infra/nginx/admin.conf",
+    "infra/nginx/admin.ghostring.ru.conf.example",
     "infra/env/runtime.env.example",
+    "infra/env/ghostring.runtime.env.example",
     "infra/scripts/Installer.Contract.ps1",
     "infra/scripts/Installer.Common.ps1",
     "infra/scripts/Installer.Diagnostics.ps1",
@@ -65,11 +78,35 @@ Assert-FileContains $composePath "TotpProtection__CurrentKey"
 Assert-FileContains $composePath "WorkerDiagnostics__HeartbeatFilePath"
 Assert-FileContains $composePath "find /tmp/otpauth-worker/heartbeat\.json -mmin -2"
 
+$ghostringComposePath = Join-Path $repoRoot "infra/docker-compose.ghostring.yml"
+Assert-FileContains $ghostringComposePath "(?ms)services:\s+redis:"
+Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+bootstrap:"
+Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+api:"
+Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+worker:"
+Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+admin:"
+Assert-FileNotContains $ghostringComposePath "(?ms)services:\s+postgres:"
+Assert-FileContains $ghostringComposePath "127\.0\.0\.1:\$\{OTPAUTH_GHOSTRING_ADMIN_HTTPS_PORT:-18443\}:8443"
+Assert-FileContains $ghostringComposePath "ChallengeCallbacks__SigningKey"
+Assert-FileContains $ghostringComposePath "Webhooks__SigningKey"
+Assert-FileContains $ghostringComposePath "PushDelivery__Provider"
+
 $nginxConfigPath = Join-Path $repoRoot "infra/nginx/admin.conf"
 Assert-FileContains $nginxConfigPath "listen 8443 ssl;"
 Assert-FileContains $nginxConfigPath "location /api/"
 Assert-FileContains $nginxConfigPath "location /oauth2/"
 Assert-FileContains $nginxConfigPath "Content-Security-Policy"
+
+$ghostringNginxConfigPath = Join-Path $repoRoot "infra/nginx/admin.ghostring.ru.conf.example"
+Assert-FileContains $ghostringNginxConfigPath "server_name admin\.ghostring\.ru;"
+Assert-FileContains $ghostringNginxConfigPath "proxy_pass https://127\.0\.0\.1:18443;"
+Assert-FileContains $ghostringNginxConfigPath "proxy_ssl_verify on;"
+Assert-FileContains $ghostringNginxConfigPath "proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates\.crt;"
+
+$ghostringEnvPath = Join-Path $repoRoot "infra/env/ghostring.runtime.env.example"
+Assert-FileContains $ghostringEnvPath "ConnectionStrings__Postgres=Host=127\.0\.0\.1;Port=5432;Database=dt-auth;"
+Assert-FileContains $ghostringEnvPath "ChallengeCallbacks__SigningKey"
+Assert-FileContains $ghostringEnvPath "Webhooks__SigningKey"
+Assert-FileContains $ghostringEnvPath "OTPAUTH_GHOSTRING_ADMIN_HTTPS_PORT=18443"
 
 $adminDockerfilePath = Join-Path $repoRoot "infra/docker/admin.Dockerfile"
 Assert-FileContains $adminDockerfilePath "nginx-unprivileged"
@@ -104,5 +141,9 @@ Assert-FileContains $installerContractPath "Write-InstallerExecutionReportJson"
 $installerDiagnosticsPath = Join-Path $repoRoot "infra/scripts/Installer.Diagnostics.ps1"
 Assert-FileContains $installerDiagnosticsPath "Get-InstallerRuntimeDiagnostics"
 Assert-FileContains $installerDiagnosticsPath "ConvertFrom-InstallerWorkerHeartbeatJson"
+
+$infraReadmePath = Join-Path $repoRoot "infra/README.md"
+Assert-FileContains $infraReadmePath "docker-compose\.ghostring\.yml"
+Assert-FileContains $infraReadmePath "admin\.ghostring\.ru"
 
 Write-Host "Packaging contract checks passed."

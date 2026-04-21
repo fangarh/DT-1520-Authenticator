@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.active {
+  color: var(--success);
+  background: rgba(43, 109, 64, 0.1);
+}
+
+.revoked {
+  color: var(--warning);
+  background: rgba(154, 76, 22, 0.12);
+}
+
+.blocked {
+  color: var(--danger);
+  background: rgba(138, 47, 61, 0.12);
+}

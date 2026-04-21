@@ -3,7 +3,7 @@ using OtpAuth.Application.Challenges;
 
 namespace OtpAuth.Infrastructure.Challenges;
 
-public sealed class LoggingPushChallengeDeliveryGateway : IPushChallengeDeliveryGateway
+public sealed class LoggingPushChallengeDeliveryGateway : IPushChallengeDeliveryProviderGateway
 {
     private readonly ILogger<LoggingPushChallengeDeliveryGateway> _logger;
 
@@ -11,6 +11,8 @@ public sealed class LoggingPushChallengeDeliveryGateway : IPushChallengeDelivery
     {
         _logger = logger;
     }
+
+    public string ProviderName => PushChallengeDeliveryProviderNames.Logging;
 
     public Task<PushChallengeDispatchResult> DeliverAsync(
         PushChallengeDispatchRequest request,

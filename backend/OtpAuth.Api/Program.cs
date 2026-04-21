@@ -12,6 +12,7 @@ using OtpAuth.Application.Enrollments;
 using OtpAuth.Application.Factors;
 using OtpAuth.Application.Integrations;
 using OtpAuth.Application.Policy;
+using OtpAuth.Application.Webhooks;
 using OtpAuth.Api.Authentication;
 using OtpAuth.Api.Endpoints;
 using OtpAuth.Infrastructure.Administration;
@@ -21,6 +22,7 @@ using OtpAuth.Infrastructure.Factors;
 using OtpAuth.Infrastructure.Integrations;
 using OtpAuth.Infrastructure.Policy;
 using OtpAuth.Infrastructure.Security;
+using OtpAuth.Infrastructure.Webhooks;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -198,22 +200,45 @@ builder.Services.AddAuthorization(options =>
             .RequireAssertion(context => HasScope(context.User, DeviceTokenScope.Challenge)));
     options.AddPolicy(AdminAuthenticationDefaults.AuthenticatedPolicy, policy =>
         policy.RequireAuthenticatedUser());
+    options.AddPolicy(AdminAuthenticationDefaults.DevicesReadPolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.DevicesRead));
+    options.AddPolicy(AdminAuthenticationDefaults.DevicesWritePolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.DevicesWrite));
     options.AddPolicy(AdminAuthenticationDefaults.EnrollmentsReadPolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.EnrollmentsRead));
     options.AddPolicy(AdminAuthenticationDefaults.EnrollmentsWritePolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.EnrollmentsWrite));
+    options.AddPolicy(AdminAuthenticationDefaults.WebhooksReadPolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.WebhooksRead));
+    options.AddPolicy(AdminAuthenticationDefaults.WebhooksWritePolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.WebhooksWrite));
 });
 builder.Services.AddSingleton<IAdminLoginRateLimiter, InMemoryAdminLoginRateLimiter>();
 builder.Services.AddSingleton<IAdminAuthAuditWriter, AdminSecurityAuditWriter>();
+builder.Services.AddSingleton<IAdminDeviceAuditWriter, AdminDeviceAuditWriter>();
 builder.Services.AddSingleton<IAdminTotpEnrollmentAuditWriter, AdminTotpEnrollmentAuditWriter>();
+builder.Services.AddSingleton<IAdminWebhookSubscriptionAuditWriter, AdminWebhookSubscriptionAuditWriter>();
 builder.Services.AddSingleton<IAdminApplicationClientResolver, AdminApplicationClientResolver>();
+builder.Services.AddSingleton<IAdminDeviceStore, PostgresAdminDeviceStore>();
+builder.Services.AddSingleton<IAdminDeliveryStatusStore, PostgresAdminDeliveryStatusStore>();
 builder.Services.AddSingleton<AdminLoginHandler>();
+builder.Services.AddSingleton<AdminListUserDevicesHandler>();
+builder.Services.AddSingleton<AdminRevokeUserDeviceHandler>();
+builder.Services.AddSingleton<AdminListDeliveryStatusesHandler>();
 builder.Services.AddSingleton<AdminStartTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminConfirmTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminReplaceTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminRevokeTotpEnrollmentHandler>();
+builder.Services.AddSingleton<IWebhookSubscriptionStore, PostgresWebhookSubscriptionStore>();
+builder.Services.AddSingleton<WebhookSubscriptionBootstrapService>();
+builder.Services.AddSingleton<AdminListWebhookSubscriptionsHandler>();
+builder.Services.AddSingleton<AdminUpsertWebhookSubscriptionHandler>();
 builder.Services.AddSingleton<IssueIntegrationTokenHandler>();
 builder.Services.AddSingleton<IntrospectIntegrationTokenHandler>();
 builder.Services.AddSingleton<RevokeIntegrationTokenHandler>();
@@ -222,9 +247,7 @@ builder.Services.AddSingleton<ISecurityAuditStore, PostgresSecurityAuditStore>()
 builder.Services.AddSingleton<SecurityAuditService>();
 builder.Services.AddSingleton<IChallengeRepository, PostgresChallengeRepository>();
 builder.Services.AddSingleton<IChallengeAttemptRecorder, PostgresChallengeAttemptRecorder>();
-builder.Services.AddSingleton<IPushChallengeDeliveryStore, PostgresPushChallengeDeliveryStore>();
-builder.Services.AddSingleton<IPushChallengeDeliveryGateway, LoggingPushChallengeDeliveryGateway>();
-builder.Services.AddSingleton<PushChallengeDeliveryCoordinator>();
+builder.Services.AddPushChallengeDeliveryServices(builder.Configuration);
 builder.Services.AddSingleton(new Pbkdf2BackupCodeHasher());
 builder.Services.AddSingleton<IBackupCodeStore, PostgresBackupCodeStore>();
 builder.Services.AddSingleton<IBackupCodeVerificationRateLimiter, PostgresBackupCodeVerificationRateLimiter>();
@@ -270,8 +293,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAdminAuthEndpoints();
+app.MapAdminDeviceEndpoints();
 app.MapAdminEnrollmentReadEndpoints();
 app.MapAdminEnrollmentCommandEndpoints();
+app.MapAdminDeliveryStatusEndpoints();
+app.MapAdminWebhookSubscriptionEndpoints();
 app.MapAuthEndpoints();
 app.MapChallengesEndpoints();
 app.MapDevicesEndpoints();

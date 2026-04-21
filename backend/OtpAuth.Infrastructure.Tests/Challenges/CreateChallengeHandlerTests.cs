@@ -191,6 +191,25 @@ public sealed class CreateChallengeHandlerTests
         Assert.Equal("CallbackUrl must use HTTPS.", result.ErrorMessage);
     }
 
+    [Theory]
+    [InlineData("https://localhost/hooks/otpauth")]
+    [InlineData("https://127.0.0.1/hooks/otpauth")]
+    [InlineData("https://10.0.0.5/hooks/otpauth")]
+    public async Task HandleAsync_RejectsLoopbackOrPrivateLiteralCallbackUrl(string callbackUrl)
+    {
+        var handler = CreateHandler();
+        var request = CreateValidRequest() with
+        {
+            CallbackUrl = new Uri(callbackUrl),
+        };
+
+        var result = await handler.HandleAsync(request, CreateClientContext(request), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CreateChallengeErrorCode.ValidationFailed, result.ErrorCode);
+        Assert.Equal("CallbackUrl must not target localhost or private network IP literals.", result.ErrorMessage);
+    }
+
     [Fact]
     public async Task HandleAsync_RejectsUnsupportedOperationType()
     {

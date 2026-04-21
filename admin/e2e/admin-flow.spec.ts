@@ -17,7 +17,7 @@ test("operator flow covers login, start, confirm, replace, revoke and artifact d
 
   await expect(page.getByRole("button", { name: "Выйти" })).toBeVisible();
   await fillLookup(page, externalUserId);
-  await page.getByLabel("Application Client ID").fill(applicationClientId);
+  await page.getByLabel("Application Client ID").first().fill(applicationClientId);
   await page.getByLabel("Issuer").fill("OTPAuth Playwright");
   await page.getByLabel("Label").fill(label);
   await page.getByRole("button", { name: "Start enrollment" }).click();
@@ -64,8 +64,9 @@ test("operator flow covers login, start, confirm, replace, revoke and artifact d
 });
 
 async function fillLookup(page: import("@playwright/test").Page, externalUserId: string) {
-  await page.getByLabel("Tenant ID").fill(tenantId);
-  await page.getByLabel("External User ID").fill(externalUserId);
+  const lookupPanel = page.getByRole("heading", { name: "Current enrollment by user" }).locator("xpath=ancestor::section[1]");
+  await lookupPanel.getByLabel("Tenant ID").fill(tenantId);
+  await lookupPanel.getByLabel("External User ID").fill(externalUserId);
 }
 
 async function waitForArtifact(page: import("@playwright/test").Page): Promise<string> {

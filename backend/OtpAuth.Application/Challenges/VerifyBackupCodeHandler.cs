@@ -74,8 +74,12 @@ public sealed class VerifyBackupCodeHandler
 
         if (challenge.ExpiresAt <= DateTimeOffset.UtcNow)
         {
+            var expiredAtUtc = DateTimeOffset.UtcNow;
             var expiredChallenge = challenge.MarkExpired();
-            await _challengeRepository.UpdateAsync(expiredChallenge, cancellationToken);
+            await _challengeRepository.UpdateAsync(
+                expiredChallenge,
+                ChallengeUpdateSideEffects.CreateForTerminalState(expiredChallenge, expiredAtUtc),
+                cancellationToken);
             await RecordAttemptAsync(expiredChallenge.Id, ChallengeAttemptResults.Expired, cancellationToken);
 
             return VerifyBackupCodeResult.Failure(
@@ -117,8 +121,12 @@ public sealed class VerifyBackupCodeHandler
                 failedChallenge);
         }
 
-        var approvedChallenge = challenge.MarkApproved(DateTimeOffset.UtcNow);
-        await _challengeRepository.UpdateAsync(approvedChallenge, cancellationToken);
+        var approvedAtUtc = DateTimeOffset.UtcNow;
+        var approvedChallenge = challenge.MarkApproved(approvedAtUtc);
+        await _challengeRepository.UpdateAsync(
+            approvedChallenge,
+            ChallengeUpdateSideEffects.CreateForTerminalState(approvedChallenge, approvedAtUtc),
+            cancellationToken);
         await RecordAttemptAsync(approvedChallenge.Id, ChallengeAttemptResults.Approved, cancellationToken);
 
         return VerifyBackupCodeResult.Success(approvedChallenge);

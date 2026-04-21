@@ -5,9 +5,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OtpAuth.Application.Administration;
+using OtpAuth.Application.Devices;
 using OtpAuth.Application.Enrollments;
 using OtpAuth.Application.Integrations;
+using OtpAuth.Application.Webhooks;
 using OtpAuth.Infrastructure.Administration;
+using OtpAuth.Infrastructure.Tests.Devices;
 using OtpAuth.Infrastructure.Tests.Enrollments;
 
 namespace OtpAuth.Infrastructure.Tests.Administration;
@@ -47,25 +50,46 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IAdminUserStore>();
             services.RemoveAll<IAdminAuthAuditWriter>();
+            services.RemoveAll<IAdminDeviceAuditWriter>();
             services.RemoveAll<IAdminTotpEnrollmentAuditWriter>();
+            services.RemoveAll<IAdminWebhookSubscriptionAuditWriter>();
             services.RemoveAll<IAdminLoginRateLimiter>();
             services.RemoveAll<IIntegrationClientStore>();
             services.RemoveAll<ITotpEnrollmentProvisioningStore>();
             services.RemoveAll<ITotpEnrollmentAuditWriter>();
+            services.RemoveAll<IDeviceRegistryStore>();
+            services.RemoveAll<IDeviceLifecycleAuditWriter>();
+            services.RemoveAll<IAdminDeviceStore>();
+            services.RemoveAll<IAdminDeliveryStatusStore>();
+            services.RemoveAll<IWebhookSubscriptionStore>();
 
             services.AddSingleton<InMemoryAdminUserStore>();
             services.AddSingleton<RecordingAdminAuthAuditWriter>();
+            services.AddSingleton<RecordingAdminDeviceAuditWriter>();
             services.AddSingleton<RecordingAdminTotpEnrollmentAuditWriter>();
+            services.AddSingleton<RecordingAdminWebhookSubscriptionAuditWriter>();
             services.AddSingleton<RecordingTotpEnrollmentAuditWriter>();
             services.AddSingleton<InMemoryIntegrationClientStore>();
             services.AddSingleton<InMemoryEnrollmentApiStore>();
+            services.AddSingleton<InMemoryDeviceRegistryStore>();
+            services.AddSingleton<RecordingDeviceLifecycleAuditWriter>();
+            services.AddSingleton<InMemoryAdminDeviceStore>();
+            services.AddSingleton<InMemoryAdminDeliveryStatusStore>();
+            services.AddSingleton<InMemoryWebhookSubscriptionStore>();
             services.AddSingleton<IAdminUserStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminUserStore>());
             services.AddSingleton<IAdminAuthAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminAuthAuditWriter>());
+            services.AddSingleton<IAdminDeviceAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminDeviceAuditWriter>());
             services.AddSingleton<IAdminTotpEnrollmentAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminTotpEnrollmentAuditWriter>());
+            services.AddSingleton<IAdminWebhookSubscriptionAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminWebhookSubscriptionAuditWriter>());
             services.AddSingleton<IAdminLoginRateLimiter, InMemoryAdminLoginRateLimiter>();
             services.AddSingleton<IIntegrationClientStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryIntegrationClientStore>());
             services.AddSingleton<ITotpEnrollmentProvisioningStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryEnrollmentApiStore>());
             services.AddSingleton<ITotpEnrollmentAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingTotpEnrollmentAuditWriter>());
+            services.AddSingleton<IDeviceRegistryStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryDeviceRegistryStore>());
+            services.AddSingleton<IDeviceLifecycleAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingDeviceLifecycleAuditWriter>());
+            services.AddSingleton<IAdminDeviceStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminDeviceStore>());
+            services.AddSingleton<IAdminDeliveryStatusStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminDeliveryStatusStore>());
+            services.AddSingleton<IWebhookSubscriptionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryWebhookSubscriptionStore>());
         });
     }
 
@@ -104,9 +128,39 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         return Services.GetRequiredService<RecordingAdminTotpEnrollmentAuditWriter>();
     }
 
+    public RecordingAdminDeviceAuditWriter GetAdminDeviceAuditWriter()
+    {
+        return Services.GetRequiredService<RecordingAdminDeviceAuditWriter>();
+    }
+
     public RecordingTotpEnrollmentAuditWriter GetTotpEnrollmentAuditWriter()
     {
         return Services.GetRequiredService<RecordingTotpEnrollmentAuditWriter>();
+    }
+
+    public InMemoryWebhookSubscriptionStore GetWebhookSubscriptions()
+    {
+        return Services.GetRequiredService<InMemoryWebhookSubscriptionStore>();
+    }
+
+    public RecordingAdminWebhookSubscriptionAuditWriter GetAdminWebhookSubscriptionAuditWriter()
+    {
+        return Services.GetRequiredService<RecordingAdminWebhookSubscriptionAuditWriter>();
+    }
+
+    internal InMemoryDeviceRegistryStore GetDevices()
+    {
+        return Services.GetRequiredService<InMemoryDeviceRegistryStore>();
+    }
+
+    internal RecordingDeviceLifecycleAuditWriter GetDeviceAuditWriter()
+    {
+        return Services.GetRequiredService<RecordingDeviceLifecycleAuditWriter>();
+    }
+
+    public InMemoryAdminDeliveryStatusStore GetAdminDeliveryStatuses()
+    {
+        return Services.GetRequiredService<InMemoryAdminDeliveryStatusStore>();
     }
 
     public sealed class InMemoryAdminUserStore : IAdminUserStore
@@ -202,6 +256,24 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         }
     }
 
+    public sealed class RecordingAdminDeviceAuditWriter : IAdminDeviceAuditWriter
+    {
+        public List<(Guid AdminUserId, Guid DeviceId, string Status, bool IsPushCapable)> Events { get; } = [];
+
+        public Task WriteRevokedAsync(
+            AdminContext adminContext,
+            Domain.Devices.RegisteredDevice device,
+            CancellationToken cancellationToken)
+        {
+            Events.Add((
+                adminContext.AdminUserId,
+                device.Id,
+                device.Status.ToString().ToLowerInvariant(),
+                !string.IsNullOrWhiteSpace(device.PushToken)));
+            return Task.CompletedTask;
+        }
+    }
+
     public sealed class RecordingTotpEnrollmentAuditWriter : ITotpEnrollmentAuditWriter
     {
         public List<(string EventType, Guid EnrollmentId)> Events { get; } = [];
@@ -249,6 +321,20 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         }
     }
 
+    public sealed class RecordingAdminWebhookSubscriptionAuditWriter : IAdminWebhookSubscriptionAuditWriter
+    {
+        public List<(Guid AdminUserId, Guid SubscriptionId, bool IsActive)> Events { get; } = [];
+
+        public Task WriteSavedAsync(
+            AdminContext adminContext,
+            WebhookSubscription subscription,
+            CancellationToken cancellationToken)
+        {
+            Events.Add((adminContext.AdminUserId, subscription.SubscriptionId, subscription.IsActive));
+            return Task.CompletedTask;
+        }
+    }
+
     public sealed class InMemoryIntegrationClientStore : IIntegrationClientStore
     {
         private readonly Dictionary<string, IntegrationClient> _clients = new(StringComparer.Ordinal);
@@ -292,6 +378,126 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
                 .ToArray();
 
             return Task.FromResult<IReadOnlyCollection<IntegrationClient>>(clients);
+        }
+    }
+
+    public sealed class InMemoryWebhookSubscriptionStore : IWebhookSubscriptionStore
+    {
+        private readonly Dictionary<(Guid TenantId, Guid ApplicationClientId, string EndpointUrl), WebhookSubscription> _subscriptions = new();
+
+        public WebhookSubscription Seed(WebhookSubscription subscription)
+        {
+            _subscriptions[(subscription.TenantId, subscription.ApplicationClientId, subscription.EndpointUrl.ToString())] = subscription;
+            return subscription;
+        }
+
+        public Task<IReadOnlyCollection<WebhookSubscription>> ListAsync(
+            WebhookSubscriptionListRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var subscriptions = _subscriptions.Values
+                .Where(subscription =>
+                    (!request.TenantId.HasValue || subscription.TenantId == request.TenantId.Value) &&
+                    (!request.ApplicationClientId.HasValue || subscription.ApplicationClientId == request.ApplicationClientId.Value))
+                .OrderBy(subscription => subscription.TenantId)
+                .ThenBy(subscription => subscription.ApplicationClientId)
+                .ThenBy(subscription => subscription.EndpointUrl.ToString(), StringComparer.Ordinal)
+                .ToArray();
+
+            return Task.FromResult<IReadOnlyCollection<WebhookSubscription>>(subscriptions);
+        }
+
+        public Task<WebhookSubscription> UpsertAsync(
+            WebhookSubscriptionUpsertRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var key = (request.TenantId, request.ApplicationClientId, request.EndpointUrl.ToString());
+            var now = DateTimeOffset.UtcNow;
+            var existing = _subscriptions.GetValueOrDefault(key);
+            var subscription = new WebhookSubscription
+            {
+                SubscriptionId = existing?.SubscriptionId ?? Guid.NewGuid(),
+                TenantId = request.TenantId,
+                ApplicationClientId = request.ApplicationClientId,
+                EndpointUrl = request.EndpointUrl,
+                IsActive = request.IsActive,
+                EventTypes = request.EventTypes
+                    .OrderBy(static item => item, StringComparer.Ordinal)
+                    .ToArray(),
+                CreatedUtc = existing?.CreatedUtc ?? now,
+                UpdatedUtc = existing is null ? now : now,
+            };
+
+            _subscriptions[key] = subscription;
+            return Task.FromResult(subscription);
+        }
+    }
+
+    public sealed class InMemoryAdminDeliveryStatusStore : IAdminDeliveryStatusStore
+    {
+        private readonly List<AdminDeliveryStatusView> _deliveries = [];
+
+        public AdminDeliveryStatusView Seed(AdminDeliveryStatusView delivery)
+        {
+            _deliveries.Add(delivery);
+            return delivery;
+        }
+
+        public Task<IReadOnlyCollection<AdminDeliveryStatusView>> ListRecentAsync(
+            AdminDeliveryStatusListRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var deliveries = _deliveries
+                .Where(delivery =>
+                    delivery.TenantId == request.TenantId &&
+                    (!request.ApplicationClientId.HasValue || delivery.ApplicationClientId == request.ApplicationClientId.Value) &&
+                    (!request.Channel.HasValue || delivery.Channel == request.Channel.Value) &&
+                    (!request.Status.HasValue || delivery.Status == request.Status.Value))
+                .OrderByDescending(delivery => delivery.CreatedAtUtc)
+                .ThenByDescending(delivery => delivery.DeliveryId)
+                .Take(request.Limit)
+                .ToArray();
+
+            return Task.FromResult<IReadOnlyCollection<AdminDeliveryStatusView>>(deliveries);
+        }
+    }
+
+    internal sealed class InMemoryAdminDeviceStore : IAdminDeviceStore
+    {
+        private readonly InMemoryDeviceRegistryStore _deviceRegistryStore;
+
+        public InMemoryAdminDeviceStore(InMemoryDeviceRegistryStore deviceRegistryStore)
+        {
+            _deviceRegistryStore = deviceRegistryStore;
+        }
+
+        public Task<IReadOnlyCollection<AdminUserDeviceView>> ListByExternalUserAsync(
+            AdminUserDeviceListRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var devices = _deviceRegistryStore.ListByTenantAndExternalUser(request.TenantId, request.ExternalUserId)
+                .Where(static device => device.Status is Domain.Devices.DeviceStatus.Active or Domain.Devices.DeviceStatus.Revoked or Domain.Devices.DeviceStatus.Blocked)
+                .OrderBy(static device => device.Status switch
+                {
+                    Domain.Devices.DeviceStatus.Active => 0,
+                    Domain.Devices.DeviceStatus.Blocked => 1,
+                    Domain.Devices.DeviceStatus.Revoked => 2,
+                    _ => 3,
+                })
+                .ThenByDescending(static device => device.LastSeenUtc ?? device.BlockedUtc ?? device.RevokedUtc ?? device.ActivatedUtc ?? device.CreatedUtc)
+                .ThenByDescending(static device => device.Id)
+                .Select(AdminUserDeviceViewFactory.Create)
+                .ToArray();
+
+            return Task.FromResult<IReadOnlyCollection<AdminUserDeviceView>>(devices);
         }
     }
 }

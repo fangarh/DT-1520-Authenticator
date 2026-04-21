@@ -27,15 +27,23 @@ export function mapAdminProblem(problem: ProblemDetails | null, fallbackStatus?:
     return {
       title: "Недостаточно прав",
       detail: detail ?? "Текущая учетная запись не может выполнять это действие.",
-      actionHint: "Проверьте наличие permission `enrollments.read` или `enrollments.write`.",
+      actionHint: "Проверьте наличие operator permissions для enrollment, device или webhook management.",
+    };
+  }
+
+  if (status === 400) {
+    return {
+      title: "Неверные параметры запроса",
+      detail: detail ?? "Один или несколько filters не прошли backend validation.",
+      actionHint: "Проверьте tenantId, externalUserId, limit и допустимые значения channel/status.",
     };
   }
 
   if (status === 404) {
     return {
       title: "Объект не найден",
-      detail: detail ?? "Backend не нашел enrollment или application client для указанного контекста.",
-      actionHint: "Проверьте tenant, external user и при необходимости application client.",
+      detail: detail ?? "Backend не нашел enrollment, device, delivery scope, webhook subscription или application client для указанного контекста.",
+      actionHint: "Проверьте tenant, external user, filters, endpoint, device binding и при необходимости application client.",
     };
   }
 
@@ -56,10 +64,18 @@ export function mapAdminProblem(problem: ProblemDetails | null, fallbackStatus?:
   }
 
   if (status === 409) {
+    if (hasText(detail, "device cannot be revoked")) {
+      return {
+        title: "Revoke уже недоступен",
+        detail: detail ?? "Устройство уже не находится в активном состоянии.",
+        actionHint: "Обновите список устройств: backend допускает revoke только для `active` device lifecycle state.",
+      };
+    }
+
     return {
       title: "Состояние изменилось",
       detail: detail ?? "Enrollment уже находится в другом состоянии.",
-      actionHint: "Обновите current state и повторите допустимое действие.",
+      actionHint: "Обновите current state и повторите допустимое действие только для допустимого lifecycle state.",
     };
   }
 

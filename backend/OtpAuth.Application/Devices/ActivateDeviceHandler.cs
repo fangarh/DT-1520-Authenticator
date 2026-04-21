@@ -107,6 +107,7 @@ public sealed class ActivateDeviceHandler
             refreshTokenRecord,
             activationCodeId,
             activatedAtUtc,
+            DeviceLifecycleSideEffects.CreateFor(device, activatedAtUtc),
             cancellationToken);
         if (!activated)
         {

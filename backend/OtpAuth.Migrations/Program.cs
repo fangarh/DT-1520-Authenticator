@@ -3,12 +3,14 @@ using FluentMigrator.Runner;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OtpAuth.Application.Integrations;
+using OtpAuth.Application.Webhooks;
 using OtpAuth.Infrastructure.Administration;
 using OtpAuth.Infrastructure.Devices;
 using OtpAuth.Infrastructure.Factors;
 using OtpAuth.Infrastructure.Integrations;
 using OtpAuth.Infrastructure.Persistence;
 using OtpAuth.Infrastructure.Security;
+using OtpAuth.Infrastructure.Webhooks;
 
 var command = args.Length == 0
     ? "migrate"
@@ -31,6 +33,8 @@ return command switch
     "seed-bootstrap-backup-codes" => await SeedBootstrapBackupCodesAsync(GetRequiredPostgresConnectionString()),
     "seed-bootstrap-device-activation" => await SeedBootstrapDeviceActivationAsync(GetRequiredPostgresConnectionString()),
     "upsert-admin-user" => await UpsertAdminUserAsync(GetRequiredPostgresConnectionString(), args),
+    "list-webhook-subscriptions" => await ListWebhookSubscriptionsAsync(GetRequiredPostgresConnectionString()),
+    "upsert-webhook-subscription" => await UpsertWebhookSubscriptionAsync(GetRequiredPostgresConnectionString(), args),
     "reencrypt-totp-secrets" => await ReEncryptTotpSecretsAsync(GetRequiredPostgresConnectionString()),
     "cleanup-security-data" => await CleanupSecurityDataAsync(GetRequiredPostgresConnectionString()),
     "rotate-integration-client-secret" => await RotateIntegrationClientSecretAsync(GetRequiredPostgresConnectionString(), args),
@@ -333,6 +337,68 @@ static async Task<int> UpsertAdminUserAsync(string connectionString, string[] ar
     return 0;
 }
 
+static async Task<int> ListWebhookSubscriptionsAsync(string connectionString)
+{
+    await using var dataSource = new Npgsql.NpgsqlDataSourceBuilder(connectionString).Build();
+    var service = new WebhookSubscriptionBootstrapService(new PostgresWebhookSubscriptionStore(dataSource));
+    var subscriptions = await service.ListAsync(new WebhookSubscriptionListRequest(), CancellationToken.None);
+
+    if (subscriptions.Count == 0)
+    {
+        Console.WriteLine("No webhook subscriptions found.");
+        return 0;
+    }
+
+    Console.WriteLine("Webhook subscriptions:");
+    foreach (var subscription in subscriptions)
+    {
+        Console.WriteLine(
+            $"- id={subscription.SubscriptionId}, tenant={subscription.TenantId}, application_client_id={subscription.ApplicationClientId}, active={subscription.IsActive}, endpoint={subscription.EndpointUrl}, events=[{string.Join(", ", subscription.EventTypes)}]");
+    }
+
+    return 0;
+}
+
+static async Task<int> UpsertWebhookSubscriptionAsync(string connectionString, string[] args)
+{
+    var clientId = GetRequiredClientIdArgument(args);
+    var endpointUrl = GetRequiredWebhookEndpointArgument(args);
+    var eventTypes = GetRequiredWebhookEventTypeArguments(args);
+
+    await using var dataSource = new Npgsql.NpgsqlDataSourceBuilder(connectionString).Build();
+    var integrationClientStore = new PostgresIntegrationClientStore(dataSource);
+    var integrationClient = await integrationClientStore.GetByClientIdAsync(clientId, CancellationToken.None);
+    if (integrationClient is null)
+    {
+        Console.Error.WriteLine($"Integration client '{clientId}' was not found.");
+        return 1;
+    }
+
+    try
+    {
+        var service = new WebhookSubscriptionBootstrapService(new PostgresWebhookSubscriptionStore(dataSource));
+        var subscription = await service.UpsertAsync(
+            new WebhookSubscriptionUpsertRequest
+            {
+                TenantId = integrationClient.TenantId,
+                ApplicationClientId = integrationClient.ApplicationClientId,
+                EndpointUrl = endpointUrl,
+                EventTypes = eventTypes,
+                IsActive = true,
+            },
+            CancellationToken.None);
+
+        Console.WriteLine(
+            $"Webhook subscription '{subscription.SubscriptionId}' active for client '{clientId}' at '{subscription.EndpointUrl}' with events [{string.Join(", ", subscription.EventTypes)}].");
+        return 0;
+    }
+    catch (InvalidOperationException exception)
+    {
+        Console.Error.WriteLine(exception.Message);
+        return 1;
+    }
+}
+
 static async Task<int> ReEncryptTotpSecretsAsync(string connectionString)
 {
     var totpProtectionOptions = LoadTotpProtectionOptions();
@@ -616,7 +682,7 @@ static string ResolveApiProjectPath()
 static int ExitWithUsage(string command)
 {
     Console.Error.WriteLine($"Unsupported command '{command}'.");
-    Console.Error.WriteLine("Supported commands: ensure-database, migrate, inspect-signing-key-lifecycle, audit-signing-key-lifecycle, list-signing-key-lifecycle-audit-events [limit], inspect-totp-protection-key-lifecycle, audit-totp-protection-key-lifecycle, list-totp-protection-key-lifecycle-audit-events [limit], list-security-audit-events [limit] [event-type-prefix], list-admin-users, initialize, seed-bootstrap-clients, seed-bootstrap-totp-enrollment, seed-bootstrap-backup-codes, seed-bootstrap-device-activation, upsert-admin-user <username> <permission> [permission...], reencrypt-totp-secrets, cleanup-security-data, rotate-integration-client-secret <client-id>, deactivate-integration-client <client-id>, activate-integration-client <client-id>, migrate-and-seed-bootstrap-clients");
+    Console.Error.WriteLine("Supported commands: ensure-database, migrate, inspect-signing-key-lifecycle, audit-signing-key-lifecycle, list-signing-key-lifecycle-audit-events [limit], inspect-totp-protection-key-lifecycle, audit-totp-protection-key-lifecycle, list-totp-protection-key-lifecycle-audit-events [limit], list-security-audit-events [limit] [event-type-prefix], list-admin-users, list-webhook-subscriptions, initialize, seed-bootstrap-clients, seed-bootstrap-totp-enrollment, seed-bootstrap-backup-codes, seed-bootstrap-device-activation, upsert-admin-user <username> <permission> [permission...], upsert-webhook-subscription <client-id> <endpoint-url> <event-type> [event-type...], reencrypt-totp-secrets, cleanup-security-data, rotate-integration-client-secret <client-id>, deactivate-integration-client <client-id>, activate-integration-client <client-id>, migrate-and-seed-bootstrap-clients");
     return 1;
 }
 
@@ -628,6 +694,21 @@ static string GetRequiredClientIdArgument(string[] args)
     }
 
     return args[1].Trim();
+}
+
+static Uri GetRequiredWebhookEndpointArgument(string[] args)
+{
+    if (args.Length < 3 || string.IsNullOrWhiteSpace(args[2]))
+    {
+        throw new InvalidOperationException("Webhook endpoint URL argument is required.");
+    }
+
+    if (!Uri.TryCreate(args[2].Trim(), UriKind.Absolute, out var endpointUrl))
+    {
+        throw new InvalidOperationException("Webhook endpoint URL must be a valid absolute URI.");
+    }
+
+    return endpointUrl;
 }
 
 static string GetRequiredAdminUsernameArgument(string[] args)
@@ -649,6 +730,20 @@ static IReadOnlyCollection<string> GetRequiredAdminPermissionArguments(string[] 
 
     return args
         .Skip(2)
+        .ToArray();
+}
+
+static IReadOnlyCollection<string> GetRequiredWebhookEventTypeArguments(string[] args)
+{
+    if (args.Length < 4)
+    {
+        throw new InvalidOperationException("At least one webhook event type is required.");
+    }
+
+    return args
+        .Skip(3)
+        .Where(static value => !string.IsNullOrWhiteSpace(value))
+        .Select(static value => value.Trim())
         .ToArray();
 }
 

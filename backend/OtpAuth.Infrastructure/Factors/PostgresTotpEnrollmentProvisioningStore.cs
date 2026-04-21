@@ -425,9 +425,12 @@ public sealed class PostgresTotpEnrollmentProvisioningStore : ITotpEnrollmentPro
     public async Task<bool> RevokeAsync(
         Guid enrollmentId,
         DateTimeOffset revokedAt,
+        FactorRevocationSideEffects? sideEffects,
         CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
         var rowsAffected = await connection.ExecuteAsync(new CommandDefinition(
             """
             update auth.totp_enrollments
@@ -451,9 +454,25 @@ public sealed class PostgresTotpEnrollmentProvisioningStore : ITotpEnrollmentPro
                 EnrollmentId = enrollmentId,
                 RevokedAt = revokedAt,
             },
+            transaction: transaction,
             cancellationToken: cancellationToken));
+        if (rowsAffected != 1)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
 
-        return rowsAffected == 1;
+        if (sideEffects?.WebhookEvent is not null)
+        {
+            await Webhooks.PostgresWebhookEventPublicationWriter.QueueAsync(
+                connection,
+                transaction,
+                sideEffects.WebhookEvent,
+                cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public async Task<bool> ConfirmReplacementAsync(

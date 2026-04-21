@@ -1,5 +1,6 @@
 using OtpAuth.Application.Enrollments;
 using OtpAuth.Application.Integrations;
+using OtpAuth.Application.Webhooks;
 using Xunit;
 
 namespace OtpAuth.Infrastructure.Tests.Enrollments;
@@ -24,6 +25,13 @@ public sealed class RevokeTotpEnrollmentHandlerTests
         Assert.Equal(TotpEnrollmentStatus.Revoked, result.Enrollment!.Status);
         Assert.True(store.RevokeCalled);
         Assert.Single(auditWriter.RevokedEnrollmentIds);
+        Assert.NotNull(store.LastSideEffects?.WebhookEvent);
+        Assert.Equal(WebhookEventTypeNames.FactorRevoked, store.LastSideEffects!.WebhookEvent!.EventType);
+        Assert.Equal(WebhookResourceTypeNames.Factor, store.LastSideEffects.WebhookEvent.ResourceType);
+        Assert.Equal(enrollment.EnrollmentId, store.LastSideEffects.WebhookEvent.ResourceId);
+        Assert.Contains("\"factorType\":\"totp\"", store.LastSideEffects.WebhookEvent.PayloadJson);
+        Assert.Contains("\"externalUserId\":\"user-123\"", store.LastSideEffects.WebhookEvent.PayloadJson);
+        Assert.NotNull(result.Enrollment.RevokedAtUtc);
     }
 
     [Fact]
@@ -132,6 +140,8 @@ public sealed class RevokeTotpEnrollmentHandlerTests
 
         public bool RevokeCalled { get; private set; }
 
+        public FactorRevocationSideEffects? LastSideEffects { get; private set; }
+
         public Task<bool> ConfirmAsync(Guid enrollmentId, DateTimeOffset confirmedAt, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
@@ -195,9 +205,14 @@ public sealed class RevokeTotpEnrollmentHandlerTests
             throw new NotSupportedException();
         }
 
-        public Task<bool> RevokeAsync(Guid enrollmentId, DateTimeOffset revokedAt, CancellationToken cancellationToken)
+        public Task<bool> RevokeAsync(
+            Guid enrollmentId,
+            DateTimeOffset revokedAt,
+            FactorRevocationSideEffects? sideEffects,
+            CancellationToken cancellationToken)
         {
             RevokeCalled = true;
+            LastSideEffects = sideEffects;
             return Task.FromResult(true);
         }
 

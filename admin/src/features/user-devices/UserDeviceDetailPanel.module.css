@@ -1,0 +1,106 @@
+.empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  gap: 16px;
+}
+
+.summary,
+.actionCard {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 250, 244, 0.8);
+}
+
+.deviceId,
+.meta dd {
+  word-break: break-word;
+}
+
+.flagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.platform,
+.pushCapable {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.platform {
+  color: var(--accent);
+  background: rgba(15, 94, 91, 0.08);
+}
+
+.pushCapable {
+  color: var(--text);
+  background: rgba(27, 29, 29, 0.08);
+}
+
+.scope,
+.scopeWarning,
+.actionCopy,
+.actionHint {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.scope {
+  color: var(--muted);
+}
+
+.scopeWarning {
+  color: var(--warning);
+}
+
+.actionCopy,
+.actionHint {
+  color: var(--muted);
+}
+
+.meta {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.meta div {
+  display: grid;
+  gap: 4px;
+}
+
+.meta dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.meta dd {
+  margin: 0;
+}
+
+.confirmation {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--text);
+}
+
+.confirmation input {
+  margin-top: 0.2rem;
+}

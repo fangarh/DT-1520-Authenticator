@@ -12,6 +12,8 @@
 - `Phase 4` закрыта частично: `Admin UI MVP` и `Installer MVP` уже реализованы, но остаются `webhook/events`, observability и часть support/productization flows
 - `Phase 5` в полном объеме еще не закрыта и сейчас вместе с хвостами `Phase 4` образует основной remaining gap до полного `MVP`
 
+Для канонического continuation path после `2026-04-20` использовать [[MVP Closure Iteration Plan]] и [[ProjectManager Pilot Integration Story]], а не расширять этот исторический план новыми ad-hoc фазами.
+
 ## Phase 1. Foundation
 
 Недели `1-3`.

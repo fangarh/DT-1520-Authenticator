@@ -4,6 +4,7 @@ using OtpAuth.Api.Admin;
 using OtpAuth.Application.Administration;
 using OtpAuth.Application.Enrollments;
 using OtpAuth.Application.Factors;
+using OtpAuth.Application.Webhooks;
 using OtpAuth.Infrastructure.Tests.Enrollments;
 using Xunit;
 
@@ -221,6 +222,35 @@ public sealed class AdminEnrollmentCommandApiTests
         Assert.False(body.HasPendingReplacement);
         Assert.Contains(adminAudit.Events, audit => audit.EventType == "revoked" && audit.EnrollmentId == enrollment.EnrollmentId);
         Assert.Contains(enrollmentAudit.Events, audit => audit.EventType == "revoked" && audit.EnrollmentId == enrollment.EnrollmentId);
+    }
+
+    [Fact]
+    public async Task RevokeEnrollment_EnqueuesFactorRevokedWebhook_ForMatchingSubscription()
+    {
+        await using var factory = new AdminAuthApiTestFactory();
+        var enrollment = factory.GetEnrollments().SeedConfirmed("user-admin-factor-webhook");
+        factory.GetEnrollments().SeedWebhookSubscription(new WebhookSubscription
+        {
+            SubscriptionId = Guid.NewGuid(),
+            TenantId = enrollment.TenantId,
+            ApplicationClientId = enrollment.ApplicationClientId,
+            EndpointUrl = new Uri("https://crm.example.com/webhooks/factors"),
+            IsActive = true,
+            EventTypes = [WebhookEventTypeNames.FactorRevoked],
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        factory.GetAdminUsers().Seed("operator", "super-secret", permissions: [AdminPermissions.EnrollmentsWrite]);
+        using var client = factory.CreateAdminClient();
+
+        var csrfToken = await LoginAsync(client, "operator", "super-secret");
+        var response = await PostWithoutBodyWithCsrfAsync(client, csrfToken, $"/api/v1/admin/enrollments/totp/{enrollment.EnrollmentId}/revoke");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var delivery = Assert.Single(factory.GetEnrollments().GetWebhookDeliveries());
+        Assert.Equal(WebhookEventTypeNames.FactorRevoked, delivery.EventType);
+        Assert.Equal(WebhookResourceTypeNames.Factor, delivery.ResourceType);
+        Assert.Equal(enrollment.EnrollmentId, delivery.ResourceId);
+        Assert.Contains("\"externalUserId\":\"user-admin-factor-webhook\"", delivery.PayloadJson);
     }
 
     private static async Task<string> LoginAsync(HttpClient client, string username, string password)

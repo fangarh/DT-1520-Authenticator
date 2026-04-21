@@ -57,7 +57,11 @@ public sealed class RefreshDeviceTokenHandler
         {
             var wasStateChanged = device.Status != DeviceStatus.Blocked;
             var blockedDevice = device.MarkBlocked(DateTimeOffset.UtcNow);
-            await _deviceRegistryStore.BlockDeviceAsync(blockedDevice, blockedDevice.LastAuthStateChangedUtc, cancellationToken);
+            await _deviceRegistryStore.BlockDeviceAsync(
+                blockedDevice,
+                blockedDevice.LastAuthStateChangedUtc,
+                wasStateChanged ? DeviceLifecycleSideEffects.CreateFor(blockedDevice, blockedDevice.LastAuthStateChangedUtc) : null,
+                cancellationToken);
             await _auditWriter.WriteRefreshReuseDetectedAsync(blockedDevice, DescribeTokenState(currentToken, blockedDevice), cancellationToken);
             await _auditWriter.WriteBlockedAsync(blockedDevice, "refresh_token_reuse", wasStateChanged, cancellationToken);
 
@@ -92,7 +96,11 @@ public sealed class RefreshDeviceTokenHandler
         {
             var wasStateChanged = device.Status != DeviceStatus.Blocked;
             var blockedDevice = device.MarkBlocked(DateTimeOffset.UtcNow);
-            await _deviceRegistryStore.BlockDeviceAsync(blockedDevice, blockedDevice.LastAuthStateChangedUtc, cancellationToken);
+            await _deviceRegistryStore.BlockDeviceAsync(
+                blockedDevice,
+                blockedDevice.LastAuthStateChangedUtc,
+                wasStateChanged ? DeviceLifecycleSideEffects.CreateFor(blockedDevice, blockedDevice.LastAuthStateChangedUtc) : null,
+                cancellationToken);
             await _auditWriter.WriteRefreshReuseDetectedAsync(blockedDevice, "rotation_race", cancellationToken);
             await _auditWriter.WriteBlockedAsync(blockedDevice, "refresh_rotation_race", wasStateChanged, cancellationToken);
 

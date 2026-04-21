@@ -92,8 +92,12 @@ public sealed class ApprovePushChallengeHandler
 
         if (challenge.ExpiresAt <= DateTimeOffset.UtcNow)
         {
+            var expiredAtUtc = DateTimeOffset.UtcNow;
             var expiredChallenge = challenge.MarkExpired();
-            await _challengeRepository.UpdateAsync(expiredChallenge, cancellationToken);
+            await _challengeRepository.UpdateAsync(
+                expiredChallenge,
+                ChallengeUpdateSideEffects.CreateForTerminalState(expiredChallenge, expiredAtUtc),
+                cancellationToken);
             await RecordAttemptAsync(expiredChallenge.Id, ChallengeAttemptTypes.PushApprove, ChallengeAttemptResults.Expired, cancellationToken);
 
             return ApprovePushChallengeResult.Failure(
@@ -130,7 +134,10 @@ public sealed class ApprovePushChallengeHandler
 
         var approvedAtUtc = DateTimeOffset.UtcNow;
         var approvedChallenge = challenge.MarkApproved(approvedAtUtc);
-        await _challengeRepository.UpdateAsync(approvedChallenge, cancellationToken);
+        await _challengeRepository.UpdateAsync(
+            approvedChallenge,
+            ChallengeUpdateSideEffects.CreateForTerminalState(approvedChallenge, approvedAtUtc),
+            cancellationToken);
         await RecordAttemptAsync(approvedChallenge.Id, ChallengeAttemptTypes.PushApprove, ChallengeAttemptResults.Approved, cancellationToken);
         await _auditWriter.WriteApprovedAsync(approvedChallenge, device, request.BiometricVerified, cancellationToken);
 

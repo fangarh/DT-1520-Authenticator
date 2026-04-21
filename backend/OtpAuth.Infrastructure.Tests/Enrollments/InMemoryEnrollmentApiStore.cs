@@ -1,4 +1,5 @@
 using OtpAuth.Application.Enrollments;
+using OtpAuth.Application.Webhooks;
 
 namespace OtpAuth.Infrastructure.Tests.Enrollments;
 
@@ -12,6 +13,8 @@ public sealed class InMemoryEnrollmentApiStore : ITotpEnrollmentProvisioningStor
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<Guid, TotpEnrollmentProvisioningRecord> _enrollments = [];
+    private readonly Dictionary<Guid, WebhookSubscription> _subscriptions = [];
+    private readonly Dictionary<Guid, WebhookEventDelivery> _webhookDeliveries = [];
 
     public TotpEnrollmentProvisioningRecord SeedPending(
         string externalUserId = "user-123",
@@ -235,6 +238,7 @@ public sealed class InMemoryEnrollmentApiStore : ITotpEnrollmentProvisioningStor
     public Task<bool> RevokeAsync(
         Guid enrollmentId,
         DateTimeOffset revokedAt,
+        FactorRevocationSideEffects? sideEffects,
         CancellationToken cancellationToken)
     {
         lock (_syncRoot)
@@ -250,6 +254,36 @@ public sealed class InMemoryEnrollmentApiStore : ITotpEnrollmentProvisioningStor
                 RevokedUtc = revokedAt,
                 PendingReplacement = null,
             };
+
+            if (sideEffects?.WebhookEvent is not null)
+            {
+                foreach (var subscription in _subscriptions.Values.Where(subscription =>
+                             subscription.IsActive &&
+                             subscription.TenantId == sideEffects.WebhookEvent.TenantId &&
+                             subscription.ApplicationClientId == sideEffects.WebhookEvent.ApplicationClientId &&
+                             subscription.EventTypes.Contains(sideEffects.WebhookEvent.EventType, StringComparer.Ordinal)))
+                {
+                    var deliveryId = Guid.NewGuid();
+                    _webhookDeliveries[deliveryId] = new WebhookEventDelivery
+                    {
+                        DeliveryId = deliveryId,
+                        SubscriptionId = subscription.SubscriptionId,
+                        TenantId = subscription.TenantId,
+                        ApplicationClientId = subscription.ApplicationClientId,
+                        EndpointUrl = subscription.EndpointUrl,
+                        EventId = sideEffects.WebhookEvent.EventId,
+                        EventType = sideEffects.WebhookEvent.EventType,
+                        OccurredAtUtc = sideEffects.WebhookEvent.OccurredAtUtc,
+                        ResourceType = sideEffects.WebhookEvent.ResourceType,
+                        ResourceId = sideEffects.WebhookEvent.ResourceId,
+                        PayloadJson = sideEffects.WebhookEvent.PayloadJson,
+                        Status = WebhookEventDeliveryStatus.Queued,
+                        AttemptCount = 0,
+                        NextAttemptUtc = sideEffects.WebhookEvent.OccurredAtUtc,
+                        CreatedUtc = sideEffects.WebhookEvent.OccurredAtUtc,
+                    };
+                }
+            }
 
             return Task.FromResult(true);
         }
@@ -327,6 +361,24 @@ public sealed class InMemoryEnrollmentApiStore : ITotpEnrollmentProvisioningStor
         lock (_syncRoot)
         {
             _enrollments[enrollment.EnrollmentId] = enrollment;
+        }
+    }
+
+    public void SeedWebhookSubscription(WebhookSubscription subscription)
+    {
+        lock (_syncRoot)
+        {
+            _subscriptions[subscription.SubscriptionId] = subscription;
+        }
+    }
+
+    public IReadOnlyCollection<WebhookEventDelivery> GetWebhookDeliveries()
+    {
+        lock (_syncRoot)
+        {
+            return _webhookDeliveries.Values
+                .OrderBy(delivery => delivery.CreatedUtc)
+                .ToArray();
         }
     }
 }

@@ -22,6 +22,16 @@ describe("mapAdminProblem", () => {
     expect(message.actionHint).toContain("replacement");
   });
 
+  it("maps device revoke conflict to lifecycle refresh hint", () => {
+    const message = mapAdminProblem({
+      status: 409,
+      detail: "Device cannot be revoked. Only active devices can be revoked.",
+    });
+
+    expect(message.title).toBe("Revoke уже недоступен");
+    expect(message.actionHint).toContain("active");
+  });
+
   it("maps unauthorized response to re-login guidance", () => {
     const message = mapAdminProblem({ status: 401, detail: "Authentication failed." });
 

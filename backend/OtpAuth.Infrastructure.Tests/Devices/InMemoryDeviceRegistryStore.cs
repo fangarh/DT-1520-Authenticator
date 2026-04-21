@@ -1,4 +1,5 @@
 using OtpAuth.Application.Devices;
+using OtpAuth.Application.Webhooks;
 using OtpAuth.Domain.Devices;
 using OtpAuth.Infrastructure.Devices;
 
@@ -9,6 +10,8 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
     private readonly Dictionary<Guid, DeviceActivationCodeArtifact> _activationCodes = [];
     private readonly Dictionary<Guid, RegisteredDevice> _devices = [];
     private readonly Dictionary<Guid, DeviceRefreshTokenRecord> _refreshTokens = [];
+    private readonly List<WebhookSubscription> _subscriptions = [];
+    private readonly List<WebhookEventDelivery> _webhookDeliveries = [];
     private readonly IDeviceRefreshTokenHasher _hasher = new Pbkdf2DeviceRefreshTokenHasher();
 
     public Task<DeviceActivationCodeArtifact?> GetActivationCodeByIdAsync(Guid activationCodeId, CancellationToken cancellationToken)
@@ -79,6 +82,7 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
         DeviceRefreshTokenRecord refreshToken,
         Guid activationCodeId,
         DateTimeOffset activatedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -96,6 +100,7 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
         };
         _devices[device.Id] = device;
         _refreshTokens[refreshToken.TokenId] = refreshToken;
+        QueueWebhookDeliveries(sideEffects?.WebhookEvent);
         return Task.FromResult(true);
     }
 
@@ -130,7 +135,11 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
         return Task.FromResult(true);
     }
 
-    public Task<bool> RevokeDeviceAsync(RegisteredDevice device, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken)
+    public Task<bool> RevokeDeviceAsync(
+        RegisteredDevice device,
+        DateTimeOffset revokedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -148,10 +157,15 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
             };
         }
 
+        QueueWebhookDeliveries(sideEffects?.WebhookEvent);
         return Task.FromResult(true);
     }
 
-    public Task<bool> BlockDeviceAsync(RegisteredDevice device, DateTimeOffset blockedAtUtc, CancellationToken cancellationToken)
+    public Task<bool> BlockDeviceAsync(
+        RegisteredDevice device,
+        DateTimeOffset blockedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -169,6 +183,7 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
             };
         }
 
+        QueueWebhookDeliveries(sideEffects?.WebhookEvent);
         return Task.FromResult(true);
     }
 
@@ -253,6 +268,59 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
             RefreshTokenRecord = tokenRecord,
             PlaintextRefreshToken = DeviceRefreshTokenFormat.Create(tokenId, refreshTokenSecret),
         };
+    }
+
+    public void SeedWebhookSubscription(WebhookSubscription subscription)
+    {
+        _subscriptions.Add(subscription);
+    }
+
+    public IReadOnlyCollection<WebhookEventDelivery> GetWebhookDeliveries()
+    {
+        return _webhookDeliveries.ToArray();
+    }
+
+    public IReadOnlyCollection<RegisteredDevice> ListByTenantAndExternalUser(Guid tenantId, string externalUserId)
+    {
+        return _devices.Values
+            .Where(candidate =>
+                candidate.TenantId == tenantId &&
+                string.Equals(candidate.ExternalUserId, externalUserId, StringComparison.Ordinal))
+            .ToArray();
+    }
+
+    private void QueueWebhookDeliveries(WebhookEventPublication? publication)
+    {
+        if (publication is null)
+        {
+            return;
+        }
+
+        foreach (var subscription in _subscriptions.Where(subscription =>
+                     subscription.IsActive &&
+                     subscription.TenantId == publication.TenantId &&
+                     subscription.ApplicationClientId == publication.ApplicationClientId &&
+                     subscription.EventTypes.Contains(publication.EventType, StringComparer.Ordinal)))
+        {
+            _webhookDeliveries.Add(new WebhookEventDelivery
+            {
+                DeliveryId = Guid.NewGuid(),
+                SubscriptionId = subscription.SubscriptionId,
+                TenantId = publication.TenantId,
+                ApplicationClientId = publication.ApplicationClientId,
+                EndpointUrl = subscription.EndpointUrl,
+                EventId = publication.EventId,
+                EventType = publication.EventType,
+                OccurredAtUtc = publication.OccurredAtUtc,
+                ResourceType = publication.ResourceType,
+                ResourceId = publication.ResourceId,
+                PayloadJson = publication.PayloadJson,
+                Status = WebhookEventDeliveryStatus.Queued,
+                AttemptCount = 0,
+                NextAttemptUtc = publication.OccurredAtUtc,
+                CreatedUtc = publication.OccurredAtUtc,
+            });
+        }
     }
 
     public sealed record SeededActivationCode

@@ -33,6 +33,9 @@
 - `ADR-029`: installer использует script-first engine и отдельный локальный setup UI поверх него
 - `ADR-030`: `Device Registry` использует rotating refresh tokens и auth-state invalidation
 - `ADR-031`: `push` challenge всегда привязан к одному active device и не может подтверждаться другим device bearer
+- `ADR-032`: `push delivery` использует configurable provider adapter с `FCM-first` и logging fallback
+- `ADR-033`: top-level `webhooks` используют отдельный subscription outbox contour
+- `ADR-034`: pilot integrations сохраняют existing primary auth и добавляют step-up `MFA` только для sensitive operations
 
 ## Reading Path
 
@@ -68,6 +71,9 @@
 28. [[Decisions/ADR-029 - Installer Uses Script-First Engine and Separate Local Setup UI]]
 29. [[Decisions/ADR-030 - Device Registry Uses Rotating Refresh Tokens and Auth-State Invalidation]]
 30. [[Decisions/ADR-031 - Push Challenges Are Bound to a Single Active Device]]
+31. [[Decisions/ADR-032 - Push Delivery Uses Configurable Provider Adapter]]
+32. [[Decisions/ADR-033 - Top-Level Webhooks Use Subscription Outbox]]
+33. [[Decisions/ADR-034 - Pilot Integrations Keep Existing Primary Auth and Use Step-Up MFA]]
 
 Если задача относится к процессу и поддержанию контекста:
 

@@ -19,6 +19,7 @@ public sealed class DeviceAccessTokenRuntimeValidatorTests
         await store.RevokeDeviceAsync(
             seededDevice.Device.MarkBlocked(DateTimeOffset.UtcNow),
             DateTimeOffset.UtcNow,
+            sideEffects: null,
             CancellationToken.None);
 
         var validator = new DeviceAccessTokenRuntimeValidator(store);

@@ -44,6 +44,7 @@ public interface ITotpEnrollmentProvisioningStore
     Task<bool> RevokeAsync(
         Guid enrollmentId,
         DateTimeOffset revokedAt,
+        FactorRevocationSideEffects? sideEffects,
         CancellationToken cancellationToken);
 
     Task IncrementFailedConfirmationAttemptsAsync(

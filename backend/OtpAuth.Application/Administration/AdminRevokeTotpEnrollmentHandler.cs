@@ -44,9 +44,11 @@ public sealed class AdminRevokeTotpEnrollmentHandler
                 $"Enrollment '{enrollmentId}' is already revoked.");
         }
 
+        var revokedAtUtc = DateTimeOffset.UtcNow;
         var revoked = await _provisioningStore.RevokeAsync(
             enrollment.EnrollmentId,
-            DateTimeOffset.UtcNow,
+            revokedAtUtc,
+            FactorRevocationSideEffects.CreateForTotp(enrollment, revokedAtUtc),
             cancellationToken);
         if (!revoked)
         {
@@ -60,6 +62,7 @@ public sealed class AdminRevokeTotpEnrollmentHandler
             EnrollmentId = enrollment.EnrollmentId,
             Status = TotpEnrollmentStatus.Revoked,
             HasPendingReplacement = false,
+            RevokedAtUtc = revokedAtUtc,
         };
 
         await _auditWriter.WriteRevokedAsync(

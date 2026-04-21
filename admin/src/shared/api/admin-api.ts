@@ -1,12 +1,17 @@
 import { runtimeConfig } from "../config/runtime";
 import { isProblemDetails } from "../problem/problem-details";
 import type {
+  AdminDeliveryStatusListFilters,
+  AdminDeliveryStatusView,
   AdminSession,
+  AdminUserDeviceView,
   ConfirmEnrollmentRequest,
   ProblemDetails,
   StartEnrollmentRequest,
   TotpEnrollmentCommandResponse,
   TotpEnrollmentCurrent,
+  UpsertWebhookSubscriptionRequest,
+  WebhookSubscriptionView,
 } from "../types/admin-contracts";
 
 export class AdminApiError extends Error {
@@ -46,6 +51,54 @@ class AdminApiClient {
     return this.postJson<TotpEnrollmentCommandResponse>("/api/v1/admin/enrollments/totp", request);
   }
 
+  async listWebhookSubscriptions(tenantId: string, applicationClientId?: string): Promise<WebhookSubscriptionView[]> {
+    const query = applicationClientId?.trim()
+      ? `?applicationClientId=${encodeURIComponent(applicationClientId)}`
+      : "";
+    return this.requestJson<WebhookSubscriptionView[]>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/webhook-subscriptions${query}`,
+    );
+  }
+
+  async upsertWebhookSubscription(request: UpsertWebhookSubscriptionRequest): Promise<WebhookSubscriptionView> {
+    return this.postJson<WebhookSubscriptionView>("/api/v1/admin/webhook-subscriptions", request);
+  }
+
+  async listDeliveryStatuses(
+    tenantId: string,
+    filters: AdminDeliveryStatusListFilters = {},
+  ): Promise<AdminDeliveryStatusView[]> {
+    const queryParts: string[] = [];
+    const applicationClientId = filters.applicationClientId?.trim();
+
+    if (applicationClientId) {
+      queryParts.push(`applicationClientId=${encodeURIComponent(applicationClientId)}`);
+    }
+
+    if (filters.channel) {
+      queryParts.push(`channel=${encodeURIComponent(filters.channel)}`);
+    }
+
+    if (filters.status) {
+      queryParts.push(`status=${encodeURIComponent(filters.status)}`);
+    }
+
+    if (typeof filters.limit === "number") {
+      queryParts.push(`limit=${encodeURIComponent(filters.limit.toString())}`);
+    }
+
+    const suffix = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+    return this.requestJson<AdminDeliveryStatusView[]>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/delivery-statuses${suffix}`,
+    );
+  }
+
+  async listUserDevices(tenantId: string, externalUserId: string): Promise<AdminUserDeviceView[]> {
+    return this.requestJson<AdminUserDeviceView[]>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(externalUserId)}/devices`,
+    );
+  }
+
   async confirmEnrollment(enrollmentId: string, request: ConfirmEnrollmentRequest): Promise<TotpEnrollmentCommandResponse> {
     return this.postJson<TotpEnrollmentCommandResponse>(
       `/api/v1/admin/enrollments/totp/${encodeURIComponent(enrollmentId)}/confirm`,
@@ -62,6 +115,12 @@ class AdminApiClient {
   async revokeEnrollment(enrollmentId: string): Promise<TotpEnrollmentCommandResponse> {
     return this.postWithoutBody<TotpEnrollmentCommandResponse>(
       `/api/v1/admin/enrollments/totp/${encodeURIComponent(enrollmentId)}/revoke`,
+    );
+  }
+
+  async revokeUserDevice(tenantId: string, externalUserId: string, deviceId: string): Promise<AdminUserDeviceView> {
+    return this.postWithoutBody<AdminUserDeviceView>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(externalUserId)}/devices/${encodeURIComponent(deviceId)}/revoke`,
     );
   }
 

@@ -30,6 +30,8 @@
 - `OTP/Product/` — продуктовые заметки и мобильный контур
 - `OTP/Product/Android Push Runtime Plan.md` — канонический план и статус закрытия device-bound `push` runtime для `Android`
 - `OTP/Delivery/` — план внедрения и коробочная поставка
+- `OTP/Delivery/ProjectManager Pilot Integration Story.md` — канонический `Iteration 3 / Slice 3A` pilot story: `ProjectManager + Keycloak + step-up push approval` для `VCS instance` credentials
+- `OTP/Delivery/Ghostring Pilot Deployment Profile.md` — server-specific pilot deployment profile для внешнего rollout на `ghostring`: existing `nginx`, existing `dt-auth`, отдельный `Redis`, ограниченный resource envelope
 - `OTP/2FA/` — исторический набор исходных заметок по теме
 - `OTP/Sessions/` — краткие записи по сессиям
 
@@ -74,8 +76,14 @@
 - `admin/src/features/auth/useAdminSession.test.tsx` - regression test для session bootstrap: failed `getSession()` не должен запускать бесконечный retry loop после state update
 - `admin/src/features/enrollment-status/EnrollmentStatusCard.test.tsx` - component tests для sanitized current enrollment summary без provisioning artifacts
 - `admin/src/features/enrollment-workspace/EnrollmentPanels.test.tsx` - component tests для `start/confirm/replace/revoke` action panels и safety copy
+- `admin/src/features/webhook-subscriptions/WebhookSubscriptionPanels.test.tsx` - component tests для editor/list панелей webhook subscription management
+- `admin/src/features/delivery-statuses/DeliveryStatusPanels.test.tsx` - component tests для delivery filters, inventory selection и read-only detail rendering
+- `admin/src/features/user-devices/UserDevicePanels.test.tsx` - component tests для device lookup, inventory selection и destructive revoke confirmation только для `active` devices
 - `admin/test-support/totp-code.test.ts` - unit tests для `TOTP` helper-а, который генерирует/валидирует коды для scripted `Playwright` contour
 - `admin/e2e/admin-flow.spec.ts` - checked-in scripted browser regression для operator flow `login -> start -> confirm -> reload/load current -> replace -> confirm -> revoke -> logout`
+- `admin/e2e/admin-webhooks.spec.ts` - checked-in scripted browser regression для admin webhook subscription flow `load -> create -> edit -> deactivate`
+- `admin/e2e/admin-delivery-statuses.spec.ts` - checked-in browser regression для delivery observability workspace: `load -> filter -> inspect sanitized detail`
+- `admin/e2e/admin-devices.spec.ts` - checked-in browser regression для device support workspace: `load user devices -> inspect active device -> destructive confirm -> revoke`
 - `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpAccountDescriptorTest.kt` - unit tests для account metadata contract, canonical label и базовой validation
 - `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/OtpAuthUriParserTest.kt` - unit tests для `otpauth://` parsing, strict validation, UTF-8 label decoding и redacted credential string representation
 - `mobile/totp-domain/src/test/kotlin/ru/dt1520/security/authenticator/totp/domain/TotpSecretTest.kt` - unit tests для Base32 normalization, redacted secret handling и fail-closed invalid input path
@@ -106,26 +114,49 @@
 - `backend/OtpAuth.Worker.Tests/SecurityDataCleanupWorkerJobTests.cs` - unit tests для первого реального background job: sanitized cleanup metrics и interval validation
 - `backend/OtpAuth.Worker.Tests/RedisConnectionTargetTests.cs` - unit tests для safe parsing redis endpoint без утечки secret material
 - `backend/OtpAuth.Worker.Tests/PushChallengeDeliveryWorkerJobTests.cs` - unit tests для job `push_challenge_delivery`: sanitized metrics и options validation
+- `backend/OtpAuth.Worker.Tests/ChallengeCallbackDeliveryWorkerJobTests.cs` - unit tests для job `challenge_callback_delivery`: sanitized metrics и options validation
+- `backend/OtpAuth.Worker.Tests/WebhookEventDeliveryWorkerJobTests.cs` - unit tests для job `webhook_event_delivery`: sanitized metrics и options validation
 - `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceApiTests.cs` - endpoint-level tests для `Device Registry`: `activate`, `refresh`, `revoke`, replay blocking и scope boundary
 - `backend/OtpAuth.Infrastructure.Tests/Devices/RefreshDeviceTokenHandlerTests.cs` - unit tests для fail-closed refresh token reuse path с переводом устройства в `blocked`
 - `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceAccessTokenRuntimeValidatorTests.cs` - unit tests для device JWT runtime validation: claim mismatch, inactive device и `last_auth_state_changed_utc`
+- `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceWebhookEventFactoryTests.cs` - unit tests для top-level `device.*` webhook payload factory и lifecycle state mapping
+- `backend/OtpAuth.Infrastructure.Tests/Devices/DeviceLifecycleWebhookPublicationTests.cs` - handler-level tests для atomic fan-out top-level `device.activated|revoked|blocked` webhook-ов в in-memory subscription/outbox contour
 - `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDecisionHandlerTests.cs` - unit tests для device-bound `push approve/deny`: binding, `biometricVerified`, policy fallback, expired/not-found paths и sanitized audit
 - `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeApiTests.cs` - endpoint-level tests для `POST /api/v1/challenges/{id}/approve|deny` под `DeviceBearer`
 - `backend/OtpAuth.Infrastructure.Tests/Challenges/ListPendingPushChallengesForDeviceHandlerTests.cs` - unit tests для device-facing read contour `GET /api/v1/devices/me/challenges/pending`: scope boundary, filtering и ordering только active pending `push` challenges
-- `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDeliveryCoordinatorTests.cs` - unit tests для outbox-driven `push` delivery: `delivered`, `rescheduled`, `failed` без provider-specific transport
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDeliveryCoordinatorTests.cs` - unit tests для outbox-driven `push` delivery coordinator: `delivered`, `rescheduled`, `failed`, binding/device validation и store transitions
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/ConfiguredPushChallengeDeliveryGatewayTests.cs` - unit tests для runtime provider selection: configured provider dispatch и fail-closed path при missing registration
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/FcmPushChallengeDeliveryGatewayTests.cs` - unit tests для `FCM HTTP v1` gateway: bearer auth header, sanitized payload и retryable/non-retryable error mapping
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/PushChallengeDeliveryGatewayOptionsTests.cs` - unit tests для push provider config hardening: unknown provider и reject non-`service_account` credentials
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/ChallengeCallbackDeliveryCoordinatorTests.cs` - unit tests для outbox-driven `challenge callback` delivery: terminal-state validation, retry path и fail-closed mismatch handling
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/HttpChallengeCallbackDeliveryGatewayTests.cs` - unit tests для signed outbound `HTTPS` callback gateway: HMAC header, payload contract и retryable/non-retryable response mapping
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/ChallengeWebhookEventFactoryTests.cs` - unit tests для top-level `challenge.*` webhook payload factory и terminal-state mapping
+- `backend/OtpAuth.Infrastructure.Tests/Challenges/ChallengeTerminalWebhookPublicationTests.cs` - handler-level test для atomic fan-out top-level `challenge.approved` webhook в in-memory subscription/outbox contour
+- `backend/OtpAuth.Infrastructure.Tests/Webhooks/WebhookSubscriptionBootstrapServiceTests.cs` - unit tests для bootstrap registration path: HTTPS/private-network hardening и event type whitelist
+- `backend/OtpAuth.Infrastructure.Tests/Webhooks/HttpWebhookEventDeliveryGatewayTests.cs` - unit tests для signed outbound top-level webhook delivery: HMAC header и retryable/non-retryable mapping
+- `backend/OtpAuth.Infrastructure.Tests/Webhooks/WebhookEventDeliveryCoordinatorTests.cs` - unit tests для top-level webhook outbox coordinator: delivered/rescheduled/failed paths
+- `backend/OtpAuth.Infrastructure.Tests/Enrollments/FactorWebhookEventFactoryTests.cs` - unit tests для sanitized payload factory `factor.revoked`: `factorType=totp`, `subject.externalUserId` и отсутствие secret-bearing полей
 - `backend/OtpAuth.Infrastructure.Tests` - unit tests для `Policy`, `Challenge` handlers, persistence, bootstrap OAuth, `TOTP` crypto/verifier и `VerifyTotp` runtime protection
 - `backend/OtpAuth.Infrastructure.Tests/Enrollments/EnrollmentApiTests.cs` - endpoint-level tests для `TOTP` enrollment management через `WebApplicationFactory` и in-memory provisioning store
 - `backend/OtpAuth.Infrastructure.Tests/Administration/AdminAuthApiTests.cs` - endpoint-level tests для `admin auth contour`: `CSRF`, cookie session, login rate limit, logout и secure cookies
 - `backend/OtpAuth.Infrastructure.Tests/Administration/AdminLoginHandlerTests.cs` - unit tests для `AdminLoginHandler`, password verification и audit/rate-limit integration
 - `backend/OtpAuth.Infrastructure.Tests/Administration/AdminCurrentEnrollmentApiTests.cs` - endpoint-level tests для admin current enrollment read model: `401/403/404`, sanitized response и revoke metadata
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminListUserDevicesHandlerTests.cs` - unit tests для `Iteration 2 / Slice 2A`: admin device visibility handler, `devices.read` permission, trimmed `externalUserId` и not-found path
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminDeviceDataMapperTests.cs` - unit tests для admin device mapper: safe lifecycle metadata и fail-closed reject `pending` status
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminRevokeUserDeviceHandlerTests.cs` - unit tests для `Iteration 2 / Slice 2B`: admin revoke validation, `devices.write` boundary, fail-closed user binding и `409` для non-active states
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminDeviceApiTests.cs` - endpoint-level tests для admin device transport: `GET /devices`, `POST /devices/{deviceId}/revoke`, `401/403/400/404/409/200`, `CSRF`, sanitized payload и lifecycle side effects
 - `backend/OtpAuth.Infrastructure.Tests/Administration/GetCurrentTotpEnrollmentForAdminHandlerTests.cs` - unit tests для admin read model mapping и permission boundary
 - `backend/OtpAuth.Infrastructure.Tests/Administration/AdminApplicationClientResolverTests.cs` - unit tests для fail-closed resolution `applicationClientId` на admin contour
 - `backend/OtpAuth.Infrastructure.Tests/Administration/AdminEnrollmentCommandApiTests.cs` - endpoint-level tests для admin `start/confirm/replace/revoke`, `401/403/404/409`, `CSRF` и audit writes
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminWebhookSubscriptionApiTests.cs` - endpoint-level tests для admin webhook subscriptions: `401/403/400/409`, tenant/application filtering, `CSRF` и audit writes
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminListDeliveryStatusesHandlerTests.cs` - unit tests для unified admin delivery read model handler: permission boundary, tenant/application validation и filter request pass-through
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminDeliveryStatusApiTests.cs` - endpoint-level tests для read-only admin delivery status API: `401/403/400/404/200`, tenant/application/channel/status filters и transport-level destination sanitization
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminDeliveryStatusDataMapperTests.cs` - unit tests для unified delivery mapper: channel/status mapping и sanitization destination URL без `userinfo/query/fragment`
 - `backend/OtpAuth.Migrations` - migration runner для `PostgreSQL` (`inspect-signing-key-lifecycle`, `audit-signing-key-lifecycle`, `list-signing-key-lifecycle-audit-events`, `inspect-totp-protection-key-lifecycle`, `audit-totp-protection-key-lifecycle`, `list-totp-protection-key-lifecycle-audit-events`, `list-security-audit-events`, `ensure-database`, `migrate`, `seed-bootstrap-clients`, `seed-bootstrap-totp-enrollment`, `reencrypt-totp-secrets`, `cleanup-security-data`, `rotate-integration-client-secret`, `deactivate-integration-client`, `activate-integration-client`)
 
 Текущие entry points по коду:
 
-- `admin/src/app/App.tsx` - runtime `Admin UI MVP` shell: hero/meta chrome, session-aware routing между `LoginPanel` и enrollment workspace
+- `admin/src/app/App.tsx` - runtime `Admin UI` shell: hero/meta chrome, session-aware routing между `LoginPanel`, enrollment workspace и webhook subscription workspace
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/MainActivity.kt` - Android entry point; поднимает только app shell без domain/storage логики
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/AuthenticatorApp.kt` - composition root для mobile shell поверх `core:ui` и feature modules
 - `mobile/app/src/main/java/ru/dt1520/security/authenticator/app/deviceruntime/DeviceRuntimeSessionManager.kt` - app-side orchestration для persisted device session: installation identity, proactive/401-driven refresh, fail-closed invalidation и runtime pending sync
@@ -172,6 +203,8 @@
 - `admin/src/features/auth/useAdminSession.ts` - browser session bootstrap для cookie-backed `admin auth contour`, login/logout, error handling и single-attempt bootstrap без retry loop на failed session restore
 - `admin/src/features/auth/LoginPanel.tsx` - operator login form для `POST /api/v1/admin/auth/login`
 - `admin/src/features/enrollment-workspace/EnrollmentWorkspace.tsx` - основной runtime workspace для lookup/read/status и operator actions
+- `admin/src/features/webhook-subscriptions/WebhookSubscriptionWorkspace.tsx` - runtime workspace для tenant-scoped webhook subscription management
+- `admin/src/features/webhook-subscriptions/model/useWebhookSubscriptionWorkspace.ts` - orchestration state machine для `load/create/edit/deactivate` webhook subscriptions и fail-closed operator notices
 - `admin/src/features/enrollment-workspace/model/useEnrollmentWorkspace.ts` - orchestration state machine для `lookup/start/confirm/replace/revoke` и discard semantics provisioning artifact
 - `admin/src/shared/api/admin-api.ts` - frontend client для `/api/v1/admin/*` с `credentials: include`, CSRF bootstrap и typed request/response contracts
 - `admin/src/shared/problem/problem-messages.ts` - stable mapping backend `ProblemDetails` в UI copy для `401/403/404/409/422`
@@ -180,6 +213,7 @@
 - `backend/OtpAuth.Api/Endpoints/AdminAuthEndpoints.cs` - `GET /api/v1/admin/auth/csrf-token`, `POST /api/v1/admin/auth/login`, `POST /api/v1/admin/auth/logout`, `GET /api/v1/admin/auth/session`
 - `backend/OtpAuth.Api/Endpoints/AdminEnrollmentReadEndpoints.cs` - `GET /api/v1/admin/tenants/{tenantId}/users/{externalUserId}/enrollments/totp/current`
 - `backend/OtpAuth.Api/Endpoints/AdminEnrollmentCommandEndpoints.cs` - `POST /api/v1/admin/enrollments/totp`, `POST /api/v1/admin/enrollments/totp/{enrollmentId}/confirm|replace|revoke`
+- `backend/OtpAuth.Api/Endpoints/AdminWebhookSubscriptionEndpoints.cs` - `GET /api/v1/admin/tenants/{tenantId}/webhook-subscriptions` и `POST /api/v1/admin/webhook-subscriptions`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - `POST /oauth2/token` для bootstrap `client_credentials`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - `POST /oauth2/token`, `POST /oauth2/introspect`, `POST /oauth2/revoke`
 - `backend/OtpAuth.Api/Endpoints/ChallengesEndpoints.cs` - `POST /api/v1/challenges`, `GET /api/v1/challenges/{id}`, `POST /api/v1/challenges/{id}/verify-totp`, `POST /api/v1/challenges/{id}/verify-backup-code` и device-bound `POST /api/v1/challenges/{id}/approve|deny`
@@ -246,9 +280,12 @@
 - `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - integration-authenticated device lifecycle API (`activate`, `revoke`) и device-authenticated pending inbox read path `GET /api/v1/devices/me/challenges/pending`
 - `backend/OtpAuth.Api/Endpoints/AuthEndpoints.cs` - anonymous `POST /api/v1/auth/device-tokens/refresh` рядом с bootstrap OAuth endpoints
 - `backend/OtpAuth.Application/Devices/ActivateDeviceHandler.cs` - orchestrates one-time activation artifact validation, device record creation и initial token pair issuance
+- `backend/OtpAuth.Application/Devices/DeviceWebhookEventFactory.cs` - factory для top-level `device.*` webhook payload snapshots и lifecycle event mapping
+- `backend/OtpAuth.Application/Devices/DeviceLifecycleSideEffects.cs` - grouped side effect contract для device lifecycle state changes и top-level webhook publication
 - `backend/OtpAuth.Application/Devices/RefreshDeviceTokenHandler.cs` - hash-only rotating refresh flow с fail-closed replay detection и `blocked` transition
 - `backend/OtpAuth.Application/Devices/RevokeDeviceHandler.cs` - scoped revoke use case для device lifecycle и auth-state invalidation
 - `backend/OtpAuth.Infrastructure/Devices/PostgresDeviceRegistryStore.cs` - transaction-safe `PostgreSQL` store для `auth.devices`, `auth.device_refresh_tokens` и atomic activation/refresh/revoke mutations
+- `backend/OtpAuth.Infrastructure/Webhooks/PostgresWebhookEventPublicationWriter.cs` - shared `PostgreSQL` helper для fan-out top-level webhook deliveries из разных write-path-ов (`challenge` и `device`) без дублирования SQL
 - `backend/OtpAuth.Infrastructure/Devices/JwtDeviceAccessTokenIssuer.cs` - отдельный device JWT issuer поверх общей signing key infrastructure
 - `backend/OtpAuth.Infrastructure/Devices/DeviceAccessTokenRuntimeValidator.cs` - runtime validator для device bearer token с `status=active` и `iat >= last_auth_state_changed_utc`
 - `backend/OtpAuth.Infrastructure/Devices/DeviceLifecycleAuditWriter.cs` - sanitized append-only audit writer для `device.activated|token_refreshed|refresh_reuse_detected|revoked|blocked`
@@ -264,18 +301,61 @@
 - `backend/OtpAuth.Worker/IWorkerJob.cs` - общий контракт для scheduled background jobs с job-level diagnostics
 - `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJob.cs` - первый реальный background job worker-а для cleanup expired security data
 - `backend/OtpAuth.Worker/PushChallengeDeliveryWorkerJob.cs` - worker job для lease/retry/dispatch `push` challenge deliveries через `auth.push_challenge_deliveries`
+- `backend/OtpAuth.Application/Observability/DeliveryStatusMetricsSummary.cs` - shared summary contract для delivery observability baseline: `queued`, `delivered`, `failed`, `retrying`
+- `backend/OtpAuth.Infrastructure/Challenges/ChallengeCallbackDeliveryStore.cs` - `challenge_callback` store теперь умеет отдавать aggregated status summary для worker observability baseline
+- `backend/OtpAuth.Infrastructure/Webhooks/WebhookEventDeliveryStore.cs` - `webhook_event` store теперь умеет отдавать aggregated status summary для worker observability baseline
+- `backend/OtpAuth.Worker/ChallengeCallbackDeliveryWorkerJob.cs` - worker job теперь пишет sanitized metrics baseline/log summary для `challenge_callback` contour
+- `backend/OtpAuth.Worker/WebhookEventDeliveryWorkerJob.cs` - worker job теперь пишет sanitized metrics baseline/log summary для `webhook_event` contour
 - `backend/OtpAuth.Worker/PushChallengeDeliveryWorkerJobOptions.cs` - config contract для interval/batch/lease/retry/max attempts `push_challenge_delivery`
 - `backend/OtpAuth.Worker/PostgresSecurityDataCleanupRunner.cs` - isolated runner для cleanup use case без падения worker startup на отсутствующей DB-конфигурации
 - `backend/OtpAuth.Worker/SecurityDataCleanupWorkerJobOptions.cs` - config contract для scheduling job-а `security_data_cleanup`
 - `backend/OtpAuth.Application/Challenges/PushChallengeDeliveryCoordinator.cs` - application orchestration для фактической постановки `push` challenge на bound device через lease-able delivery store и gateway
+- `backend/OtpAuth.Application/Challenges/ChallengeCallbackDeliveryCoordinator.cs` - application coordinator для queued outbound challenge callbacks: reload challenge, validate terminal event binding и dispatch signed payload
+- `backend/OtpAuth.Application/Challenges/ChallengeWebhookEventFactory.cs` - factory для top-level `challenge.*` webhook payload snapshots и event type mapping
+- `backend/OtpAuth.Application/Challenges/ChallengeUpdateSideEffects.cs` - grouped side effects для terminal challenge state changes: per-request callback + top-level webhook publication
+- `backend/OtpAuth.Application/Webhooks/WebhookEventContracts.cs` - contracts для subscription model, webhook deliveries, bootstrap registration и generic event publication
+- `backend/OtpAuth.Application/Webhooks/WebhookEventDeliveryCoordinator.cs` - application coordinator для top-level webhook outbox dispatch без повторной загрузки domain state
+- `backend/OtpAuth.Application/Webhooks/WebhookSubscriptionBootstrapService.cs` - shared validation service для operational/admin list/upsert webhook subscriptions с fail-closed endpoint and event type checks
+- `backend/OtpAuth.Application/Administration/AdminDeliveryStatusReadModel.cs` - unified admin-facing contracts для recent delivery visibility: filters `tenant/application/channel/status`, sanitized view model и handler/store boundary
+- `backend/OtpAuth.Application/Administration/AdminListDeliveryStatusesHandler.cs` - admin read handler для `Iteration 1 / Slice 1A`: permission check, optional application client resolution и handoff в unified delivery store
+- `backend/OtpAuth.Application/Administration/AdminDeviceReadModel.cs` - admin-facing contracts для current/recent устройств пользователя: safe metadata only, `devices.read` boundary и read-model store contract
+- `backend/OtpAuth.Application/Administration/AdminListUserDevicesHandler.cs` - backend handler для `Iteration 2 / Slice 2A`: validation, `devices.read` permission и `404` при отсутствии device history
+- `backend/OtpAuth.Application/Administration/AdminRevokeUserDeviceHandler.cs` - backend command handler для `Iteration 2 / Slice 2B/2D`: `devices.write`, fail-closed `tenantId + externalUserId + deviceId` binding, existing `device.revoked` lifecycle/webhook side effects и отдельный `admin_device.revoked`
+- `backend/OtpAuth.Application/Administration/IAdminDeviceAuditWriter.cs` - contract для `Iteration 2 / Slice 2D`: admin-facing sanitized audit по operator device revoke action
+- `backend/OtpAuth.Application/Administration/AdminUserDeviceViewFactory.cs` - mapper из `RegisteredDevice` в operator-safe device view без secret-bearing metadata
+- `backend/OtpAuth.Api/Endpoints/AdminDeliveryStatusEndpoints.cs` - read-only admin transport для `Iteration 1 / Slice 1B`: `GET /api/v1/admin/tenants/{tenantId}/delivery-statuses`, stable `Problem` mapping и no-store response headers
+- `backend/OtpAuth.Api/Admin/AdminDeliveryStatusRequestMapper.cs` - HTTP filter/response mapper для admin delivery status API: parse `channel/status`, default `limit` и transport-level destination sanitization
+- `backend/OtpAuth.Api/Endpoints/AdminDeviceEndpoints.cs` - admin device transport для `Iteration 2 / Slice 2B`: `GET /api/v1/admin/tenants/{tenantId}/users/{externalUserId}/devices` и `POST .../devices/{deviceId}/revoke`, `CSRF`, no-store list responses и stable `Problem` mapping
+- `admin/src/features/user-devices/` - frontend workspace для `Iteration 2 / Slice 2C`: lookup по `tenantId + externalUserId`, inventory list current/recent устройств и detail/action panel с destructive revoke confirmation
+- `admin/src/shared/api/admin-api.ts` - typed admin client теперь также закрывает `listUserDevices` и `revokeUserDevice` для device support workspace
+- `backend/OtpAuth.Api/Admin/AdminDeviceRequestMapper.cs` - HTTP response mapper для operator-safe device list/revoke transport
+- `backend/OtpAuth.Infrastructure/Administration/AdminDeviceStore.cs` - `PostgreSQL` read-only store для admin device visibility: lookup по `tenant + externalUserId`, только `active|revoked|blocked`, ordering `current -> recent`
+- `backend/OtpAuth.Infrastructure/Administration/AdminDeviceAuditWriter.cs` - security audit writer для `Iteration 2 / Slice 2D`: пишет append-only `admin_device.revoked` без `installationId/deviceName/pushToken/publicKey`
+- `backend/OtpAuth.Infrastructure.Tests/Administration/AdminDeviceAuditWriterTests.cs` - unit tests для `Iteration 2 / Slice 2D`: sanitization payload и append-only metadata для `admin_device.revoked`
+- `admin/src/features/delivery-statuses/DeliveryStatusWorkspace.tsx` - operator workspace для `Iteration 1 / Slice 1C`: tenant/application filters, recent inventory и read-only detail panel поверх delivery status API
+- `admin/src/features/delivery-statuses/model/useDeliveryStatusWorkspace.ts` - client-side state contour для delivery visibility: permission gate, trimmed filters, limit validation, item selection и problem mapping
+- `backend/OtpAuth.Application/Administration/AdminListWebhookSubscriptionsHandler.cs` - admin read handler для tenant/application-scoped subscription inventory
+- `backend/OtpAuth.Application/Administration/AdminUpsertWebhookSubscriptionHandler.cs` - admin write handler для create/update/deactivate webhook subscriptions с fail-closed application client resolution
 - `backend/OtpAuth.Application/Challenges/ListPendingPushChallengesForDeviceHandler.cs` - device-facing read model для pending `push` challenges, already bound к authenticated device bearer
 - `backend/OtpAuth.Application/Challenges/PushChallengeDeliveryContracts.cs` - delivery contracts: queued delivery model, store/gateway interfaces и dispatch result
 - `backend/OtpAuth.Application/Devices/ListDevicesForRoutingHandler.cs` - integration support read path для active devices по `externalUserId` c optional `pushCapableOnly`
 - `backend/OtpAuth.Infrastructure/Challenges/PostgresChallengeRepository.cs` - теперь также умеет list pending `push` challenges по bound `target_device_id` для mobile runtime inbox
 - `backend/OtpAuth.Infrastructure/Challenges/PostgresPushChallengeDeliveryStore.cs` - `PostgreSQL` store для `auth.push_challenge_deliveries`: atomic lease/update status/retry metadata
-- `backend/OtpAuth.Infrastructure/Challenges/LoggingPushChallengeDeliveryGateway.cs` - текущий sanitized delivery gateway stub; не хранит и не логирует raw `pushToken`
+- `backend/OtpAuth.Infrastructure/Challenges/PushChallengeDeliveryServiceCollectionExtensions.cs` - единая регистрация push delivery contour для `Api` и `Worker`: provider options, selector, stores и coordinator
+- `backend/OtpAuth.Infrastructure/Challenges/PushChallengeDeliveryGatewayOptions.cs` - runtime config contract для provider selection и `FCM` settings validation
+- `backend/OtpAuth.Infrastructure/Challenges/ConfiguredPushChallengeDeliveryGateway.cs` - runtime selector для configured push provider поверх existing `IPushChallengeDeliveryGateway`
+- `backend/OtpAuth.Infrastructure/Challenges/LoggingPushChallengeDeliveryGateway.cs` - sanitized fallback provider для локальной отладки и профилей без внешнего push
+- `backend/OtpAuth.Infrastructure/Challenges/FcmPushChallengeDeliveryGateway.cs` - `FCM HTTP v1` adapter: bearer auth, sanitized payload, provider message id и retryable/non-retryable mapping
+- `backend/OtpAuth.Infrastructure/Challenges/GoogleCredentialFcmAccessTokenProvider.cs` - token provider для `FCM` service account credentials с scoped Google auth access token retrieval
+- `backend/OtpAuth.Infrastructure/Challenges/ChallengeCallbackDeliveryStore.cs` - `PostgreSQL` outbox store для `auth.challenge_callback_deliveries`: lease, reschedule, fail, delivered
+- `backend/OtpAuth.Infrastructure/Challenges/HttpChallengeCallbackDeliveryGateway.cs` - outbound `HTTPS` callback gateway: signed JSON payload, bounded timeout и retryable/non-retryable response mapping без логирования full callback URL
+- `backend/OtpAuth.Infrastructure/Webhooks/WebhookSubscriptionStore.cs` - bootstrap store для `auth.webhook_subscriptions` и `auth.webhook_subscription_event_types`
+- `backend/OtpAuth.Infrastructure/Webhooks/WebhookEventDeliveryStore.cs` - `PostgreSQL` outbox store для `auth.webhook_event_deliveries`: lease, reschedule, fail, delivered
+- `backend/OtpAuth.Infrastructure/Webhooks/HttpWebhookEventDeliveryGateway.cs` - outbound `HTTPS` gateway для top-level webhooks: signed JSON payload, bounded timeout и retryable/non-retryable response mapping
+- `backend/OtpAuth.Infrastructure/Webhooks/WebhookDeliveryGatewayOptions.cs` - runtime config contract для signing key, timeout и user agent top-level webhook delivery
 - `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` - теперь также публикует `GET /api/v1/devices` как support path для multi-device routing
 - `backend/OtpAuth.Migrations/Migrations/202604170004_CreatePushChallengeDeliveries.cs` - схема `auth.push_challenge_deliveries`
+- `backend/OtpAuth.Migrations/Migrations/202604200002_CreateWebhookSubscriptionsAndDeliveries.cs` - схемы `auth.webhook_subscriptions`, `auth.webhook_subscription_event_types` и `auth.webhook_event_deliveries`
 - `backend/OtpAuth.Infrastructure/Integrations/BootstrapSigningKeyRing.cs` - lifecycle-aware signing key ring для current/legacy keys с `RetireAtUtc` и fail-closed `kid` resolution
 - `backend/OtpAuth.Infrastructure/Integrations/BootstrapSigningKeyLifecycleReportFactory.cs` - sanitized report factory для signing key lifecycle inspection/audit
 - `backend/OtpAuth.Infrastructure/Integrations/SigningKeyLifecycleAuditService.cs` - запись и чтение append-only audit snapshots по signing key lifecycle
@@ -307,7 +387,8 @@
 - `backend/OtpAuth.Migrations/Migrations/202604150003_AddTotpEnrollmentReplacementColumns.cs` - pending replacement state для safe `TOTP` enrollment replace и отдельный replacement attempt counter
 - `backend/OtpAuth.Migrations/Migrations/202604150004_CreateAdminUsers.cs` - bootstrap schema для `auth.admin_users` и `auth.admin_user_permissions`
 - `backend/OtpAuth.Migrations/Migrations/202604150005_AddTotpEnrollmentRevokedAt.cs` - явный `revoked_utc` для operator/admin read model
-- `backend/OtpAuth.Migrations/Program.cs` - migration runner и operational commands: security audit, bootstrap clients, `list-admin-users`, `upsert-admin-user`
+- `backend/OtpAuth.Migrations/Migrations/202604200003_AddAdminDeviceLookupIndex.cs` - индекс под admin/support lookup current/recent устройств по `tenant + external_user + status`
+- `backend/OtpAuth.Migrations/Program.cs` - migration runner и operational commands: security audit, bootstrap clients, `list-admin-users`, `upsert-admin-user`, `list-webhook-subscriptions`, `upsert-webhook-subscription`
 - `backend/OtpAuth.Infrastructure/Persistence/SecurityDataCleanupService.cs` - retention cleanup для `challenge_attempts`, `totp_used_time_steps` и `revoked_integration_access_tokens`
 
 ## Последнее обновление
@@ -369,6 +450,21 @@
 - `2026-04-17`: карта дополнена реализованным runtime `Device Registry` slice: backend теперь публикует `activate/refresh/revoke`, хранит one-time activation artifacts в `auth.device_activation_codes`, rotate-ит hash-only refresh tokens в `auth.device_refresh_tokens`, блокирует устройство при refresh replay и покрыт dedicated unit + endpoint tests
 - `2026-04-17`: карта дополнена device-bound `push approve/deny` slice: challenge теперь хранит `target_device_id + approved_utc + denied_utc`, `CreateChallenge` auto-bind-ит `push` только при единственном active push-capable device, а backend публикует `approve/deny` под `DeviceBearer` с policy/binding checks и dedicated tests
 - `2026-04-17`: карта дополнена `push delivery + routing` slice: `CreateChallenge` теперь поддерживает explicit `targetDeviceId`, `GET /api/v1/devices` дает active routing candidates, `auth.push_challenge_deliveries` хранит queued delivery rows, а `OtpAuth.Worker` dispatch-ит их через job `push_challenge_delivery`
+- `2026-04-20`: карта дополнена внешним `challenge callback` slice: terminal state transitions теперь атомарно enqueue-ят `auth.challenge_callback_deliveries`, `OtpAuth.Worker` доставляет signed `HTTPS` callbacks через `challenge_callback_delivery`, а create-path дополнительно reject-ит localhost/private-IP callback literals
+- `2026-04-20`: карта дополнена configurable `push` gateway adapter: `logging` остается fallback provider, а новый `FCM HTTP v1` adapter использует service account `OAuth 2.0`, sanitized payload и retryable/non-retryable error mapping без изменения outbox contract
+- `2026-04-20`: карта дополнена расширением top-level `webhooks/events`: общий subscription/outbox contour теперь закрывает не только `challenge.approved|denied|expired`, но и `device.activated|revoked|blocked`; для этого добавлены `DeviceWebhookEventFactory`, `DeviceLifecycleSideEffects` и shared `PostgresWebhookEventPublicationWriter`
+- `2026-04-20`: карта дополнена `factor.revoked`: revoke `TOTP` enrollment-а теперь передает `FactorRevocationSideEffects` в provisioning store, `PostgresTotpEnrollmentProvisioningStore` атомарно queue-ит webhook row вместе с revoke update, а integration/admin API tests подтверждают fan-out через тот же subscription/outbox contour
+- `2026-04-20`: карта дополнена admin management slice для webhook subscriptions: появились `AdminWebhookSubscriptionEndpoints`, admin handlers/audit writer, frontend workspace в `admin/src/features/webhook-subscriptions`, endpoint/component/browser tests и обновленный `verify-backend`/`Playwright` verification contour
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 1 / Slice 1A`: появились unified `AdminDeliveryStatus*` contracts, `AdminListDeliveryStatusesHandler`, `PostgresAdminDeliveryStatusStore` и mapper c sanitization boundary для recent `challenge_callback` + `webhook_event` deliveries
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 1 / Slice 1B`: добавлены read-only admin delivery status endpoint, HTTP mapper/contracts и endpoint-level API tests для stable `Problem`/filter behavior
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 1 / Slice 1C`: `admin` получил новый feature `delivery-statuses` с filter panel, inventory list и read-only detail panel, а verification закрыта через `npm test`, `npm run build` и `npm run test:e2e`
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 1 / Slice 1D`: delivery stores теперь отдают aggregated `queued/delivered/failed/retrying` summary, а worker jobs публикуют этот baseline в heartbeat/job metrics и sanitized summary logs
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 2 / Slice 2A`: backend получил `AdminUserDevice*` read model, `AdminListUserDevicesHandler`, `PostgresAdminDeviceStore`, `devices.read` permission boundary и индекс для lookup по `tenant + externalUserId`
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 2 / Slice 2B`: backend получил admin device transport `GET /users/{externalUserId}/devices` + `POST /devices/{deviceId}/revoke`, `AdminRevokeUserDeviceHandler`, permissions `devices.read|write` и API/unit tests для `401/403/400/404/409/200`
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 2 / Slice 2C`: `admin` получил новый feature `user-devices` с lookup panel, inventory list, detail/action panel и checked-in browser regression для destructive revoke confirmation
+- `2026-04-20`: карта дополнена `MVP Closure Iteration Plan / Iteration 2 / Slice 2D`: operator revoke path теперь пишет `admin_device.revoked`, а tests фиксируют, что admin audit остается sanitized и не расходится с existing `device.revoked` lifecycle/webhook side effects
+- `2026-04-21`: карта дополнена `ProjectManager Pilot Integration Story` и `ADR-034`: canonical pilot теперь зафиксирован как `ProjectManager`, existing `Keycloak` остается primary auth, `externalUserId` равен `Keycloak sub`, а первая protected operation ограничена create/update `VCS instance` credentials
+- `2026-04-21`: карта дополнена `Ghostring Pilot Deployment Profile`: внешний сервер `ghostring` признан пригодным для pilot rollout при узком profile `api + worker + admin` через existing host `nginx`, existing `dt-auth` и отдельный `Redis`, без compose-managed `postgres`
 - `2026-04-17`: карта дополнена `Android Push Runtime` checkpoint note и завершенной `Iteration 1`: backend device contour теперь включает `GET /api/v1/devices/me/challenges/pending`, `PostgresChallengeRepository` умеет list pending bound challenges, а tests закрывают ordering/filtering/scope boundary
 - `2026-04-17`: карта дополнена завершенной `Iteration 2` `Android Push Runtime`: `mobile` получил новый модуль `:feature:push-approvals`, `AuthenticatorApp` wired к injected pending read-model/decision callbacks, а локальная проверка `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest` и `:app:assembleDebug` проходит
 - `2026-04-17`: карта дополнена завершенной `Iteration 3` `Android Push Runtime`: `mobile/security:storage` теперь хранит encrypted device session и installation identity, `mobile/app` получил `DeviceRuntimeSessionManager + HttpDeviceRuntimeTransport`, а локальная проверка `:security:storage:testDebugUnitTest`, `:feature:push-approvals:testDebugUnitTest`, `:app:testDebugUnitTest`, `:app:assembleDebug` и live MCP start-check на `emulator-5554` подтверждены

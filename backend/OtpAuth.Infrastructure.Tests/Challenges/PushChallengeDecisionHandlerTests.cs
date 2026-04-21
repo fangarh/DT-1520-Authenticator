@@ -45,6 +45,8 @@ public sealed class PushChallengeDecisionHandlerTests
         Assert.NotNull(result.Challenge.ApprovedUtc);
         Assert.Equal(ChallengeAttemptResults.Approved, Assert.Single(attempts.Attempts).Result);
         Assert.Contains(audit.Events, entry => entry == $"approved:{challenge.Id}:{device.Device.Id}:True");
+        var callbackDelivery = Assert.Single(repository.GetCallbackDeliveries());
+        Assert.Equal(ChallengeCallbackEventType.Approved, callbackDelivery.EventType);
     }
 
     [Fact]
@@ -171,6 +173,8 @@ public sealed class PushChallengeDecisionHandlerTests
         Assert.NotNull(result.Challenge.DeniedUtc);
         Assert.Equal(ChallengeAttemptResults.Denied, Assert.Single(attempts.Attempts).Result);
         Assert.Contains(audit.Events, entry => entry == $"denied:{challenge.Id}:{device.Device.Id}:True");
+        var callbackDelivery = Assert.Single(repository.GetCallbackDeliveries());
+        Assert.Equal(ChallengeCallbackEventType.Denied, callbackDelivery.EventType);
     }
 
     [Fact]
@@ -204,6 +208,8 @@ public sealed class PushChallengeDecisionHandlerTests
         Assert.NotNull(result.Challenge);
         Assert.Equal(ChallengeStatus.Expired, result.Challenge!.Status);
         Assert.Equal(ChallengeAttemptResults.Expired, Assert.Single(attempts.Attempts).Result);
+        var callbackDelivery = Assert.Single(repository.GetCallbackDeliveries());
+        Assert.Equal(ChallengeCallbackEventType.Expired, callbackDelivery.EventType);
     }
 
     private static (InMemoryDeviceRegistryStore Store, InMemoryDeviceRegistryStore.SeededDevice Device, Challenge Challenge) CreatePushChallengeSeed()

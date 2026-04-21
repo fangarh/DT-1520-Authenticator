@@ -2,6 +2,7 @@ using Dapper;
 using Npgsql;
 using OtpAuth.Application.Devices;
 using OtpAuth.Domain.Devices;
+using OtpAuth.Infrastructure.Webhooks;
 
 namespace OtpAuth.Infrastructure.Devices;
 
@@ -181,6 +182,7 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
         DeviceRefreshTokenRecord refreshToken,
         Guid activationCodeId,
         DateTimeOffset activatedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
         CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
@@ -285,6 +287,15 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
             transaction: transaction,
             cancellationToken: cancellationToken));
 
+        if (sideEffects?.WebhookEvent is not null)
+        {
+            await PostgresWebhookEventPublicationWriter.QueueAsync(
+                connection,
+                transaction,
+                sideEffects.WebhookEvent,
+                cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return true;
     }
@@ -372,7 +383,11 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
         return true;
     }
 
-    public async Task<bool> RevokeDeviceAsync(RegisteredDevice device, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken)
+    public async Task<bool> RevokeDeviceAsync(
+        RegisteredDevice device,
+        DateTimeOffset revokedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
+        CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -415,11 +430,24 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
             transaction: transaction,
             cancellationToken: cancellationToken));
 
+        if (sideEffects?.WebhookEvent is not null)
+        {
+            await PostgresWebhookEventPublicationWriter.QueueAsync(
+                connection,
+                transaction,
+                sideEffects.WebhookEvent,
+                cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
-    public async Task<bool> BlockDeviceAsync(RegisteredDevice device, DateTimeOffset blockedAtUtc, CancellationToken cancellationToken)
+    public async Task<bool> BlockDeviceAsync(
+        RegisteredDevice device,
+        DateTimeOffset blockedAtUtc,
+        DeviceLifecycleSideEffects? sideEffects,
+        CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -461,6 +489,15 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
             },
             transaction: transaction,
             cancellationToken: cancellationToken));
+
+        if (sideEffects?.WebhookEvent is not null)
+        {
+            await PostgresWebhookEventPublicationWriter.QueueAsync(
+                connection,
+                transaction,
+                sideEffects.WebhookEvent,
+                cancellationToken);
+        }
 
         await transaction.CommitAsync(cancellationToken);
         return true;

@@ -3,6 +3,7 @@ using OtpAuth.Application.Devices;
 using OtpAuth.Application.Integrations;
 using OtpAuth.Domain.Challenges;
 using OtpAuth.Domain.Policy;
+using System.Net;
 
 namespace OtpAuth.Application.Challenges;
 
@@ -159,6 +160,11 @@ public sealed class CreateChallengeHandler
             return "CallbackUrl must use HTTPS.";
         }
 
+        if (request.CallbackUrl is not null && IsDisallowedCallbackHost(request.CallbackUrl))
+        {
+            return "CallbackUrl must not target localhost or private network IP literals.";
+        }
+
         if (NormalizeOptional(request.CorrelationId)?.Length > 128)
         {
             return "CorrelationId must be 128 characters or fewer.";
@@ -265,6 +271,38 @@ public sealed class CreateChallengeHandler
         Span<byte> guidBytes = stackalloc byte[16];
         hash.AsSpan(0, 16).CopyTo(guidBytes);
         return new Guid(guidBytes);
+    }
+
+    private static bool IsDisallowedCallbackHost(Uri callbackUrl)
+    {
+        if (string.Equals(callbackUrl.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!IPAddress.TryParse(callbackUrl.Host, out var ipAddress))
+        {
+            return false;
+        }
+
+        if (IPAddress.IsLoopback(ipAddress))
+        {
+            return true;
+        }
+
+        if (ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            return ipAddress.IsIPv6LinkLocal ||
+                   ipAddress.IsIPv6SiteLocal ||
+                   ipAddress.GetAddressBytes() is [>= 0xfc and <= 0xfd, ..];
+        }
+
+        var bytes = ipAddress.GetAddressBytes();
+        return bytes is [10, ..] ||
+               bytes is [127, ..] ||
+               bytes is [172, >= 16 and <= 31, ..] ||
+               bytes is [192, 168, ..] ||
+               bytes is [169, 254, ..];
     }
 
     private sealed record PushDeviceResolution

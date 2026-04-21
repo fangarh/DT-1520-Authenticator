@@ -5,9 +5,12 @@
 Текущие артефакты:
 
 - `docker-compose.yml` - runtime contour `postgres + redis + api + worker + admin`
+- `docker-compose.ghostring.yml` - server-specific pilot profile для `ghostring` без локального `postgres` и с internal-only `admin`
 - `docker/` - Dockerfile для `api`, `worker`, `admin` и отдельного `bootstrap` image на базе `OtpAuth.Migrations`
 - `nginx/admin.conf` - HTTPS edge для `Admin UI` и reverse proxy на `api`
+- `nginx/admin.ghostring.ru.conf.example` - host-level `nginx` site template для `admin.ghostring.ru -> 127.0.0.1:18443`
 - `env/runtime.env.example` - пример install-time/runtime env contract без секретов в репозитории
+- `env/ghostring.runtime.env.example` - пример env contract для pilot rollout на `ghostring`
 - `scripts/install.ps1` - installer entry point с режимами `Install`, `Update`, `Recover`
 - `scripts/Installer.Contract.ps1` - machine-readable manifest/report contract для installer engine
 - `scripts/Installer.Diagnostics.ps1` - structured runtime diagnostics и troubleshooting hints для installer report
@@ -108,6 +111,27 @@ docker compose --env-file C:\secure\otpauth\runtime.env -f .\infra\docker-compos
 - подробный operational сценарий вынесен в `OTP/Delivery/Installer Operations Runbook.md`
 
 ## Validation
+
+## Ghostring Pilot Profile
+
+`ghostring` не должен использовать full default contour как black-box deploy. Для него подготовлен отдельный server-specific path:
+
+1. Скопировать `infra/env/ghostring.runtime.env.example` в host-level защищенный каталог вне репозитория.
+2. Подготовить internal TLS cert/key для контейнера `admin`.
+3. Поднять runtime:
+
+```powershell
+docker compose --env-file /opt/dt-1520-authenticator/runtime.env -f .\infra\docker-compose.ghostring.yml up -d redis api worker admin
+```
+
+4. При первом bootstrap/миграциях использовать тот же compose file и `bootstrap` profile:
+
+```powershell
+docker compose --env-file /opt/dt-1520-authenticator/runtime.env -f .\infra\docker-compose.ghostring.yml --profile bootstrap run --rm bootstrap ensure-database
+docker compose --env-file /opt/dt-1520-authenticator/runtime.env -f .\infra\docker-compose.ghostring.yml --profile bootstrap run --rm bootstrap migrate
+```
+
+5. Host-level reverse proxy брать из `infra/nginx/admin.ghostring.ru.conf.example`, а не из runtime `admin.conf`.
 
 Локальная contract-проверка:
 
