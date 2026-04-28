@@ -131,6 +131,17 @@ curl -iks https://admin.ghostring.ru:18443/api/v1/admin/auth/csrf-token
 
 Это не считается blocker-ом для pilot usage, но должно быть сохранено как post-bring-up hardening backlog.
 
+## Latest Runtime Alignment
+
+`2026-04-28` live alignment after ReferenceBackend gate diagnostics:
+
+- deployed backend token response fix for OAuth snake_case fields: `access_token`, `token_type`, `expires_in`, `scope`
+- rebuilt `api`, `worker` and `admin` images through `infra/docker-compose.ghostring.yml`
+- recreated `api`, `worker` and `admin`; `redis` remained running with its existing volume
+- internal and public `/health/api` checks returned `{"status":"ok","service":"OtpAuth.Api"}`
+- public `/oauth2/token` check for the live integration client returned `HTTP 200`, `token_type=Bearer`, `expires_in=3600` and scope `challenges:read challenges:write`; the access token was not printed
+- effective allowed scope probe showed the client still has `challenges:read challenges:write devices:write`; `devices:read` was not added and the ReferenceBackend gate should request only `challenges:read challenges:write`
+
 ## Practical meaning
 
 Server-side contour считается готовым для:

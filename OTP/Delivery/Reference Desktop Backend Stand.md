@@ -136,6 +136,7 @@ Required local-only values:
 
 Security constraints:
 
+- current gate scope is `challenges:read challenges:write`; do not request `devices:read` or another device-routing scope until the stand explicitly enables target-device selection.
 - `ReferenceBackend__CallbackUrl` must be external `HTTPS`, not `localhost`, private IP literal or credential-bearing URL.
 - desktop shell keeps only reference backend URL.
 - real secrets stay in environment variables or ignored local settings.
@@ -152,6 +153,15 @@ Security constraints:
 - `--preflight` returns not ready with missing `Dt1520Authenticator` and `ReferenceBackend` configuration issues.
 
 The live end-to-end flow is therefore blocked on supplying backend-only live configuration and an external HTTPS callback URL, not on Android availability.
+
+## Latest Ghostring Runtime Alignment
+
+`2026-04-28` runtime alignment work:
+
+- `OtpAuth.Api` token response contract now explicitly serializes OAuth fields as `access_token`, `token_type`, `expires_in` and `scope`.
+- `ReferenceBackend` sample configuration and runbook now request only `challenges:read challenges:write` for the current gate.
+- Targeted backend contract test `IssueIntegrationTokenResponseTests` passes in a `.NET 10` Docker SDK container.
+- Ghostring public token check returns `HTTP 200`, `token_type=Bearer`, `expires_in=3600` and granted scope `challenges:read challenges:write` without printing the access token.
 
 ## Related notes
 
