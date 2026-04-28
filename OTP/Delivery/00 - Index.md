@@ -23,6 +23,7 @@
 - [[Admin Client Management Iteration Plan]]
 - [[Admin Client Management Context Reset Prompt]]
 - [[QR Device Onboarding Follow-Up]]
+- [[QR Device Onboarding Runtime URL Follow-Up]]
 - [[Official Dotnet Integration SDK]]
 - [[Official Dotnet Integration SDK Context Reset Prompt]]
 - [[Reference Desktop Backend Stand]]

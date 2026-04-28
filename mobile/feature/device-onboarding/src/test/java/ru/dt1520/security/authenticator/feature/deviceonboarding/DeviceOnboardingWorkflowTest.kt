@@ -15,6 +15,27 @@ class DeviceOnboardingWorkflowTest {
         )
 
         assertEquals(VALID_PAYLOAD, state.acceptedPayload?.value)
+        assertNull(state.acceptedPayload?.runtimeBaseUrl)
+        assertEquals("QR payload готов к активации.", state.successMessage)
+        assertNull(state.errorMessage)
+    }
+
+    @Test
+    fun acceptScannedEnvelopeStoresRuntimeUrlAndActivationPayload() {
+        val state = DeviceOnboardingWorkflow.acceptScannedPayload(
+            DeviceOnboardingWorkflowState(),
+            """
+            {
+              "v": 1,
+              "runtimeBaseUrl": "https://admin.ghostring.ru:18443",
+              "activationPayload": "$VALID_PAYLOAD"
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(VALID_PAYLOAD, state.acceptedPayload?.activationPayload)
+        assertEquals("https://admin.ghostring.ru:18443", state.acceptedPayload?.runtimeBaseUrl)
+        assertEquals(VALID_PAYLOAD, state.draftPayload)
         assertEquals("QR payload готов к активации.", state.successMessage)
         assertNull(state.errorMessage)
     }

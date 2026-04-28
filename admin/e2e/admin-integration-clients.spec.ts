@@ -5,7 +5,7 @@ const tenantId = "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb";
 const applicationClientId = "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4";
 
 test("operator can load and create integration client with one-time secret display", async ({ page }) => {
-  await installAdminApiFixture(page);
+  await installAdminApiFixture(page, { includeTenantPermissions: false });
 
   const clientId = `playwright-client-${Date.now()}`;
 
@@ -48,7 +48,7 @@ test("operator can load and create integration client with one-time secret displ
 });
 
 test("operator can run integration client lifecycle actions", async ({ page }) => {
-  await installAdminApiFixture(page);
+  await installAdminApiFixture(page, { includeTenantPermissions: false });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Open workspace" }).click();

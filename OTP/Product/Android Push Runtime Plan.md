@@ -38,6 +38,15 @@ Accepted working guideline
 - Найденные и закрытые mobile runtime gaps: network calls перенесены с main thread в `DeviceRuntimeSessionManager` через `Dispatchers.IO`, `MainActivity` переведена на `FragmentActivity` для реального `BiometricPrompt`, а runtime base URL передается явно из `BuildConfig`.
 - Добавлен debug-only helper `PilotDeviceActivationActivity` под `mobile/app/src/debug` для controlled pilot activation/pending checks; это не production onboarding UX.
 
+## QR runtime URL follow-up on `2026-04-28`
+
+- Admin UI QR теперь кодирует v1 envelope `{ v, runtimeBaseUrl, activationPayload }`, где `runtimeBaseUrl` является public routing metadata, а `activationPayload` остается one-time credential-like material.
+- Android parser принимает v1 envelope и legacy raw `dac_...`; runtime URL validation fail-closed допускает только `https`, non-empty host и no embedded credentials/userinfo.
+- Android activation wiring использует QR `runtimeBaseUrl` при наличии. Legacy raw `dac_...` временно использует `BuildConfig.DEVICE_RUNTIME_BASE_URL`; если fallback отсутствует, activation fail-closed сообщает, что QR не содержит runtime адрес.
+- После успешной активации `runtimeBaseUrl` сохраняется в encrypted device session storage и используется после app restart для refresh/pending/approve/deny, поэтому productized QR onboarding больше не требует сборки APK с `-PdeviceRuntimeBaseUrl`.
+- Legacy raw `dac_...` QR без runtime URL остается временным compatibility path и по-прежнему требует explicit build-config fallback.
+- Documentation handoff закрыт отдельно: полный live proof `QR -> Android activation -> pending push -> approve/deny` откладывается до финального integrated gate после callback URL policy и tenant-centric admin итераций.
+
 ## Scope текущего трека
 
 Входит:

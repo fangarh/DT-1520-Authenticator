@@ -20,6 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import ru.dt1520.security.authenticator.BuildConfig
+import ru.dt1520.security.authenticator.app.deviceonboarding.DeviceOnboardingRuntimeTarget
+import ru.dt1520.security.authenticator.app.deviceonboarding.resolveDefaultDeviceRuntimeBaseUrl
+import ru.dt1520.security.authenticator.app.deviceonboarding.resolveDeviceOnboardingRuntimeTarget
 import ru.dt1520.security.authenticator.app.deviceonboarding.rememberDeviceOnboardingQrScanner
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeSessionManager
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeTransportException
@@ -64,19 +67,40 @@ internal fun AuthenticatorApp(
     val secureStore = secureStoreOverride ?: remember(context) {
         AndroidKeystoreSecureTotpSecretStore.create(context)
     }
-    val defaultDeviceRuntimeManager = remember(context, deviceRuntimeBaseUrl) {
-        deviceRuntimeBaseUrl?.let { baseUrl ->
+    val deviceSessionStore = remember(context) {
+        AndroidKeystoreSecureDeviceSessionStore.create(context)
+    }
+    var persistedDeviceRuntimeBaseUrl by remember {
+        mutableStateOf<String?>(null)
+    }
+    LaunchedEffect(deviceSessionStore) {
+        persistedDeviceRuntimeBaseUrl = runCatching {
+            deviceSessionStore.readSession()?.runtimeBaseUrl
+        }.getOrNull()
+    }
+    val effectiveDeviceRuntimeBaseUrl = resolveDefaultDeviceRuntimeBaseUrl(
+        configuredBaseUrl = deviceRuntimeBaseUrl,
+        persistedBaseUrl = persistedDeviceRuntimeBaseUrl
+    )
+    val deviceRuntimeManagerFactory: (String) -> DeviceRuntimeSessionManager = remember(deviceSessionStore) {
+        { baseUrl ->
             DeviceRuntimeSessionManager(
-                sessionStore = AndroidKeystoreSecureDeviceSessionStore.create(context),
-                transport = HttpDeviceRuntimeTransport(baseUrl)
+                sessionStore = deviceSessionStore,
+                transport = HttpDeviceRuntimeTransport(baseUrl),
+                runtimeBaseUrl = baseUrl
             )
+        }
+    }
+    val defaultDeviceRuntimeManager = remember(deviceRuntimeManagerFactory, effectiveDeviceRuntimeBaseUrl) {
+        effectiveDeviceRuntimeBaseUrl?.let { baseUrl ->
+            deviceRuntimeManagerFactory(baseUrl)
         }
     }
     val deviceRuntimeManager = deviceRuntimeManagerOverride ?: defaultDeviceRuntimeManager
     val pushApprovalsRuntimeInteractor = rememberPushApprovalsRuntimeInteractor(
         deviceRuntimeManagerOverride = deviceRuntimeManager,
         pushApprovalDecisionCoordinatorOverride = pushApprovalDecisionCoordinatorOverride,
-        deviceRuntimeBaseUrl = deviceRuntimeBaseUrl,
+        deviceRuntimeBaseUrl = effectiveDeviceRuntimeBaseUrl,
         onApprovePushChallenge = onApprovePushChallenge,
         onDenyPushChallenge = onDenyPushChallenge
     )
@@ -84,29 +108,43 @@ internal fun AuthenticatorApp(
     val scanDeviceOnboardingQrPayload = onScanDeviceOnboardingQrPayload ?: defaultQrScanner
     val activateDeviceOnboardingPayload: suspend (DeviceOnboardingPayload) -> DeviceOnboardingActivationResult =
         onActivateDeviceOnboardingPayload ?: { payload ->
-        val runtimeManager = deviceRuntimeManager
-        if (runtimeManager == null) {
-            DeviceOnboardingActivationResult.Failure(
-                userMessage = "Runtime адрес не настроен. Проверьте сборку приложения."
+            val runtimeTarget = resolveDeviceOnboardingRuntimeTarget(
+                payload = payload,
+                configuredBaseUrl = deviceRuntimeBaseUrl
             )
-        } else {
-            runCatching {
-                runtimeManager.activateWithOnboardingPayload(
-                    activationPayload = payload.value,
-                    deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device"
+            val runtimeManager = deviceRuntimeManagerOverride ?: when (runtimeTarget) {
+                is DeviceOnboardingRuntimeTarget.QrEnvelope -> deviceRuntimeManagerFactory(runtimeTarget.baseUrl)
+                DeviceOnboardingRuntimeTarget.ConfiguredFallback -> defaultDeviceRuntimeManager
+                DeviceOnboardingRuntimeTarget.Missing -> null
+            }
+            val activationRuntimeBaseUrl = when (runtimeTarget) {
+                is DeviceOnboardingRuntimeTarget.QrEnvelope -> runtimeTarget.baseUrl
+                DeviceOnboardingRuntimeTarget.ConfiguredFallback -> deviceRuntimeBaseUrl
+                DeviceOnboardingRuntimeTarget.Missing -> null
+            }
+            if (runtimeManager == null) {
+                DeviceOnboardingActivationResult.Failure(
+                    userMessage = "QR не содержит runtime адрес. Отсканируйте QR, созданный в актуальной админ-панели."
                 )
-            }.fold(
-                onSuccess = { deviceId ->
-                    DeviceOnboardingActivationResult.Success(deviceId)
-                },
-                onFailure = { exception ->
-                    DeviceOnboardingActivationResult.Failure(
-                        userMessage = exception.toDeviceOnboardingStatusMessage()
+            } else {
+                runCatching {
+                    runtimeManager.activateWithOnboardingPayload(
+                        activationPayload = payload.activationPayload,
+                        deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device"
                     )
-                }
-            )
+                }.fold(
+                    onSuccess = { deviceId ->
+                        persistedDeviceRuntimeBaseUrl = activationRuntimeBaseUrl ?: persistedDeviceRuntimeBaseUrl
+                        DeviceOnboardingActivationResult.Success(deviceId)
+                    },
+                    onFailure = { exception ->
+                        DeviceOnboardingActivationResult.Failure(
+                            userMessage = exception.toDeviceOnboardingStatusMessage()
+                        )
+                    }
+                )
+            }
         }
-    }
     var storedSecrets by remember {
         mutableStateOf<List<StoredTotpSecret>>(emptyList())
     }

@@ -4,7 +4,7 @@ import { installAdminApiFixture } from "./support/admin-api-fixture";
 const tenantId = "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb";
 
 test("operator can load user devices and revoke the active device", async ({ page }) => {
-  await installAdminApiFixture(page);
+  await installAdminApiFixture(page, { includeTenantPermissions: false });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Open workspace" }).click();

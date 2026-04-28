@@ -192,6 +192,92 @@ describe("adminApi", () => {
     );
   });
 
+  it("loads tenant directory list and encoded detail path", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tenant: { tenantId: "tenant/with space" }, applications: [], integrationClients: [] }), { status: 200 }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adminApi.listTenants();
+    await adminApi.getTenantDirectory("tenant/with space");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/admin/tenants");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/v1/admin/tenants/tenant%2Fwith%20space/directory",
+    );
+  });
+
+  it("loads runtime configuration without csrf token", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        callbackUrlPolicy: {
+          mode: "PrivateNetwork",
+          allowInsecureHttp: false,
+        },
+      }), { status: 200 }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adminApi.getRuntimeConfiguration();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/admin/runtime-configuration");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      credentials: "include",
+    });
+  });
+
+  it("sends tenant create and quick-create commands with csrf token", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ requestToken: "csrf-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tenantId: "tenant-id" }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ requestToken: "csrf-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        directory: { tenant: { tenantId: "tenant-id" }, applications: [], integrationClients: [] },
+        client: { clientId: "client-id" },
+        clientSecret: "one-time-secret",
+      }), { status: 201 }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adminApi.createTenant({
+      tenantId: "tenant-id",
+      displayName: "Migration Tenant",
+      slug: "migration-tenant",
+      status: "test",
+    });
+    await adminApi.quickCreateTenant({
+      tenantDisplayName: "Example Tenant",
+      applicationDisplayName: "Project Manager",
+      integrationClientDisplayName: "Backend API",
+      allowedScopes: ["challenges:read"],
+    });
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/admin/tenants");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": "csrf-token",
+      },
+      body: JSON.stringify({
+        tenantId: "tenant-id",
+        displayName: "Migration Tenant",
+        slug: "migration-tenant",
+        status: "test",
+      }),
+    });
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/v1/admin/tenants/quick-create");
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": "csrf-token",
+      },
+    });
+  });
+
   it("sends integration client create command with csrf token", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({ requestToken: "csrf-token" }), { status: 200 }))

@@ -1,0 +1,31 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.active {
+  color: #0f5e35;
+  background: rgba(31, 130, 78, 0.12);
+}
+
+.disabled {
+  color: #67503a;
+  background: rgba(150, 113, 63, 0.16);
+}
+
+.archived {
+  color: #535b69;
+  background: rgba(83, 91, 105, 0.14);
+}
+
+.test {
+  color: #14506f;
+  background: rgba(34, 123, 166, 0.14);
+}

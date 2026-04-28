@@ -34,7 +34,7 @@ export const quickStartCommands = [
   "cd .\\backend",
   "powershell -ExecutionPolicy Bypass -File .\\scripts\\initialize-postgres.ps1",
   "$env:OTPAUTH_ADMIN_PASSWORD = '<set-a-strong-password>'",
-  "dotnet run --project .\\OtpAuth.Migrations\\OtpAuth.Migrations.csproj -- upsert-admin-user operator enrollments.read enrollments.write webhooks.read webhooks.write devices.read devices.write integration-clients.read integration-clients.write",
+  "dotnet run --project .\\OtpAuth.Migrations\\OtpAuth.Migrations.csproj -- upsert-admin-user operator enrollments.read tenants.write tenants.read enrollments.write webhooks.read webhooks.write devices.read devices.write integration-clients.read integration-clients.write",
   "cd ..\\admin",
   "npm install",
   "npm run build",
@@ -101,7 +101,7 @@ export const sections: DocumentationSection[] = [
   {
     id: "admin",
     title: "Admin UI",
-    lead: "Admin panel покрывает enrollment, integration client onboarding, QR device onboarding, webhook subscriptions, delivery visibility и user device support.",
+    lead: "Admin panel покрывает tenant directory, selected-tenant management, enrollment, integration client onboarding, QR device onboarding, webhook subscriptions, delivery visibility и user device support.",
     items: [
       {
         label: "Session",
@@ -109,7 +109,7 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Permissions",
-        detail: "Кодовый source of truth: enrollments.read/write, webhooks.read/write, devices.read/write, integration-clients.read/write в AdminPermissions.cs.",
+        detail: "Кодовый source of truth: tenants.read/write, enrollments.read/write, webhooks.read/write, devices.read/write, integration-clients.read/write в AdminPermissions.cs.",
       },
       {
         label: "Secrets",
@@ -117,7 +117,15 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Client onboarding",
-        detail: "Operator flow: выдать права integration-clients.read/write, открыть Integration clients, создать client с whitelisted scopes, один раз передать generated secret внешней системе, затем управлять scopes/rotation/status из detail panel.",
+        detail: "Operator flow: tenant-centric setup starts with tenants.read/write quick create, then generated API client secret is handed to the external backend once and lifecycle stays under integration-clients.read/write.",
+      },
+      {
+        label: "Tenant management",
+        detail: "Selected tenant page is the primary operator path: API client lifecycle, user devices, QR issue, runtime callback policy and reports work without copying tenant/application IDs between blocks.",
+      },
+      {
+        label: "Reports",
+        detail: "Tenant reports summarize recent delivery status, callback/webhook health, selected-user devices, QR artifact statuses and last approval/device activity markers without exposing payloads or tokens.",
       },
       {
         label: "QR device onboarding",
@@ -140,11 +148,11 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Device onboarding",
-        detail: "feature:device-onboarding сканирует opaque activation payload из Admin UI QR flow и активирует устройство без integration secret/token в приложении.",
+        detail: "feature:device-onboarding сканирует v1 QR envelope с runtimeBaseUrl и one-time activationPayload; legacy dac payload остается временным fallback.",
       },
       {
         label: "QR activation",
-        detail: "Основной app UI запускает CameraX + ML Kit QR scanner; успешная активация вызывает /api/v1/devices/activate-onboarding и сохраняет device session в secure storage.",
+        detail: "Основной app UI запускает CameraX + ML Kit QR scanner; успешная активация вызывает /api/v1/devices/activate-onboarding через QR runtime URL, затем хранит runtime URL в encrypted device session для refresh/pending/approve/deny после restart.",
       },
       {
         label: "Pilot helper",
@@ -167,7 +175,7 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Callbacks",
-        detail: "Challenge callbacks и webhooks подписываются X-OTPAuth-Signature; delivery details в admin UI sanitized.",
+        detail: "Challenge callbacks и webhooks подписываются X-OTPAuth-Signature; callback URL policy явно настроена как PublicInternet, PrivateNetwork или LocalDevelopment, а delivery details в admin UI sanitized.",
       },
       {
         label: "Audit",
@@ -175,7 +183,7 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Device onboarding",
-        detail: "Activation payload возвращается только один раз при create, не хранится plaintext, не появляется в list/read path, не содержит trusted tenant/user claims и блокируется через consume, TTL или revoke.",
+        detail: "Activation payload возвращается только один раз при create, не хранится plaintext, не появляется в list/read path, не содержит trusted tenant/user claims и блокируется через consume, TTL или revoke; QR runtimeBaseUrl является public routing metadata и хранится на Android только в encrypted device session.",
       },
     ],
   },
@@ -217,7 +225,7 @@ export const sections: DocumentationSection[] = [
   {
     id: "roadmap",
     title: "SDK и reference stand",
-    lead: "lib/ уже содержит официальный .NET SDK workspace с typed Client APIs; rdb_stand/ теперь содержит воспроизводимый Reference Desktop + Backend scaffold и live wiring runbook.",
+    lead: "lib/ уже содержит официальный .NET SDK workspace с typed Client APIs; rdb_stand/ теперь содержит воспроизводимый Reference Desktop + Backend scaffold, WPF demo shell и live wiring runbook.",
     items: [
       {
         label: "NuGet SDK",
@@ -233,7 +241,11 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Reference stand",
-        detail: "rdb_stand/ содержит ASP.NET Core reference backend, console desktop shell, sanitized --preflight/live-readiness checks, live env-var runbook и tests для start challenge, signed callback, callback URL hardening, status polling и online TOTP fallback.",
+        detail: "rdb_stand/ содержит ASP.NET Core reference backend, console desktop shell, WPF MVVM demo shell с encrypted local MVP settings, sanitized --preflight/live-readiness checks, live env-var runbook и tests для start challenge, signed callback, callback URL policy, status polling и online TOTP fallback.",
+      },
+      {
+        label: "WPF demo storage",
+        detail: "DesktopWpfTest сохраняет demo/live wiring form values в encrypted JSON под LocalAppData, но это не production secret store; TOTP code остается transient UI input и не сохраняется.",
       },
       {
         label: "Limitations",
@@ -266,6 +278,20 @@ export const workflows: Workflow[] = [
     audit: "Read-only workspace, replay/retry actions отсутствуют.",
   },
   {
+    title: "Tenant directory",
+    permission: "tenants.read + tenants.write",
+    path: "admin/src/features/tenant-directory + /api/v1/admin/tenants",
+    steps: ["List tenants", "Inspect tenant directory", "Manual create", "Quick create tenant + application + API client"],
+    audit: "admin_tenant.* пишет sanitized metadata без client_secret/client_secret_hash.",
+  },
+  {
+    title: "Tenant management",
+    permission: "tenants.read + integration-clients.* + devices.* + webhooks.read",
+    path: "admin/src/features/tenant-management",
+    steps: ["Open selected tenant", "Manage API clients", "Load selected-user devices", "Issue QR", "Read runtime policy", "Refresh report snapshot"],
+    audit: "Uses existing sanitized admin read/command paths; no client_secret/client_secret_hash/pushToken/raw callback payload/QR payload persistence.",
+  },
+  {
     title: "Integration clients",
     permission: "integration-clients.read + integration-clients.write",
     path: "admin/src/features/integration-clients + /api/v1/admin/.../integration-clients",
@@ -292,7 +318,9 @@ export const troubleshooting = [
   "CSRF/login за reverse proxy: проверь ReverseProxy__Enabled и trusted OTPAUTH_RUNTIME_NETWORK_CIDR.",
   "Worker unhealthy: смотри sanitized heartbeat /tmp/otpauth-worker/heartbeat.json и docker compose ps.",
   "Webhook/callback delivery failed: проверяй HTTPS endpoint, signature secret и Admin Delivery Statuses.",
+  "Callback URL rejected: проверь active policy в /api/v1/admin/runtime-configuration; PublicInternet strict, PrivateNetwork для closed contours, LocalDevelopment только для local/demo.",
   "Integration client не получает token после rotation/deactivate: проверь статус client-а, назначенные scopes и что внешняя система использует последний one-time secret.",
+  "Operator не видит tenant directory: проверь наличие tenants.read/write у admin user через list-admin-users.",
   "Operator не видит Integration clients: проверь наличие integration-clients.read/write у admin user через list-admin-users.",
   "Operator не видит QR onboarding workspace: проверь devices.read/write и что браузерный flow использует /api/v1/admin/device-onboarding-artifacts.",
   "SDK callback validation падает: проверь, что backend передает helper-у original HttpRequest.Body bytes до reserialization и использует актуальный callback signing secret.",

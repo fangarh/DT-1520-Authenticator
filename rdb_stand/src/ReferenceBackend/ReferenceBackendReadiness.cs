@@ -14,6 +14,10 @@ public sealed record ReferenceBackendReadiness
 
     public required Uri? CallbackUrl { get; init; }
 
+    public required string CallbackUrlPolicyMode { get; init; }
+
+    public required bool AllowInsecureCallbackHttp { get; init; }
+
     public required IReadOnlyCollection<string> ConfigurationIssues { get; init; }
 }
 
@@ -25,6 +29,7 @@ public sealed class ReferenceBackendReadinessReporter(
     public ReferenceBackendReadiness GetReadiness()
     {
         var issues = _options.Validate();
+        ReferenceCallbackUrlPolicy.TryCreateFromOptions(_options, out var policy, out _);
 
         return new ReferenceBackendReadiness
         {
@@ -33,6 +38,8 @@ public sealed class ReferenceBackendReadinessReporter(
             HasApplicationClientId = _options.ApplicationClientId != Guid.Empty,
             HasCallbackUrl = _options.CallbackUrl is not null,
             CallbackUrl = _options.CallbackUrl,
+            CallbackUrlPolicyMode = policy.ModeName,
+            AllowInsecureCallbackHttp = policy.AllowInsecureHttp,
             ConfigurationIssues = issues,
         };
     }

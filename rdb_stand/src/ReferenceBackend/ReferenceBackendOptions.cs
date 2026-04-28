@@ -1,6 +1,4 @@
 using Microsoft.Extensions.Options;
-using System.Net;
-using System.Net.Sockets;
 
 namespace Dt1520.Authenticator.ReferenceBackend;
 
@@ -11,6 +9,10 @@ public sealed class ReferenceBackendOptions
     public Guid ApplicationClientId { get; init; }
 
     public Uri? CallbackUrl { get; init; }
+
+    public string CallbackUrlPolicyMode { get; init; } = nameof(ReferenceCallbackUrlPolicyMode.PublicInternet);
+
+    public bool AllowInsecureCallbackHttp { get; init; }
 
     public TimeSpan DefaultOperationTtl { get; init; } = TimeSpan.FromMinutes(5);
 
@@ -34,7 +36,14 @@ public sealed class ReferenceBackendOptions
         }
         else
         {
-            AddCallbackUrlFailures(CallbackUrl, failures);
+            if (!ReferenceCallbackUrlPolicy.TryCreateFromOptions(this, out var policy, out var policyFailure))
+            {
+                failures.Add(policyFailure!);
+            }
+            else if (policy.Validate(CallbackUrl) is string callbackUrlFailure)
+            {
+                failures.Add(callbackUrlFailure);
+            }
         }
 
         if (DefaultOperationTtl <= TimeSpan.Zero)
@@ -45,43 +54,6 @@ public sealed class ReferenceBackendOptions
         return failures;
     }
 
-    private static void AddCallbackUrlFailures(Uri callbackUrl, List<string> failures)
-    {
-        if (callbackUrl.Scheme != Uri.UriSchemeHttps)
-        {
-            failures.Add("CallbackUrl must use HTTPS.");
-        }
-
-        if (!string.IsNullOrEmpty(callbackUrl.UserInfo))
-        {
-            failures.Add("CallbackUrl must not contain embedded credentials.");
-        }
-
-        if (string.Equals(callbackUrl.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-            || IPAddress.TryParse(callbackUrl.Host, out var address) && IsPrivateOrLoopback(address))
-        {
-            failures.Add("CallbackUrl must be externally reachable and must not use localhost or private IP literals.");
-        }
-    }
-
-    private static bool IsPrivateOrLoopback(IPAddress address)
-    {
-        if (IPAddress.IsLoopback(address))
-        {
-            return true;
-        }
-
-        if (address.AddressFamily == AddressFamily.InterNetwork)
-        {
-            var bytes = address.GetAddressBytes();
-            return bytes[0] == 10
-                || bytes[0] == 172 && bytes[1] is >= 16 and <= 31
-                || bytes[0] == 192 && bytes[1] == 168
-                || bytes[0] == 169 && bytes[1] == 254;
-        }
-
-        return address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.IsIPv6UniqueLocal;
-    }
 }
 
 public sealed class ReferenceBackendOptionsValidator : IValidateOptions<ReferenceBackendOptions>

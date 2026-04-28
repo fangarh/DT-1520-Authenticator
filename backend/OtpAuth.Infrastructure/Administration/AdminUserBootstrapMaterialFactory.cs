@@ -12,6 +12,8 @@ public sealed class AdminUserBootstrapMaterialFactory
         AdminPermissions.EnrollmentsWrite,
         AdminPermissions.IntegrationClientsRead,
         AdminPermissions.IntegrationClientsWrite,
+        AdminPermissions.TenantsRead,
+        AdminPermissions.TenantsWrite,
         AdminPermissions.WebhooksRead,
         AdminPermissions.WebhooksWrite,
     ];

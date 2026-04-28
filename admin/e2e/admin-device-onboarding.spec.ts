@@ -5,7 +5,7 @@ const tenantId = "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb";
 const applicationClientId = "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4";
 
 test("operator can create QR onboarding artifact and revoke pending artifact", async ({ page }) => {
-  await installAdminApiFixture(page);
+  await installAdminApiFixture(page, { includeTenantPermissions: false });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Open workspace" }).click();
@@ -28,7 +28,9 @@ test("operator can create QR onboarding artifact and revoke pending artifact", a
   await createPanel.getByRole("button", { name: "Create QR" }).click();
 
   await expect(page.getByText("QR artifact created")).toBeVisible();
-  const createdPayload = await page.locator("code").filter({ hasText: "fixture-activation-payload-" }).innerText();
+  const createdPayload = await page.locator("code").filter({ hasText: `dac_` }).innerText();
+  const runtimeBaseUrl = new URL(page.url()).origin;
+  await expect(page.getByText(`Runtime: ${runtimeBaseUrl}`)).toBeVisible();
   await expect(page.getByLabel("One-time device activation QR")).toBeVisible();
   expect(await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")).toBe(true);
 

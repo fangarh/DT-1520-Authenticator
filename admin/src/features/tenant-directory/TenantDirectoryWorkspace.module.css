@@ -1,0 +1,22 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 1fr);
+  gap: 24px;
+}
+
+.primaryColumn {
+  display: grid;
+  gap: 18px;
+}
+
+.secondaryColumn {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+@media (max-width: 1120px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

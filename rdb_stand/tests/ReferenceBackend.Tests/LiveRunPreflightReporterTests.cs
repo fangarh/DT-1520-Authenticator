@@ -40,6 +40,8 @@ public sealed class LiveRunPreflightReporterTests
         Assert.True(report.IsReadyForBackendStart);
         Assert.Equal("admin.ghostring.ru", report.Dt1520BaseUrlHost);
         Assert.Equal("reference.example.test", report.CallbackUrlHost);
+        Assert.Equal("PublicInternet", report.CallbackUrlPolicyMode);
+        Assert.False(report.AllowInsecureCallbackHttp);
         Assert.DoesNotContain("secret-one", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("callback-secret", serialized, StringComparison.Ordinal);
     }

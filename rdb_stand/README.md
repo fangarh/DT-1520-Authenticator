@@ -10,7 +10,9 @@ The first scaffold slice is implemented:
 - The solution includes local SDK projects from `../lib/src` so Visual Studio restore can resolve stand `ProjectReference` dependencies without unloaded-project `NU1105` errors.
 - `src/ReferenceBackend` is a minimal ASP.NET Core backend that consumes the local SDK projects.
 - `src/DesktopShell` is a console desktop shell that talks only to the reference backend.
+- `src/DesktopWpfTest` is a WPF MVVM demo/test shell for visual approval and online `TOTP` fallback checks.
 - `tests/ReferenceBackend.Tests` covers challenge start, signed callback validation, status polling state and online `TOTP` fallback.
+- `tests/DesktopWpfTest.Tests` covers encrypted local demo settings, backend HTTP calls and view-model state changes.
 - `src/ReferenceBackend/appsettings.Development.example.json` documents live wiring without storing real secrets.
 
 Verification:
@@ -79,7 +81,9 @@ Runtime configuration is split between backend-owned `Dt1520Authenticator` SDK s
   "ReferenceBackend": {
     "TenantId": "00000000-0000-0000-0000-000000000000",
     "ApplicationClientId": "00000000-0000-0000-0000-000000000000",
-    "CallbackUrl": "https://reference-backend.example.test/api/reference/callbacks/dt1520"
+    "CallbackUrl": "https://reference-backend.example.test/api/reference/callbacks/dt1520",
+    "CallbackUrlPolicyMode": "PublicInternet",
+    "AllowInsecureCallbackHttp": false
   }
 }
 ```
@@ -92,7 +96,8 @@ The reference backend must be reachable by DT-1520 for signed challenge callback
 
 - run `ReferenceBackend` on `127.0.0.1`;
 - expose it through a temporary HTTPS tunnel or a controlled reverse proxy;
-- set `ReferenceBackend:CallbackUrl` to the externally reachable HTTPS callback URL ending in `/api/reference/callbacks/dt1520`;
+- set `ReferenceBackend:CallbackUrl` to the callback URL ending in `/api/reference/callbacks/dt1520`;
+- keep `ReferenceBackend:CallbackUrlPolicyMode=PublicInternet` for public live runs; use `PrivateNetwork` for closed HTTPS contours and `LocalDevelopment` only for local HTTP callback tests;
 - keep `Dt1520Authenticator:ClientSecret` and `Dt1520Authenticator:CallbackSigningSecret` in environment variables or a local untracked settings file.
 
 PowerShell environment example:
@@ -108,6 +113,7 @@ $env:Dt1520Authenticator__Scope = "challenges:read challenges:write devices:read
 $env:ReferenceBackend__TenantId = "<tenant-guid>"
 $env:ReferenceBackend__ApplicationClientId = "<application-client-guid>"
 $env:ReferenceBackend__CallbackUrl = "https://<public-https-host>/api/reference/callbacks/dt1520"
+$env:ReferenceBackend__CallbackUrlPolicyMode = "PublicInternet"
 dotnet run --project .\src\ReferenceBackend\ReferenceBackend.csproj
 ```
 
@@ -127,11 +133,19 @@ $env:RDB_BACKEND_BASE_URL = "http://127.0.0.1:5188/"
 dotnet run --project .\src\DesktopShell\DesktopShell.csproj
 ```
 
+WPF demo shell:
+
+```powershell
+dotnet run --project .\src\DesktopWpfTest\DesktopWpfTest.csproj
+```
+
+`DesktopWpfTest` stores demo form values in `%LOCALAPPDATA%\DT-1520\DesktopWpfTest\settings.demo.json` as encrypted JSON. The encryption is intentionally simple local MVP/demo protection, not a production secret store. `TOTP` codes are transient UI input and are never saved.
+
 Live run checklist:
 
 1. Create or select an active integration client in Admin UI with `challenges:read`, `challenges:write` and `devices:read`.
 2. Use Admin UI QR device onboarding to activate an Android device for the target `externalUserId`.
-3. Start `ReferenceBackend` with backend-only DT-1520 credentials and a public HTTPS callback URL.
+3. Start `ReferenceBackend` with backend-only DT-1520 credentials, callback URL and explicit callback URL policy.
 4. Start `DesktopShell`, enter the same `externalUserId`, then approve or deny the pending push in Android.
 5. Repeat once with TOTP fallback: press Enter in `DesktopShell`, enter the Android-generated TOTP code, and confirm centralized verify succeeds.
 6. Capture latency timestamps from the status response for desktop submit, backend challenge request, challenge creation, callback/TOTP submission and terminal state.
@@ -146,6 +160,13 @@ The desktop shell currently:
 - offer TOTP fallback by sending the user-entered code to the backend;
 - never hold DT-1520 integration credentials, bearer tokens, callback signing secrets or direct DT-1520 base URL configuration.
 
+The WPF test shell currently:
+
+- uses an MVVM split between XAML, view models, HTTP services, models and storage;
+- saves demo/live wiring form values to encrypted JSON for faster repeated MVP checks;
+- clearly keeps `TOTP` code as transient input and clears it after fallback submission;
+- calls only the reference backend for start, status and `TOTP` fallback operations.
+
 ## Android Scope
 
 The Android app should:
@@ -158,9 +179,9 @@ The Android app should:
 ## First Verification Gate
 
 - backend unit tests for challenge start, callback validation, status polling and TOTP fallback are in place;
-- desktop shell is console-based, so no Playwright/browser verification is required for this slice;
+- WPF shell is a Windows desktop harness, so no Playwright/browser verification is required for this slice;
 - SDK consumption uses local project references to the prerelease SDK projects in `lib/src`;
-- security review: desktop has only reference backend URL, backend owns DT-1520 secrets, callback validation uses raw request body bytes, and non-approved outcomes do not commit;
+- security review: default desktop boundary still keeps DT-1520 secrets backend-owned; WPF local encrypted JSON is MVP/demo-only, avoids plaintext test secrets, does not persist `TOTP` codes, callback validation uses raw request body bytes, and non-approved outcomes do not commit;
 - live wiring runbook and sanitized readiness endpoint are in place;
 - `--preflight` is available for secret-safe config checks before starting the web host;
 - next live slice should execute the runbook against real DT-1520 config, QR-activated Android device and running backend/worker/mobile runtime.

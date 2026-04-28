@@ -29,6 +29,8 @@ The suite verifies:
 - safe `replace -> confirm`
 - `revoke`
 - one-time artifact visibility and no `localStorage` persistence
+- tenant directory list/detail, quick create and manual create
+- selected tenant management tabs for API clients, users/devices, runtime policy and reports
 - integration client list/create with one-time secret display
 - integration client lifecycle actions: rotate secret, update scopes, deactivate and reactivate
 - QR device onboarding list/create/revoke with one-time activation payload display
@@ -57,6 +59,40 @@ Runtime behavior:
 - state-changing calls use the shared admin API client and fetch a fresh `CSRF` token
 
 Secrets must not be copied into issue trackers, screenshots, fixture snapshots, browser storage or audit payloads.
+
+## Tenant directory operator flow
+
+The `Tenant directory` workspace is the primary setup entry for tenant-centric onboarding.
+
+Required admin permissions:
+
+- `tenants.read` for list/detail
+- `tenants.write` for quick create and manual create
+
+Runtime behavior:
+
+- quick create generates tenant, application and initial API client IDs server-side
+- quick create returns the initial `clientSecret` exactly once in the current UI state
+- manual create supports advanced migration/demo tenants without returning any secret
+- discard, reload and follow-up commands clear one-time client secrets from browser state
+- state-changing calls use the shared admin API client and fetch a fresh `CSRF` token
+
+Tenant directory read models must not show `client_secret`, `client_secret_hash` or activation payloads.
+
+## Tenant management operator flow
+
+The `Tenant management` workspace opens from a selected tenant directory record and keeps daily actions under that tenant context.
+
+Runtime behavior:
+
+- API client create, rotate, scope update, deactivate and reactivate use the selected tenant/client context
+- selected-user device lookup, device revoke and QR issue use the selected tenant/application/user context
+- runtime configuration shows callback policy metadata only, without callback URLs or secrets
+- reports summarize existing delivery/device read models and do not include raw callback payloads, push tokens or QR activation payloads
+- reports now include a selected-tenant snapshot over recent deliveries, callback/webhook health, selected-user device counts, recent QR artifact statuses and last approval/device activity markers
+- one-time client secrets and QR activation payloads remain current-session only and are cleared by discard/follow-up secret-bearing commands
+
+This workspace is the primary operator path after tenant quick create; the older copy-paste workspaces are fallback-only for admin sessions that do not have tenant permissions.
 
 ## QR device onboarding operator flow
 

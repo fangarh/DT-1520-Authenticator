@@ -1,9 +1,8 @@
-using OtpAuth.Application.Policy;
 using OtpAuth.Application.Devices;
 using OtpAuth.Application.Integrations;
+using OtpAuth.Application.Policy;
 using OtpAuth.Domain.Challenges;
 using OtpAuth.Domain.Policy;
-using System.Net;
 
 namespace OtpAuth.Application.Challenges;
 
@@ -14,15 +13,18 @@ public sealed class CreateChallengeHandler
     private readonly IChallengeRepository _challengeRepository;
     private readonly IDeviceRegistryStore _deviceRegistryStore;
     private readonly IPolicyEvaluator _policyEvaluator;
+    private readonly ChallengeCallbackUrlPolicy _callbackUrlPolicy;
 
     public CreateChallengeHandler(
         IChallengeRepository challengeRepository,
         IDeviceRegistryStore deviceRegistryStore,
-        IPolicyEvaluator policyEvaluator)
+        IPolicyEvaluator policyEvaluator,
+        ChallengeCallbackUrlPolicy callbackUrlPolicy)
     {
         _challengeRepository = challengeRepository;
         _deviceRegistryStore = deviceRegistryStore;
         _policyEvaluator = policyEvaluator;
+        _callbackUrlPolicy = callbackUrlPolicy;
     }
 
     public async Task<CreateChallengeResult> HandleAsync(
@@ -30,7 +32,7 @@ public sealed class CreateChallengeHandler
         IntegrationClientContext clientContext,
         CancellationToken cancellationToken)
     {
-        var validationError = Validate(request);
+        var validationError = Validate(request, _callbackUrlPolicy);
         if (validationError is not null)
         {
             return CreateChallengeResult.Failure(CreateChallengeErrorCode.ValidationFailed, validationError);
@@ -133,7 +135,7 @@ public sealed class CreateChallengeHandler
         return CreateChallengeResult.Success(challenge);
     }
 
-    private static string? Validate(CreateChallengeRequest request)
+    private static string? Validate(CreateChallengeRequest request, ChallengeCallbackUrlPolicy callbackUrlPolicy)
     {
         if (request.TenantId == Guid.Empty)
         {
@@ -155,14 +157,13 @@ public sealed class CreateChallengeHandler
             return $"OperationType '{request.OperationType}' is not supported for challenge creation.";
         }
 
-        if (request.CallbackUrl is not null && request.CallbackUrl.Scheme != Uri.UriSchemeHttps)
+        if (request.CallbackUrl is not null)
         {
-            return "CallbackUrl must use HTTPS.";
-        }
-
-        if (request.CallbackUrl is not null && IsDisallowedCallbackHost(request.CallbackUrl))
-        {
-            return "CallbackUrl must not target localhost or private network IP literals.";
+            var callbackUrlDecision = callbackUrlPolicy.Validate(request.CallbackUrl);
+            if (!callbackUrlDecision.IsValid)
+            {
+                return callbackUrlDecision.ErrorMessage;
+            }
         }
 
         if (NormalizeOptional(request.CorrelationId)?.Length > 128)
@@ -271,38 +272,6 @@ public sealed class CreateChallengeHandler
         Span<byte> guidBytes = stackalloc byte[16];
         hash.AsSpan(0, 16).CopyTo(guidBytes);
         return new Guid(guidBytes);
-    }
-
-    private static bool IsDisallowedCallbackHost(Uri callbackUrl)
-    {
-        if (string.Equals(callbackUrl.Host, "localhost", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (!IPAddress.TryParse(callbackUrl.Host, out var ipAddress))
-        {
-            return false;
-        }
-
-        if (IPAddress.IsLoopback(ipAddress))
-        {
-            return true;
-        }
-
-        if (ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-        {
-            return ipAddress.IsIPv6LinkLocal ||
-                   ipAddress.IsIPv6SiteLocal ||
-                   ipAddress.GetAddressBytes() is [>= 0xfc and <= 0xfd, ..];
-        }
-
-        var bytes = ipAddress.GetAddressBytes();
-        return bytes is [10, ..] ||
-               bytes is [127, ..] ||
-               bytes is [172, >= 16 and <= 31, ..] ||
-               bytes is [192, 168, ..] ||
-               bytes is [169, 254, ..];
     }
 
     private sealed record PushDeviceResolution

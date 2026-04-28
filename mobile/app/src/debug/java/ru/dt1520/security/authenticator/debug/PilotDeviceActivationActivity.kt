@@ -46,7 +46,8 @@ class PilotDeviceActivationActivity : ComponentActivity() {
 
         val manager = DeviceRuntimeSessionManager(
             sessionStore = AndroidKeystoreSecureDeviceSessionStore.create(this@PilotDeviceActivationActivity),
-            transport = HttpDeviceRuntimeTransport(baseUrl)
+            transport = HttpDeviceRuntimeTransport(baseUrl),
+            runtimeBaseUrl = baseUrl
         )
 
         manager.activate(
@@ -63,7 +64,8 @@ class PilotDeviceActivationActivity : ComponentActivity() {
         val baseUrl = requiredExtra("baseUrl")
         val manager = DeviceRuntimeSessionManager(
             sessionStore = AndroidKeystoreSecureDeviceSessionStore.create(this@PilotDeviceActivationActivity),
-            transport = HttpDeviceRuntimeTransport(baseUrl)
+            transport = HttpDeviceRuntimeTransport(baseUrl),
+            runtimeBaseUrl = baseUrl
         )
 
         val pending = manager.listPendingPushApprovals()

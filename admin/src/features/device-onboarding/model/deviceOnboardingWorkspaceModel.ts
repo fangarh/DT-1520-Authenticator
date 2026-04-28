@@ -32,6 +32,7 @@ export interface CreateDraft {
 export interface OneTimeActivationPayload {
   activationCodeId: string;
   activationPayload: string;
+  runtimeBaseUrl: string;
   expiresAtUtc: string;
 }
 

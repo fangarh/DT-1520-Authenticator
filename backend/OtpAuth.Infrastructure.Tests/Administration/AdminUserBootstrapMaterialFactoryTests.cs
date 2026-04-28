@@ -19,6 +19,8 @@ public sealed class AdminUserBootstrapMaterialFactoryTests
                 AdminPermissions.DevicesWrite,
                 AdminPermissions.IntegrationClientsRead,
                 AdminPermissions.IntegrationClientsWrite,
+                AdminPermissions.TenantsRead,
+                AdminPermissions.TenantsWrite,
                 AdminPermissions.EnrollmentsRead,
                 AdminPermissions.EnrollmentsRead,
             ]);
@@ -32,6 +34,8 @@ public sealed class AdminUserBootstrapMaterialFactoryTests
                 AdminPermissions.EnrollmentsWrite,
                 AdminPermissions.IntegrationClientsRead,
                 AdminPermissions.IntegrationClientsWrite,
+                AdminPermissions.TenantsRead,
+                AdminPermissions.TenantsWrite,
             ],
             material.Permissions);
         Assert.DoesNotContain("super-secret-123", material.PasswordHash, StringComparison.Ordinal);

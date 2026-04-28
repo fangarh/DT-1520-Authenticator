@@ -147,7 +147,8 @@ internal fun rememberPushApprovalsRuntimeInteractor(
         deviceRuntimeBaseUrl?.let { baseUrl ->
             DeviceRuntimeSessionManager(
                 sessionStore = AndroidKeystoreSecureDeviceSessionStore.create(context),
-                transport = HttpDeviceRuntimeTransport(baseUrl)
+                transport = HttpDeviceRuntimeTransport(baseUrl),
+                runtimeBaseUrl = baseUrl
             )
         }
     }

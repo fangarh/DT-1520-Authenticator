@@ -236,6 +236,25 @@ Security behavior:
 - legacy `TOTP` protection key versions should remain in runtime only until re-encryption backlog reaches zero
 - `TOTP` protection key lifecycle events are stored in the unified append-only trail `auth.security_audit_events`
 
+## Tenant directory operations
+
+Runtime admin API now has the backend contract for tenant-centric operator workflows:
+
+- `GET /api/v1/admin/tenants` requires `tenants.read`
+- `GET /api/v1/admin/tenants/{tenantId}/directory` requires `tenants.read`
+- `POST /api/v1/admin/tenants` requires `tenants.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/admin/tenants/quick-create` requires `tenants.write` and `X-CSRF-TOKEN`
+- manual tenant create supports advanced migration/demo/recovery cases with explicit `tenantId`, display name, slug and status
+- quick create accepts display names and creates tenant, first application and initial integration client with server-generated IDs
+- quick create generates the plaintext integration `clientSecret` server-side and returns it only in the `201 Created` response
+
+Security behavior:
+
+- tenant/application read models expose only display/status/count metadata
+- integration client directory responses reuse the sanitized admin integration client view and never return `client_secret_hash`
+- quick create rejects operator-provided `clientSecret`/`client_secret` payload fields and unsupported scopes
+- tenant creation events write sanitized `admin_tenant.*` audit metadata without client secrets
+
 ## Integration client lifecycle operations
 
 Runtime admin API now supports operator-safe read, creation and lifecycle flows for integration clients:
@@ -252,6 +271,22 @@ Runtime admin API now supports operator-safe read, creation and lifecycle flows 
 - admin scope update accepts only whitelisted supported scopes and invalidates already issued access tokens through persisted auth state
 
 CLI lifecycle commands remain the operational fallback for bootstrap/recovery work.
+
+## Challenge callback URL policy
+
+`POST /api/v1/challenges` validates optional `callback.url` through explicit runtime policy:
+
+- `ChallengeCallbackUrlPolicy__Mode=PublicInternet` is the default strict production mode.
+- `ChallengeCallbackUrlPolicy__Mode=PrivateNetwork` allows private DNS/private IP HTTPS callbacks for closed/on-prem contours.
+- `ChallengeCallbackUrlPolicy__Mode=LocalDevelopment` allows local HTTP callback URLs for local/demo/reference stand work only.
+- `ChallengeCallbackUrlPolicy__AllowInsecureHttp=true` relaxes HTTP only for private-network routing when the mode is `PrivateNetwork`; production default remains `false`.
+
+Security behavior:
+
+- all modes reject embedded credentials/userinfo, URL fragments and root-only callback paths
+- `PublicInternet` rejects `localhost`, loopback and private IP literals
+- validation errors mention the active policy but do not echo the rejected URL
+- authenticated admins can read the active mode via `GET /api/v1/admin/runtime-configuration`; the response contains policy metadata only, not callback URLs or secrets
 
 ## Device onboarding artifacts
 
@@ -378,6 +413,8 @@ curl.exe -X POST http://localhost:5143/oauth2/token ^
   -d "grant_type=client_credentials&client_id=otpauth-crm&client_secret=$env:OTPAUTH_BOOTSTRAP_CLIENT_SECRET&scope=challenges:read challenges:write"
 ```
 
+Successful token responses use OAuth-compatible JSON field names: `access_token`, `token_type`, `expires_in` and `scope`.
+
 Note: if the client secret contains `+`, `/` or `=`, URL-encode it when sending `application/x-www-form-urlencoded`.
 
 ## Admin UI bootstrap for local development
@@ -401,6 +438,8 @@ Supported bootstrap permissions:
 - `enrollments.write`
 - `integration-clients.read`
 - `integration-clients.write`
+- `tenants.read`
+- `tenants.write`
 - `webhooks.read`
 - `webhooks.write`
 
@@ -419,7 +458,7 @@ For full operator lifecycle work during local productization, include all curren
 cd .\backend
 $env:ConnectionStrings__Postgres = 'Host=...;Port=5432;Database=...;Username=...;Password=...;SSL Mode=Disable'
 $env:OTPAUTH_ADMIN_PASSWORD = '<set-a-strong-password>'
-dotnet run --project .\OtpAuth.Migrations\OtpAuth.Migrations.csproj -- upsert-admin-user operator enrollments.read enrollments.write webhooks.read webhooks.write devices.read devices.write integration-clients.read integration-clients.write
+dotnet run --project .\OtpAuth.Migrations\OtpAuth.Migrations.csproj -- upsert-admin-user operator enrollments.read enrollments.write webhooks.read webhooks.write devices.read devices.write integration-clients.read integration-clients.write tenants.read tenants.write
 ```
 
 ```powershell

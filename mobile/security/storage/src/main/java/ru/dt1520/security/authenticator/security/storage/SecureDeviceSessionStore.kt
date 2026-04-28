@@ -1,5 +1,6 @@
 package ru.dt1520.security.authenticator.security.storage
 
+import java.net.URI
 import java.util.UUID
 
 data class StoredDeviceInstallation(
@@ -18,7 +19,8 @@ data class StoredDeviceSession(
     val refreshToken: String,
     val tokenType: String,
     val scope: String,
-    val accessTokenExpiresAtEpochSeconds: Long
+    val accessTokenExpiresAtEpochSeconds: Long,
+    val runtimeBaseUrl: String? = null
 ) {
     init {
         require(accessToken.isNotBlank()) {
@@ -36,6 +38,20 @@ data class StoredDeviceSession(
         require(accessTokenExpiresAtEpochSeconds > 0) {
             "accessTokenExpiresAtEpochSeconds must be positive."
         }
+        runtimeBaseUrl?.let { value ->
+            requireSafeDeviceRuntimeBaseUrl(value)
+        }
+    }
+}
+
+internal fun requireSafeDeviceRuntimeBaseUrl(value: String) {
+    require(value.isNotBlank()) {
+        "runtimeBaseUrl must not be blank when present."
+    }
+
+    val uri = runCatching { URI(value) }.getOrNull()
+    require(uri?.rawUserInfo == null) {
+        "runtimeBaseUrl must not contain credentials."
     }
 }
 

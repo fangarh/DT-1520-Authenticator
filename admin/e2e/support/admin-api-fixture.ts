@@ -7,13 +7,18 @@ import {
   createSeedDeviceOnboardingArtifacts,
   createSeedDeliveryStatuses,
   createSeedIntegrationClients,
+  createSeedTenantDirectory,
   createSeedUserDevices,
+  createTenant,
+  getTenantDirectory,
   jsonResponse,
   listDeliveryStatuses,
   listDeviceOnboardingArtifacts,
   listIntegrationClients,
+  listTenants,
   listUserDevices,
   problemResponse,
+  quickCreateTenant,
   revokeDeviceOnboardingArtifact,
   revokeUserDevice,
   rotateIntegrationClientSecret,
@@ -29,7 +34,12 @@ import {
   type WebhookSubscriptionRecord,
 } from "./admin-api-fixture-models";
 
-export async function installAdminApiFixture(page: Page) {
+interface AdminApiFixtureOptions {
+  includeTenantPermissions?: boolean;
+}
+
+export async function installAdminApiFixture(page: Page, options: AdminApiFixtureOptions = {}) {
+  const includeTenantPermissions = options.includeTenantPermissions ?? true;
   const csrfToken = "fixture-csrf-token";
   const defaultApplicationClientId = "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4";
   const session = {
@@ -44,6 +54,7 @@ export async function installAdminApiFixture(page: Page) {
       "webhooks.write",
       "integration-clients.read",
       "integration-clients.write",
+      ...(includeTenantPermissions ? ["tenants.read", "tenants.write"] : []),
     ],
   };
   let isAuthenticated = false;
@@ -55,6 +66,9 @@ export async function installAdminApiFixture(page: Page) {
     "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb",
     defaultApplicationClientId,
   );
+  const tenantDirectory = createSeedTenantDirectory("6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb", defaultApplicationClientId);
+  let tenants = tenantDirectory.tenants;
+  let applications = tenantDirectory.applications;
   const deliveryStatuses = createSeedDeliveryStatuses("6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb", defaultApplicationClientId);
   let userDevices: UserDeviceRecord[] = createSeedUserDevices("6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb", "user-device");
   let deviceOnboardingArtifacts: DeviceOnboardingArtifactRecord[] = createSeedDeviceOnboardingArtifacts(
@@ -113,6 +127,16 @@ export async function installAdminApiFixture(page: Page) {
       return;
     }
 
+    if (url.pathname === "/api/v1/admin/runtime-configuration" && request.method() === "GET") {
+      await route.fulfill(jsonResponse(200, {
+        callbackUrlPolicy: {
+          mode: "PrivateNetwork",
+          allowInsecureHttp: false,
+        },
+      }));
+      return;
+    }
+
     if (url.pathname.endsWith("/enrollments/totp/current") && request.method() === "GET") {
       await route.fulfill(
         enrollment
@@ -143,6 +167,22 @@ export async function installAdminApiFixture(page: Page) {
     if (url.pathname.endsWith("/integration-clients") && request.method() === "GET") {
       const tenantId = url.pathname.split("/")[5];
       await route.fulfill(jsonResponse(200, listIntegrationClients(integrationClients, tenantId)));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/tenants" && request.method() === "GET") {
+      await route.fulfill(jsonResponse(200, listTenants(tenants, applications, integrationClients)));
+      return;
+    }
+
+    if (url.pathname.endsWith("/directory") && url.pathname.includes("/tenants/") && request.method() === "GET") {
+      const tenantId = decodeURIComponent(url.pathname.split("/")[5] ?? "");
+      const directory = getTenantDirectory(tenants, applications, integrationClients, tenantId);
+      await route.fulfill(
+        directory
+          ? jsonResponse(200, directory)
+          : problemResponse(404, "Tenant directory was not found.", "Tenant does not exist."),
+      );
       return;
     }
 
@@ -317,6 +357,38 @@ export async function installAdminApiFixture(page: Page) {
 
       integrationClients = result.clients;
       await route.fulfill(jsonResponse(201, {
+        client: result.client,
+        clientSecret: result.clientSecret,
+      }));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/tenants" && request.method() === "POST") {
+      const payload = await request.postDataJSON();
+      const result = createTenant(tenants, payload);
+      if (result.errorStatus || !result.tenant) {
+        await route.fulfill(problemResponse(result.errorStatus ?? 400, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      tenants = result.tenants;
+      await route.fulfill(jsonResponse(201, result.tenant));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/tenants/quick-create" && request.method() === "POST") {
+      const payload = await request.postDataJSON();
+      const result = quickCreateTenant(tenants, applications, integrationClients, payload);
+      if (result.errorStatus || !result.directory || !result.client || !result.clientSecret) {
+        await route.fulfill(problemResponse(result.errorStatus ?? 400, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      tenants = result.tenants;
+      applications = result.applications;
+      integrationClients = result.clients;
+      await route.fulfill(jsonResponse(201, {
+        directory: result.directory,
         client: result.client,
         clientSecret: result.clientSecret,
       }));

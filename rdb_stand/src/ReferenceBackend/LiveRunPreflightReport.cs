@@ -24,6 +24,10 @@ public sealed record LiveRunPreflightReport
 
     public required string? CallbackUrlHost { get; init; }
 
+    public required string CallbackUrlPolicyMode { get; init; }
+
+    public required bool AllowInsecureCallbackHttp { get; init; }
+
     public required IReadOnlyCollection<string> ConfigurationIssues { get; init; }
 }
 
@@ -40,6 +44,7 @@ public static class LiveRunPreflightReporter
             .GetSection("ReferenceBackend")
             .Get<ReferenceBackendOptions>() ?? new ReferenceBackendOptions();
         var issues = Validate(authenticator, reference);
+        ReferenceCallbackUrlPolicy.TryCreateFromOptions(reference, out var callbackUrlPolicy, out _);
 
         return new LiveRunPreflightReport
         {
@@ -53,6 +58,8 @@ public static class LiveRunPreflightReporter
             HasApplicationClientId = reference.ApplicationClientId != Guid.Empty,
             HasCallbackUrl = reference.CallbackUrl is not null,
             CallbackUrlHost = reference.CallbackUrl?.Host,
+            CallbackUrlPolicyMode = callbackUrlPolicy.ModeName,
+            AllowInsecureCallbackHttp = callbackUrlPolicy.AllowInsecureHttp,
             ConfigurationIssues = issues,
         };
     }

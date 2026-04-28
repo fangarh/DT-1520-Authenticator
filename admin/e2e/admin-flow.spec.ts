@@ -6,7 +6,7 @@ const tenantId = "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb";
 const applicationClientId = "f7e5f55c-5ef8-4b84-aa33-d2dcac91c9d4";
 
 test("operator flow covers login, start, confirm, replace, revoke and artifact discard", async ({ page }) => {
-  await installAdminApiFixture(page);
+  await installAdminApiFixture(page, { includeTenantPermissions: false });
 
   const externalUserId = `playwright-${Date.now()}`;
   const label = `pw-${Date.now()}`;

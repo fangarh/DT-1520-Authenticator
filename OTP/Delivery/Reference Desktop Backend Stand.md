@@ -2,7 +2,7 @@
 
 ## Status
 
-Local live wiring handoff completed. Next continuation point is executing the runbook against real `DT-1520` backend/worker plus QR-activated Android device and recording latency.
+Local live wiring handoff plus WPF MVP demo shell completed. Next continuation point is executing the runbook against real `DT-1520` backend/worker plus QR-activated Android device and recording latency.
 
 The SDK handoff entry points are:
 
@@ -14,7 +14,9 @@ Current code entry points:
 - `rdb_stand/ReferenceDesktopBackendStand.slnx`
 - `rdb_stand/src/ReferenceBackend`
 - `rdb_stand/src/DesktopShell`
+- `rdb_stand/src/DesktopWpfTest`
 - `rdb_stand/tests/ReferenceBackend.Tests`
+- `rdb_stand/tests/DesktopWpfTest.Tests`
 - `rdb_stand/src/ReferenceBackend/appsettings.Development.example.json`
 
 ## Goal
@@ -96,6 +98,7 @@ Pilot acceptable target:
 ## First implementation expectations
 
 - simplest console desktop shell: done
+- WPF MVVM desktop demo shell with encrypted local MVP settings: done
 - simplest backend API: done
 - SDK-based integration through local project references: done
 - QR-based Android activation: runbook prepared, execution next
@@ -105,9 +108,9 @@ Pilot acceptable target:
 - live wiring handoff: env-var runbook, ignored local settings and sanitized readiness endpoint done
 - local preflight command: `dotnet run --no-build --project .\src\ReferenceBackend\ReferenceBackend.csproj -- --preflight` done
 - Visual Studio solution restore: SDK projects from `../lib/src` are included in `ReferenceDesktopBackendStand.slnx` to avoid `NU1105` for unloaded project references
-- automated backend/SDK tests: `ReferenceBackend.Tests` done, including callback URL hardening
-- UI verification: not required for console shell
-- security review: done for secret boundary and callback validation
+- automated backend/SDK/WPF tests: `ReferenceBackend.Tests` and `DesktopWpfTest.Tests` done, including callback URL policy, encrypted JSON storage and transient `TOTP` input
+- UI verification: not required for WPF desktop shell because it is not a browser surface
+- security review: done for backend secret boundary, callback validation and WPF MVP/demo-only local encrypted JSON storage
 
 ## Verification
 
@@ -117,6 +120,7 @@ dotnet restore .\ReferenceDesktopBackendStand.slnx
 dotnet build .\ReferenceDesktopBackendStand.slnx --no-restore -maxcpucount:1
 dotnet test .\ReferenceDesktopBackendStand.slnx --no-build -maxcpucount:1
 dotnet run --no-build --project .\src\ReferenceBackend\ReferenceBackend.csproj -- --preflight
+dotnet run --project .\src\DesktopWpfTest\DesktopWpfTest.csproj
 ```
 
 ## Live Runbook
@@ -136,22 +140,26 @@ Required local-only values:
 
 Security constraints:
 
-- `ReferenceBackend__CallbackUrl` must be external `HTTPS`, not `localhost`, private IP literal or credential-bearing URL.
+- `ReferenceBackend__CallbackUrlPolicyMode` defaults to `PublicInternet`: external `HTTPS`, no `localhost`, no loopback/private IP literal and no credential-bearing URL.
+- `ReferenceBackend__CallbackUrlPolicyMode=PrivateNetwork` is allowed for closed HTTPS contours; `AllowInsecureCallbackHttp=true` is an explicit demo/on-prem relaxation and must stay visible in readiness/preflight output.
+- `ReferenceBackend__CallbackUrlPolicyMode=LocalDevelopment` is allowed only for local/demo HTTP callback tests.
 - desktop shell keeps only reference backend URL.
+- `DesktopWpfTest` stores demo/live wiring values in encrypted JSON under LocalAppData for MVP convenience only; it is not a production secret store.
+- `TOTP` codes are transient UI input and are not persisted.
 - real secrets stay in environment variables or ignored local settings.
 - next live execution must use Admin UI QR onboarding for the Android device and then run push approve/deny plus online `TOTP` fallback.
 
-## Latest Local Preflight
+## Latest Live Diagnostics
 
-`2026-04-28` local environment status:
+`2026-04-28` `Final Integrated Verification Gate` status:
 
-- Android MCP sees `emulator-5554` online and the app package `ru.dt1520.security.authenticator` launches to `MainActivity`.
-- `Device onboarding` UI is visible on the emulator.
-- no `rdb_stand/src/ReferenceBackend/appsettings.Development.json` or `appsettings.Local.json` is present.
-- required live env vars are not set in the current shell.
-- `--preflight` returns not ready with missing `Dt1520Authenticator` and `ReferenceBackend` configuration issues.
+- Android MCP sees `emulator-5554` online; a fresh APK launches to `MainActivity` and shows `Device onboarding`.
+- Backend, admin, docs, rdb_stand and Android automated verification passed before live operation troubleshooting.
+- `ReferenceBackend --preflight` is ready with local ignored config and a public callback URL, but direct live operation returns `502` because Windows/.NET fails the TLS transport to `https://admin.ghostring.ru:18443` before any HTTP response.
+- Node/OpenSSL from the same workstation reaches `https://admin.ghostring.ru:18443/health/api` and receives expected token endpoint responses, so ghostring is reachable; this is a Windows SChannel contour issue.
+- A loopback-only diagnostic proxy surfaced the next live blockers: current local `Dt1520Authenticator:Scope` includes `devices:read`, which the selected live integration client does not allow, and the deployed token endpoint still returns camelCase token fields until the backend snake_case fix is deployed.
 
-The live end-to-end flow is therefore blocked on supplying backend-only live configuration and an external HTTPS callback URL, not on Android availability.
+The live end-to-end flow is therefore blocked on redeploying the OAuth token response fix, aligning integration client scopes/config, and either fixing the Windows SChannel path or running `ReferenceBackend` from an OpenSSL/Linux contour.
 
 ## Related notes
 

@@ -1,0 +1,56 @@
+using System.Text.Json.Serialization;
+using Dt1520.Authenticator.Desktop;
+
+namespace Dt1520.Authenticator.DesktopWpfTest.Services;
+
+public sealed record StartProtectedOperationRequest(string ExternalUserId, string DisplayName);
+
+public sealed record VerifyTotpFallbackRequest(string Code);
+
+public sealed record ReferenceApprovalSession
+{
+    public required string SessionId { get; init; }
+
+    public required string PollingPath { get; init; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public required DesktopApprovalSessionStatus Status { get; init; }
+
+    public DateTimeOffset? ExpiresAt { get; init; }
+
+    public string? DisplayMessage { get; init; }
+
+    public string? FailureReason { get; init; }
+
+    public bool IsCommitted { get; init; }
+
+    public ReferenceLatencyTimestamps Latency { get; init; } = new();
+
+    public DesktopApprovalSession ToDesktopSession()
+    {
+        return new DesktopApprovalSession
+        {
+            SessionId = SessionId,
+            PollingPath = PollingPath,
+            Status = Status,
+            ExpiresAt = ExpiresAt,
+            DisplayMessage = DisplayMessage,
+            FailureReason = FailureReason,
+        };
+    }
+}
+
+public sealed record ReferenceLatencyTimestamps
+{
+    public DateTimeOffset? DesktopSubmittedAtUtc { get; init; }
+
+    public DateTimeOffset? BackendChallengeRequestedAtUtc { get; init; }
+
+    public DateTimeOffset? ChallengeCreatedAtUtc { get; init; }
+
+    public DateTimeOffset? CallbackReceivedAtUtc { get; init; }
+
+    public DateTimeOffset? TotpSubmittedAtUtc { get; init; }
+
+    public DateTimeOffset? TerminalAtUtc { get; init; }
+}

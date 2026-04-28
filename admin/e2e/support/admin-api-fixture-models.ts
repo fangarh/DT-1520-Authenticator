@@ -91,6 +91,30 @@ export interface IntegrationClientRecord {
   lastAuthStateChangedUtc: string;
 }
 
+export type TenantDirectoryStatus = "active" | "disabled" | "archived" | "test";
+
+export interface TenantDirectoryTenantRecord {
+  tenantId: string;
+  displayName: string;
+  slug: string | null;
+  status: TenantDirectoryStatus;
+  applicationCount: number;
+  integrationClientCount: number;
+  createdUtc: string;
+  updatedUtc: string | null;
+}
+
+export interface TenantDirectoryApplicationRecord {
+  applicationClientId: string;
+  tenantId: string;
+  displayName: string;
+  slug: string | null;
+  status: TenantDirectoryStatus;
+  integrationClientCount: number;
+  createdUtc: string;
+  updatedUtc: string | null;
+}
+
 export function createArtifact(issuer: string, label: string, suffix: string): ArtifactRecord {
   const secret = createBase32Secret(suffix);
   const secretUri = `otpauth://totp/${encodeURIComponent(`${issuer}:${label}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
@@ -245,6 +269,38 @@ export function createSeedIntegrationClients(tenantId: string, applicationClient
   ];
 }
 
+export function createSeedTenantDirectory(
+  tenantId: string,
+  applicationClientId: string,
+): { tenants: TenantDirectoryTenantRecord[]; applications: TenantDirectoryApplicationRecord[] } {
+  return {
+    tenants: [
+      {
+        tenantId,
+        displayName: "Directory Tenant",
+        slug: "directory-tenant",
+        status: "active",
+        applicationCount: 1,
+        integrationClientCount: 1,
+        createdUtc: "2026-04-28T09:00:00Z",
+        updatedUtc: "2026-04-28T09:30:00Z",
+      },
+    ],
+    applications: [
+      {
+        applicationClientId,
+        tenantId,
+        displayName: "Project Manager",
+        slug: "project-manager",
+        status: "active",
+        integrationClientCount: 1,
+        createdUtc: "2026-04-28T09:00:00Z",
+        updatedUtc: "2026-04-28T09:30:00Z",
+      },
+    ],
+  };
+}
+
 export function listDeliveryStatuses(
   deliveries: DeliveryStatusRecord[],
   tenantId: string,
@@ -363,7 +419,7 @@ export function createDeviceOnboardingArtifact(
     consumedAtUtc: null,
     revokedAtUtc: null,
     createdAtUtc: now,
-    activationPayload: `fixture-activation-payload-${activationCodeId}`,
+    activationPayload: `dac_${activationCodeId}.fixture-secret`,
   };
 
   return {
@@ -416,6 +472,175 @@ export function listIntegrationClients(
   tenantId: string,
 ): IntegrationClientRecord[] {
   return clients.filter((client) => client.tenantId === tenantId);
+}
+
+export function getTenantDirectory(
+  tenants: TenantDirectoryTenantRecord[],
+  applications: TenantDirectoryApplicationRecord[],
+  clients: IntegrationClientRecord[],
+  tenantId: string,
+) {
+  const tenant = tenants.find((item) => item.tenantId === tenantId);
+  if (!tenant) {
+    return null;
+  }
+
+  return {
+    tenant: refreshTenantCounts(tenant, applications, clients),
+    applications: applications
+      .filter((application) => application.tenantId === tenantId)
+      .map((application) => refreshApplicationCounts(application, clients)),
+    integrationClients: clients.filter((client) => client.tenantId === tenantId),
+  };
+}
+
+export function listTenants(
+  tenants: TenantDirectoryTenantRecord[],
+  applications: TenantDirectoryApplicationRecord[],
+  clients: IntegrationClientRecord[],
+): TenantDirectoryTenantRecord[] {
+  return tenants.map((tenant) => refreshTenantCounts(tenant, applications, clients));
+}
+
+export function createTenant(
+  tenants: TenantDirectoryTenantRecord[],
+  payload: {
+    tenantId?: string;
+    displayName: string;
+    slug?: string;
+    status?: TenantDirectoryStatus;
+  },
+): { tenants: TenantDirectoryTenantRecord[]; tenant?: TenantDirectoryTenantRecord; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  const displayName = payload.displayName.trim();
+  if (!displayName) {
+    return {
+      tenants,
+      errorStatus: 400,
+      errorTitle: "Invalid tenant creation request.",
+      errorDetail: "Tenant display name is required.",
+    };
+  }
+
+  if (tenants.some((tenant) => tenant.displayName.toUpperCase() === displayName.toUpperCase())) {
+    return {
+      tenants,
+      errorStatus: 409,
+      errorTitle: "Tenant cannot be created.",
+      errorDetail: "Tenant already exists.",
+    };
+  }
+
+  const now = new Date().toISOString();
+  const tenant: TenantDirectoryTenantRecord = {
+    tenantId: payload.tenantId || crypto.randomUUID(),
+    displayName,
+    slug: payload.slug || slugify(displayName),
+    status: payload.status || "active",
+    applicationCount: 0,
+    integrationClientCount: 0,
+    createdUtc: now,
+    updatedUtc: now,
+  };
+
+  return {
+    tenants: [tenant, ...tenants],
+    tenant,
+  };
+}
+
+export function quickCreateTenant(
+  tenants: TenantDirectoryTenantRecord[],
+  applications: TenantDirectoryApplicationRecord[],
+  clients: IntegrationClientRecord[],
+  payload: {
+    tenantDisplayName: string;
+    applicationDisplayName: string;
+    integrationClientDisplayName: string;
+    allowedScopes: string[];
+  },
+): {
+  tenants: TenantDirectoryTenantRecord[];
+  applications: TenantDirectoryApplicationRecord[];
+  clients: IntegrationClientRecord[];
+  directory?: ReturnType<typeof getTenantDirectory>;
+  client?: IntegrationClientRecord;
+  clientSecret?: string;
+  errorStatus?: number;
+  errorTitle?: string;
+  errorDetail?: string;
+} {
+  const tenantDisplayName = payload.tenantDisplayName.trim();
+  const applicationDisplayName = payload.applicationDisplayName.trim();
+  const clientDisplayName = payload.integrationClientDisplayName.trim();
+  if (!tenantDisplayName || !applicationDisplayName || !clientDisplayName) {
+    return {
+      tenants,
+      applications,
+      clients,
+      errorStatus: 400,
+      errorTitle: "Invalid tenant quick-create request.",
+      errorDetail: "Display names are required.",
+    };
+  }
+
+  if (tenants.some((tenant) => tenant.displayName.toUpperCase() === tenantDisplayName.toUpperCase())) {
+    return {
+      tenants,
+      applications,
+      clients,
+      errorStatus: 409,
+      errorTitle: "Tenant cannot be quick-created.",
+      errorDetail: "Tenant already exists.",
+    };
+  }
+
+  const now = new Date().toISOString();
+  const tenantId = crypto.randomUUID();
+  const applicationClientId = crypto.randomUUID();
+  const clientId = slugify(`${tenantDisplayName}-${applicationDisplayName}-${clientDisplayName}`);
+  const tenant: TenantDirectoryTenantRecord = {
+    tenantId,
+    displayName: tenantDisplayName,
+    slug: slugify(tenantDisplayName),
+    status: "active",
+    applicationCount: 1,
+    integrationClientCount: 1,
+    createdUtc: now,
+    updatedUtc: now,
+  };
+  const application: TenantDirectoryApplicationRecord = {
+    applicationClientId,
+    tenantId,
+    displayName: applicationDisplayName,
+    slug: slugify(applicationDisplayName),
+    status: "active",
+    integrationClientCount: 1,
+    createdUtc: now,
+    updatedUtc: now,
+  };
+  const client: IntegrationClientRecord = {
+    clientId,
+    tenantId,
+    applicationClientId,
+    status: "active",
+    allowedScopes: [...payload.allowedScopes].sort(),
+    createdUtc: now,
+    updatedUtc: now,
+    lastSecretRotatedUtc: now,
+    lastAuthStateChangedUtc: now,
+  };
+  const nextTenants = [tenant, ...tenants];
+  const nextApplications = [application, ...applications];
+  const nextClients = [client, ...clients];
+
+  return {
+    tenants: nextTenants,
+    applications: nextApplications,
+    clients: nextClients,
+    directory: getTenantDirectory(nextTenants, nextApplications, nextClients, tenantId),
+    client,
+    clientSecret: `fixture-tenant-secret-${clientId}`,
+  };
 }
 
 export function createIntegrationClient(
@@ -620,4 +845,38 @@ function integrationClientNotFound<T extends { clients: IntegrationClientRecord[
     errorTitle: "Integration client was not found.",
     errorDetail: "Integration client does not belong to the requested tenant scope.",
   } as T & { errorStatus: number; errorTitle: string; errorDetail: string };
+}
+
+function refreshTenantCounts(
+  tenant: TenantDirectoryTenantRecord,
+  applications: TenantDirectoryApplicationRecord[],
+  clients: IntegrationClientRecord[],
+): TenantDirectoryTenantRecord {
+  return {
+    ...tenant,
+    applicationCount: applications.filter((application) => application.tenantId === tenant.tenantId).length,
+    integrationClientCount: clients.filter((client) => client.tenantId === tenant.tenantId).length,
+  };
+}
+
+function refreshApplicationCounts(
+  application: TenantDirectoryApplicationRecord,
+  clients: IntegrationClientRecord[],
+): TenantDirectoryApplicationRecord {
+  return {
+    ...application,
+    integrationClientCount: clients.filter((client) => (
+      client.tenantId === application.tenantId &&
+      client.applicationClientId === application.applicationClientId
+    )).length,
+  };
+}
+
+function slugify(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "tenant";
 }
