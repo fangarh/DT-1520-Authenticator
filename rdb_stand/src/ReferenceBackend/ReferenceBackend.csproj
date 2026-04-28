@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Dt1520.Authenticator.ReferenceBackend</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\lib\src\Dt1520.Authenticator.AspNetCore\Dt1520.Authenticator.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\lib\src\Dt1520.Authenticator.Client\Dt1520.Authenticator.Client.csproj" />
+    <ProjectReference Include="..\..\..\lib\src\Dt1520.Authenticator.Desktop\Dt1520.Authenticator.Desktop.csproj" />
+  </ItemGroup>
+</Project>

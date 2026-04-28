@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Documentation system grid">
+  <rect width="1600" height="900" fill="#17324d"/>
+  <g fill="none" stroke="#ffffff" stroke-opacity=".18">
+    <path d="M120 170h1360M120 330h1360M120 490h1360M120 650h1360M120 810h1360"/>
+    <path d="M220 80v760M440 80v760M660 80v760M880 80v760M1100 80v760M1320 80v760"/>
+  </g>
+  <g fill="#ffffff" fill-opacity=".22">
+    <rect x="180" y="130" width="260" height="110" rx="16"/>
+    <rect x="520" y="290" width="260" height="110" rx="16"/>
+    <rect x="860" y="450" width="260" height="110" rx="16"/>
+    <rect x="1200" y="610" width="260" height="110" rx="16"/>
+  </g>
+</svg>

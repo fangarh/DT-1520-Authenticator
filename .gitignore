@@ -6,6 +6,8 @@
 # dotenv files
 .env
 .env.*
+rdb_stand/src/ReferenceBackend/appsettings.Development.json
+rdb_stand/src/ReferenceBackend/appsettings.Local.json
 
 # User-specific files
 *.rsuser
@@ -89,6 +91,8 @@ temp/
 **/captures/
 **/.cxx/
 **/.externalNativeBuild/
+!mobile/app/src/debug/
+!mobile/app/src/debug/**
 
 # Frontend tool caches
 .vite/

@@ -65,6 +65,7 @@ public sealed class CreateDevices : Migration
                 code_hash varchar(512) not null,
                 expires_utc timestamptz not null,
                 consumed_utc timestamptz null,
+                revoked_utc timestamptz null,
                 created_utc timestamptz not null
             );
 

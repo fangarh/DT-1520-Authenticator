@@ -1,0 +1,107 @@
+.empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  gap: 14px;
+}
+
+.summary,
+.actionCard,
+.secretPanel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 250, 244, 0.8);
+}
+
+.summary strong,
+.summary p,
+.scopeItem span,
+.secretPanel code {
+  word-break: break-word;
+}
+
+.summary p,
+.warning,
+.secretPanel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.warning {
+  color: var(--warning);
+}
+
+.scopeList {
+  display: grid;
+  gap: 8px;
+}
+
+.scopeItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.78);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.scopeItem input {
+  grid-row: span 2;
+  margin-top: 0.2rem;
+}
+
+.scopeItem span {
+  color: var(--text);
+}
+
+.scopeItem small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.confirmation {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--text);
+}
+
+.confirmation input {
+  margin-top: 0.2rem;
+}
+
+.secretPanel {
+  border: 1px solid rgba(138, 47, 61, 0.28);
+  background: rgba(138, 47, 61, 0.08);
+}
+
+.secretPanel code {
+  display: block;
+  max-width: 100%;
+  padding: 0.85rem;
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--panel-strong);
+  overflow-wrap: anywhere;
+}
+
+.actions,
+.stateGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stateGrid > * {
+  flex: 1 1 220px;
+}

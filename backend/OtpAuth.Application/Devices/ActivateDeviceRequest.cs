@@ -20,3 +20,18 @@ public sealed record ActivateDeviceRequest
 
     public string? PublicKey { get; init; }
 }
+
+public sealed record ActivateDeviceWithOnboardingPayloadRequest
+{
+    public required string ActivationPayload { get; init; }
+
+    public required DevicePlatform Platform { get; init; }
+
+    public required string InstallationId { get; init; }
+
+    public string? DeviceName { get; init; }
+
+    public string? PushToken { get; init; }
+
+    public string? PublicKey { get; init; }
+}

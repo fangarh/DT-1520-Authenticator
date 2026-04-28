@@ -94,6 +94,7 @@ Accepted working note
 - выбран отдельный `Redis` именно для `DT-1520`
 - понятен способ запуска: контейнер из `docker-compose.ghostring.yml`
 - выбран сильный пароль для `OTPAUTH_REDIS_PASSWORD`
+- `OTPAUTH_RUNTIME_NETWORK_CIDR` не конфликтует с существующими host/docker subnet-ами
 
 ### Actions
 
@@ -103,6 +104,7 @@ Accepted working note
 ### Expected result
 
 - worker dependency probe по `Redis` сможет стать healthy
+- trusted proxy boundary для `admin -> api` будет опираться на deterministic runtime subnet, а не на trust-all proxy режим
 
 ## Phase 5. Signing And Protection Keys
 
@@ -182,6 +184,7 @@ Accepted working note
 - `admin` опубликован только как `127.0.0.1:${OTPAUTH_GHOSTRING_ADMIN_HTTPS_PORT:-18443}:8443`
 - memory limits соответствуют pilot profile
 - `bootstrap`, `api`, `worker` используют existing `ConnectionStrings__Postgres`
+- `api` получает `ReverseProxy__Enabled=true` и trusted network через `OTPAUTH_RUNTIME_NETWORK_CIDR`
 
 ### Expected result
 

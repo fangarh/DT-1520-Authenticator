@@ -65,6 +65,32 @@ export interface UserDeviceRecord {
   blockedAtUtc: string | null;
 }
 
+export interface DeviceOnboardingArtifactRecord {
+  activationCodeId: string;
+  tenantId: string;
+  applicationClientId: string;
+  externalUserId: string;
+  platform: "android" | "ios" | "unknown";
+  status: "pending" | "consumed" | "expired" | "revoked";
+  expiresAtUtc: string;
+  consumedAtUtc: string | null;
+  revokedAtUtc: string | null;
+  createdAtUtc: string;
+  activationPayload: string;
+}
+
+export interface IntegrationClientRecord {
+  clientId: string;
+  tenantId: string;
+  applicationClientId: string;
+  status: "active" | "inactive";
+  allowedScopes: string[];
+  createdUtc: string;
+  updatedUtc: string | null;
+  lastSecretRotatedUtc: string | null;
+  lastAuthStateChangedUtc: string;
+}
+
 export function createArtifact(issuer: string, label: string, suffix: string): ArtifactRecord {
   const secret = createBase32Secret(suffix);
   const secretUri = `otpauth://totp/${encodeURIComponent(`${issuer}:${label}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
@@ -181,6 +207,44 @@ export function createSeedUserDevices(tenantId: string, externalUserId: string):
   ];
 }
 
+export function createSeedDeviceOnboardingArtifacts(
+  tenantId: string,
+  applicationClientId: string,
+  externalUserId: string,
+): DeviceOnboardingArtifactRecord[] {
+  return [
+    {
+      activationCodeId: "44444444-4444-4444-4444-444444444444",
+      tenantId,
+      applicationClientId,
+      externalUserId,
+      platform: "android",
+      status: "pending",
+      expiresAtUtc: "2026-04-27T10:30:00Z",
+      consumedAtUtc: null,
+      revokedAtUtc: null,
+      createdAtUtc: "2026-04-27T10:00:00Z",
+      activationPayload: "fixture-existing-payload-hidden-from-list",
+    },
+  ];
+}
+
+export function createSeedIntegrationClients(tenantId: string, applicationClientId: string): IntegrationClientRecord[] {
+  return [
+    {
+      clientId: "project-manager-pilot",
+      tenantId,
+      applicationClientId,
+      status: "active",
+      allowedScopes: ["challenges:read", "challenges:write"],
+      createdUtc: "2026-04-27T09:00:00Z",
+      updatedUtc: null,
+      lastSecretRotatedUtc: null,
+      lastAuthStateChangedUtc: "2026-04-27T09:00:00Z",
+    },
+  ];
+}
+
 export function listDeliveryStatuses(
   deliveries: DeliveryStatusRecord[],
   tenantId: string,
@@ -256,6 +320,232 @@ export function revokeUserDevice(
   };
 }
 
+export function listDeviceOnboardingArtifacts(
+  artifacts: DeviceOnboardingArtifactRecord[],
+  tenantId: string,
+  searchParams: URLSearchParams,
+): Omit<DeviceOnboardingArtifactRecord, "activationPayload">[] {
+  const externalUserId = searchParams.get("externalUserId");
+  const applicationClientId = searchParams.get("applicationClientId");
+  const status = searchParams.get("status");
+  const limit = Number.parseInt(searchParams.get("limit") ?? `${artifacts.length}`, 10);
+
+  return artifacts
+    .filter((artifact) => artifact.tenantId === tenantId)
+    .filter((artifact) => !externalUserId || artifact.externalUserId === externalUserId)
+    .filter((artifact) => !applicationClientId || artifact.applicationClientId === applicationClientId)
+    .filter((artifact) => !status || artifact.status === status)
+    .slice(0, Number.isFinite(limit) ? limit : artifacts.length)
+    .map(toDeviceOnboardingArtifactResponse);
+}
+
+export function createDeviceOnboardingArtifact(
+  artifacts: DeviceOnboardingArtifactRecord[],
+  payload: {
+    tenantId: string;
+    applicationClientId: string;
+    externalUserId: string;
+    platform: "android" | "ios" | "unknown";
+    ttlMinutes: number;
+  },
+): { artifacts: DeviceOnboardingArtifactRecord[]; artifact?: DeviceOnboardingArtifactRecord; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  const now = new Date().toISOString();
+  const expiresAtUtc = new Date(Date.now() + payload.ttlMinutes * 60_000).toISOString();
+  const activationCodeId = crypto.randomUUID();
+  const artifact: DeviceOnboardingArtifactRecord = {
+    activationCodeId,
+    tenantId: payload.tenantId,
+    applicationClientId: payload.applicationClientId,
+    externalUserId: payload.externalUserId,
+    platform: payload.platform,
+    status: "pending",
+    expiresAtUtc,
+    consumedAtUtc: null,
+    revokedAtUtc: null,
+    createdAtUtc: now,
+    activationPayload: `fixture-activation-payload-${activationCodeId}`,
+  };
+
+  return {
+    artifacts: [artifact, ...artifacts],
+    artifact,
+  };
+}
+
+export function revokeDeviceOnboardingArtifact(
+  artifacts: DeviceOnboardingArtifactRecord[],
+  tenantId: string,
+  activationCodeId: string,
+): { artifacts: DeviceOnboardingArtifactRecord[]; artifact?: Omit<DeviceOnboardingArtifactRecord, "activationPayload">; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  const index = artifacts.findIndex((artifact) => artifact.tenantId === tenantId && artifact.activationCodeId === activationCodeId);
+  if (index < 0) {
+    return {
+      artifacts,
+      errorStatus: 404,
+      errorTitle: "Device onboarding artifact was not found.",
+      errorDetail: "Artifact does not belong to the requested tenant scope.",
+    };
+  }
+
+  const current = artifacts[index]!;
+  if (current.status !== "pending") {
+    return {
+      artifacts,
+      errorStatus: 409,
+      errorTitle: "Device onboarding artifact cannot be revoked.",
+      errorDetail: "Only pending artifacts can be revoked.",
+    };
+  }
+
+  const revoked: DeviceOnboardingArtifactRecord = {
+    ...current,
+    status: "revoked",
+    revokedAtUtc: new Date().toISOString(),
+  };
+  const nextArtifacts = [...artifacts];
+  nextArtifacts[index] = revoked;
+
+  return {
+    artifacts: nextArtifacts,
+    artifact: toDeviceOnboardingArtifactResponse(revoked),
+  };
+}
+
+export function listIntegrationClients(
+  clients: IntegrationClientRecord[],
+  tenantId: string,
+): IntegrationClientRecord[] {
+  return clients.filter((client) => client.tenantId === tenantId);
+}
+
+export function createIntegrationClient(
+  clients: IntegrationClientRecord[],
+  payload: {
+    clientId: string;
+    tenantId: string;
+    applicationClientId: string;
+    allowedScopes: string[];
+  },
+): { clients: IntegrationClientRecord[]; client?: IntegrationClientRecord; clientSecret?: string; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  if (clients.some((client) => client.clientId === payload.clientId)) {
+    return {
+      clients,
+      errorStatus: 409,
+      errorTitle: "Integration client cannot be created.",
+      errorDetail: "Integration client already exists.",
+    };
+  }
+
+  const now = new Date().toISOString();
+  const client: IntegrationClientRecord = {
+    clientId: payload.clientId,
+    tenantId: payload.tenantId,
+    applicationClientId: payload.applicationClientId,
+    status: "active",
+    allowedScopes: [...payload.allowedScopes].sort(),
+    createdUtc: now,
+    updatedUtc: null,
+    lastSecretRotatedUtc: null,
+    lastAuthStateChangedUtc: now,
+  };
+
+  return {
+    clients: [client, ...clients],
+    client,
+    clientSecret: `fixture-secret-${payload.clientId}`,
+  };
+}
+
+export function rotateIntegrationClientSecret(
+  clients: IntegrationClientRecord[],
+  tenantId: string,
+  clientId: string,
+): { clients: IntegrationClientRecord[]; client?: IntegrationClientRecord; clientSecret?: string; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  const index = findIntegrationClientIndex(clients, tenantId, clientId);
+  if (index < 0) {
+    return integrationClientNotFound(clients);
+  }
+
+  const now = new Date().toISOString();
+  const client: IntegrationClientRecord = {
+    ...clients[index]!,
+    updatedUtc: now,
+    lastSecretRotatedUtc: now,
+    lastAuthStateChangedUtc: now,
+  };
+  const nextClients = [...clients];
+  nextClients[index] = client;
+
+  return {
+    clients: nextClients,
+    client,
+    clientSecret: `fixture-rotated-secret-${clientId}`,
+  };
+}
+
+export function updateIntegrationClientScopes(
+  clients: IntegrationClientRecord[],
+  tenantId: string,
+  clientId: string,
+  allowedScopes: string[],
+): { clients: IntegrationClientRecord[]; client?: IntegrationClientRecord; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  const index = findIntegrationClientIndex(clients, tenantId, clientId);
+  if (index < 0) {
+    return integrationClientNotFound(clients);
+  }
+
+  const now = new Date().toISOString();
+  const client: IntegrationClientRecord = {
+    ...clients[index]!,
+    allowedScopes: [...allowedScopes].sort(),
+    updatedUtc: now,
+    lastAuthStateChangedUtc: now,
+  };
+  const nextClients = [...clients];
+  nextClients[index] = client;
+
+  return {
+    clients: nextClients,
+    client,
+  };
+}
+
+export function setIntegrationClientActiveState(
+  clients: IntegrationClientRecord[],
+  tenantId: string,
+  clientId: string,
+  status: "active" | "inactive",
+): { clients: IntegrationClientRecord[]; client?: IntegrationClientRecord; errorStatus?: number; errorTitle?: string; errorDetail?: string } {
+  const index = findIntegrationClientIndex(clients, tenantId, clientId);
+  if (index < 0) {
+    return integrationClientNotFound(clients);
+  }
+
+  if (clients[index]!.status === status) {
+    return {
+      clients,
+      errorStatus: 409,
+      errorTitle: "Integration client state cannot be changed.",
+      errorDetail: `Integration client is already ${status}.`,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const client: IntegrationClientRecord = {
+    ...clients[index]!,
+    status,
+    updatedUtc: now,
+    lastAuthStateChangedUtc: now,
+  };
+  const nextClients = [...clients];
+  nextClients[index] = client;
+
+  return {
+    clients: nextClients,
+    client,
+  };
+}
+
 export function toCurrentResponse(enrollment: EnrollmentRecord) {
   return {
     enrollmentId: enrollment.enrollmentId,
@@ -282,6 +572,13 @@ export function toCommandResponse(enrollment: EnrollmentRecord, artifact?: Artif
   };
 }
 
+export function toDeviceOnboardingArtifactResponse(
+  artifact: DeviceOnboardingArtifactRecord,
+): Omit<DeviceOnboardingArtifactRecord, "activationPayload"> {
+  const { activationPayload: _activationPayload, ...response } = artifact;
+  return response;
+}
+
 export function jsonResponse(status: number, body: unknown) {
   return {
     status,
@@ -304,4 +601,23 @@ function createBase32Secret(seed: string): string {
     const charCode = seed.charCodeAt(index % seed.length);
     return base32Alphabet[charCode % base32Alphabet.length];
   }).join("");
+}
+
+function findIntegrationClientIndex(
+  clients: IntegrationClientRecord[],
+  tenantId: string,
+  clientId: string,
+): number {
+  return clients.findIndex((client) => client.tenantId === tenantId && client.clientId === clientId);
+}
+
+function integrationClientNotFound<T extends { clients: IntegrationClientRecord[] }>(
+  clients: IntegrationClientRecord[],
+): T & { errorStatus: number; errorTitle: string; errorDetail: string } {
+  return {
+    clients,
+    errorStatus: 404,
+    errorTitle: "Integration client was not found.",
+    errorDetail: "Integration client does not belong to the requested tenant scope.",
+  } as T & { errorStatus: number; errorTitle: string; errorDetail: string };
 }

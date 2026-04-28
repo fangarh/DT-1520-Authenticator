@@ -87,6 +87,30 @@ Implementation status on `2026-04-20`: runtime slice `activate -> refresh -> rev
 - duplicate activation не должна бесконтрольно переиспользовать уже выданный refresh family
 - successful activation переводит устройство в `active`, пишет audit событие и обновляет `last_auth_state_changed_utc`
 
+### `POST /api/v1/devices/activate-onboarding`
+
+Назначение:
+
+- production-oriented QR onboarding для Android без передачи integration bearer/token в мобильное приложение
+- consume one-time activation artifact, созданный admin/operator surface
+- выдать первую пару `device access token + refresh token`
+
+Минимальные поля запроса:
+
+- `activationPayload`
+- `platform`
+- `installationId`
+- `deviceName`
+- optional `pushToken`
+- optional `publicKey`
+
+Поведение:
+
+- QR payload не содержит trusted tenant/user claims; backend берет `tenantId`, `applicationClientId` и `externalUserId` из server-side artifact
+- artifact должен пройти те же проверки `hash/TTL/consumed/revoked/platform`
+- successful activation использует тот же atomic consume path, что и integration-auth `activate`
+- mobile app не получает и не хранит integration `client_secret` или integration bearer token
+
 ### `POST /api/v1/auth/device-tokens/refresh`
 
 Назначение:
@@ -201,6 +225,7 @@ Bootstrap/runtime activation artifact storage:
 
 - activation code plaintext не хранится
 - artifact consume-ится атомарно вместе с первой device/token issuance
+- artifact может быть explicit revoked оператором через admin QR onboarding contract; revoked artifact отклоняется fail-closed так же, как expired/consumed
 - expired или уже consumed artifact снаружи маскируется как generic invalid/expired activation code
 
 ### `auth.devices`

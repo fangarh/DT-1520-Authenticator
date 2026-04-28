@@ -7,6 +7,9 @@ Repository workspace for the OTPAuth platform.
 - `mobile` - Android app scaffold
 - `backend` - .NET backend scaffold
 - `admin` - React admin scaffold
+- `docs` - standalone documentation app
+- `lib` - .NET NuGet SDK workspace
+- `rdb_stand` - future reference Desktop + Backend stand
 - `infra` - infrastructure assets
 - `config/mcp` - local MCP configuration examples
 - `OTP` - project knowledge vault
@@ -16,6 +19,7 @@ Repository workspace for the OTPAuth platform.
 - `mobile` is the canonical Android project root
 - `admin` is the canonical frontend/admin root
 - `backend` is the canonical .NET workspace root
+- `lib` is the canonical .NET SDK workspace root
 
 ## Working commands
 
@@ -33,6 +37,16 @@ npm run build
 cd .\backend
 dotnet restore .\OtpAuth.slnx
 dotnet build .\OtpAuth.slnx
+```
+
+### SDK
+
+```powershell
+cd .\lib
+dotnet restore .\Dt1520.Authenticator.slnx
+dotnet build .\Dt1520.Authenticator.slnx --no-restore -maxcpucount:1
+dotnet test .\Dt1520.Authenticator.slnx --no-build -maxcpucount:1
+dotnet pack .\Dt1520.Authenticator.slnx --no-build --configuration Release -maxcpucount:1
 ```
 
 ### Mobile

@@ -4,6 +4,8 @@
 
 Accepted working note
 
+`ProjectManager`-side implementation completed, live Authenticator device path verified, first ProjectManager-created manual pilot completed with a delivery latency residual
+
 ## Goal
 
 Зафиксировать канонический `Iteration 3 / Slice 3A` scenario для `MVP Closure` поверх уже закрытых runtime/admin/device контуров `Authenticator`.
@@ -83,6 +85,70 @@ Accepted working note
 12. `ProjectManager` валидирует callback signature/status, завершает pending protected operation и только после этого сохраняет `VCS instance`.
 13. Пользователь видит успешное завершение операции в `ProjectManager`.
 14. При необходимости оператор может проверить delivery/device side effects через existing `Admin UI` `Authenticator`.
+
+## Implementation status
+
+На стороне `ProjectManager` pilot MFA slice уже реализован.
+
+Что закрыто в коде:
+
+- `POST/PUT /api/vcs-instances` больше не сохраняют credential-bearing payload сразу
+- backend создает pending protected operation и инициирует backend-only integration call в `DT-1520`
+- apply-path стал callback-driven и idempotent: approved operation применяется ровно один раз
+- frontend показывает pending approval UX и user-scoped resume path без прямых browser calls в `Authenticator`
+- polling идет только через `ProjectManager` backend
+- чувствительный `VCS` password больше не живет в React state дольше submit flow
+
+Ключевые implementation entry points на стороне `ProjectManager`:
+
+- `src/Server/ProjectManager.Server/Program.cs`
+- `src/Server/ProjectManager.Server/Api/Vcs/VcsEndpoints.cs`
+- `src/Logic/PM.Repository/ProtectedOperations/ProtectedOperationRepository.cs`
+- `src/Logic/PM.Repository/Scripts/018_protected_operations_SAFE.sql`
+- `src/Client/frontend/src/App.tsx`
+- `src/Client/frontend/src/components/VcsInstanceFormModal.tsx`
+- `src/Client/frontend/src/components/VcsApprovalPendingModal.tsx`
+
+Проверка, уже подтвержденная в репозитории `ProjectManager`:
+
+- `dotnet test src\Tests\ProjectManager.Server.Tests\ProjectManager.Server.Tests.csproj`
+- `npm test` в `src/Client/frontend`
+- `npm run build` в `src/Client/frontend`
+- `dotnet build src\Server\ProjectManager.Server\ProjectManager.Server.csproj`
+- `dotnet build src\Server\ProjectManager.Worker\ProjectManager.Worker.csproj`
+- `dotnet build src\ProjectManager.slnx`
+
+Закрытые security properties:
+
+- backend-only integration с `Authenticator`
+- fail-closed path при `0` или `>1` подходящих device
+- `HMAC`-verification signed callback
+- user-scoped status polling
+- encrypted pending payload at rest
+- transparent encryption для сохраненного `VCS` password
+
+Live Authenticator/device verification на `2026-04-24`:
+
+- `ProjectManager` integration client `otpauth-projectmanager` уже имеет scopes `challenges:read`, `challenges:write`, `devices:write`.
+- `ProjectManager` pilot user использует canonical `externalUserId=f1d6afaa-8a5d-4fd3-9f75-0a5c0177df81`.
+- Android emulator активирован как device `077d09f9-8637-4583-8864-9b29ced707b4` и проходит device lookup как active push-capable device.
+- Synthetic live challenges, созданные напрямую через `DT-1520` contract, отображаются в Android `Push Approvals` UI.
+- Android `deny` path подтвержден server-side через terminal state `denied`.
+- Android `approve` path подтвержден server-side через `BiometricPrompt`/device credential и terminal state `approved` для challenge `a202ef93-c2f5-4645-80cf-06af37d1d86d`.
+- Первый ручной прогон через реальный `ProjectManager` login и protected `VCS` operation завершился успешно: вход остается обычным `Keycloak` flow, step-up approval появляется только при защищенной операции, а подтверждение проходит через Android emulator.
+- Наблюдаемый lag между запросом в `ProjectManager` и появлением challenge на Android emulator составляет около `~60s`; это зафиксировано как delivery/polling UX residual для следующего hardening шага.
+- Offline verification не проводилась: этот checkpoint подтверждает только online/live contour через `ghostring`, `ProjectManager`, `Keycloak` и Android emulator; поведение при недоступной сети, недоступном `DT-1520` runtime или offline fallback отдельно не проверено.
+
+Незакрытые operational остатки после первого ProjectManager-created live pilot:
+
+- разобраться с observed `~60s` lag до появления challenge в Android UI: проверить worker enqueue/delivery timings, mobile foreground polling interval и текущий `PushDelivery:Provider=logging` profile
+- отдельно решить, нужна ли offline/fallback проверка для pilot scope, и если да, оформить отдельный сценарий с ожидаемым fail-closed поведением
+- зафиксировать expected manual pilot UX copy в `ProjectManager`, чтобы пользователь понимал, что step-up approval появляется на защищенной операции, а не на login
+- перед продуктовым pilot решить, оставляем ли временный polling-only режим или подключаем real push provider для near-real-time delivery
+
+Отдельный plan item:
+
+- [[Push Delivery Latency Follow-Up]]
 
 ## Failure Handling
 
@@ -169,4 +235,4 @@ Accepted working note
 - frontend approval UX вокруг `VCS` form submit
 - tests и security hardening
 
-Этот roadmap должен жить в репозитории `ProjectManager`, а данный note остается source of truth для самого pilot story в `OTP/`.
+Этот roadmap живет в репозитории `ProjectManager`, а данный note остается source of truth для pilot story и текущего integration status в `OTP/`.

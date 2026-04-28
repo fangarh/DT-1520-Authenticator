@@ -214,6 +214,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AdminAuthenticationDefaults.EnrollmentsWritePolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.EnrollmentsWrite));
+    options.AddPolicy(AdminAuthenticationDefaults.IntegrationClientsReadPolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.IntegrationClientsRead));
+    options.AddPolicy(AdminAuthenticationDefaults.IntegrationClientsWritePolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.IntegrationClientsWrite));
     options.AddPolicy(AdminAuthenticationDefaults.WebhooksReadPolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.WebhooksRead));
@@ -226,13 +232,27 @@ builder.Services.AddSingleton<IAdminAuthAuditWriter, AdminSecurityAuditWriter>()
 builder.Services.AddSingleton<IAdminDeviceAuditWriter, AdminDeviceAuditWriter>();
 builder.Services.AddSingleton<IAdminTotpEnrollmentAuditWriter, AdminTotpEnrollmentAuditWriter>();
 builder.Services.AddSingleton<IAdminWebhookSubscriptionAuditWriter, AdminWebhookSubscriptionAuditWriter>();
+builder.Services.AddSingleton<IAdminIntegrationClientAuditWriter, AdminIntegrationClientAuditWriter>();
+builder.Services.AddSingleton<IAdminDeviceOnboardingAuditWriter, AdminDeviceOnboardingAuditWriter>();
 builder.Services.AddSingleton<IAdminApplicationClientResolver, AdminApplicationClientResolver>();
+builder.Services.AddSingleton<IAdminIntegrationClientSecretGenerator, AdminIntegrationClientSecretGenerator>();
+builder.Services.AddSingleton<IAdminDeviceActivationSecretGenerator, AdminDeviceActivationSecretGenerator>();
 builder.Services.AddSingleton<IAdminDeviceStore, PostgresAdminDeviceStore>();
+builder.Services.AddSingleton<IAdminDeviceOnboardingStore, PostgresAdminDeviceOnboardingStore>();
 builder.Services.AddSingleton<IAdminDeliveryStatusStore, PostgresAdminDeliveryStatusStore>();
+builder.Services.AddSingleton<IAdminIntegrationClientStore, PostgresAdminIntegrationClientStore>();
 builder.Services.AddSingleton<AdminLoginHandler>();
 builder.Services.AddSingleton<AdminListUserDevicesHandler>();
 builder.Services.AddSingleton<AdminRevokeUserDeviceHandler>();
+builder.Services.AddSingleton<AdminListDeviceOnboardingArtifactsHandler>();
+builder.Services.AddSingleton<AdminCreateDeviceOnboardingArtifactHandler>();
+builder.Services.AddSingleton<AdminRevokeDeviceOnboardingArtifactHandler>();
 builder.Services.AddSingleton<AdminListDeliveryStatusesHandler>();
+builder.Services.AddSingleton<AdminListIntegrationClientsHandler>();
+builder.Services.AddSingleton<AdminCreateIntegrationClientHandler>();
+builder.Services.AddSingleton<AdminRotateIntegrationClientSecretHandler>();
+builder.Services.AddSingleton<AdminUpdateIntegrationClientScopesHandler>();
+builder.Services.AddSingleton<AdminSetIntegrationClientActiveStateHandler>();
 builder.Services.AddSingleton<AdminStartTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminConfirmTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminReplaceTotpEnrollmentHandler>();
@@ -276,6 +296,7 @@ builder.Services.AddSingleton<IChallengeDecisionAuditWriter, PushChallengeDecisi
 builder.Services.AddSingleton<ApprovePushChallengeHandler>();
 builder.Services.AddSingleton<DenyPushChallengeHandler>();
 builder.Services.AddSingleton<ActivateDeviceHandler>();
+builder.Services.AddSingleton<ActivateDeviceWithOnboardingPayloadHandler>();
 builder.Services.AddSingleton<ListDevicesForRoutingHandler>();
 builder.Services.AddSingleton<RefreshDeviceTokenHandler>();
 builder.Services.AddSingleton<RevokeDeviceHandler>();
@@ -297,9 +318,11 @@ app.UseAuthorization();
 
 app.MapAdminAuthEndpoints();
 app.MapAdminDeviceEndpoints();
+app.MapAdminDeviceOnboardingEndpoints();
 app.MapAdminEnrollmentReadEndpoints();
 app.MapAdminEnrollmentCommandEndpoints();
 app.MapAdminDeliveryStatusEndpoints();
+app.MapAdminIntegrationClientEndpoints();
 app.MapAdminWebhookSubscriptionEndpoints();
 app.MapAuthEndpoints();
 app.MapChallengesEndpoints();

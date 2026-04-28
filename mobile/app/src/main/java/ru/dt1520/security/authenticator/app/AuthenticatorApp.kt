@@ -20,16 +20,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import ru.dt1520.security.authenticator.BuildConfig
+import ru.dt1520.security.authenticator.app.deviceonboarding.rememberDeviceOnboardingQrScanner
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeSessionManager
+import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeTransportException
+import ru.dt1520.security.authenticator.app.deviceruntime.HttpDeviceRuntimeTransport
 import ru.dt1520.security.authenticator.app.pushapprovals.PushApprovalDecisionCoordinator
 import ru.dt1520.security.authenticator.app.pushapprovals.rememberPushApprovalsRuntimeInteractor
 import ru.dt1520.security.authenticator.core.ui.theme.DT1520AuthenticatorTheme
+import ru.dt1520.security.authenticator.feature.deviceonboarding.DeviceOnboardingActivationResult
+import ru.dt1520.security.authenticator.feature.deviceonboarding.DeviceOnboardingPayload
+import ru.dt1520.security.authenticator.feature.deviceonboarding.DeviceOnboardingRoute
 import ru.dt1520.security.authenticator.feature.pushapprovals.PendingPushApproval
 import ru.dt1520.security.authenticator.feature.pushapprovals.PushApprovalDecisionResult
 import ru.dt1520.security.authenticator.feature.pushapprovals.PushApprovalsRoute
 import ru.dt1520.security.authenticator.feature.pushapprovals.PushDecisionHistoryEntry
 import ru.dt1520.security.authenticator.feature.provisioning.ProvisioningRoute
 import ru.dt1520.security.authenticator.feature.totpcodes.TotpCodesRoute
+import ru.dt1520.security.authenticator.security.storage.AndroidKeystoreSecureDeviceSessionStore
 import ru.dt1520.security.authenticator.security.storage.AndroidKeystoreSecureTotpSecretStore
 import ru.dt1520.security.authenticator.security.storage.SecureTotpSecretStore
 import ru.dt1520.security.authenticator.security.storage.StoredTotpSecret
@@ -42,6 +49,8 @@ internal fun AuthenticatorApp(
     deviceRuntimeBaseUrl: String? = BuildConfig.DEVICE_RUNTIME_BASE_URL.takeIf { it.isNotBlank() },
     pendingPushApprovals: List<PendingPushApproval> = emptyList(),
     pushDecisionHistory: List<PushDecisionHistoryEntry> = emptyList(),
+    onScanDeviceOnboardingQrPayload: (suspend () -> String?)? = null,
+    onActivateDeviceOnboardingPayload: (suspend (DeviceOnboardingPayload) -> DeviceOnboardingActivationResult)? = null,
     onApprovePushChallenge: suspend (PendingPushApproval) -> PushApprovalDecisionResult = {
         PushApprovalDecisionResult.Success
     },
@@ -55,13 +64,49 @@ internal fun AuthenticatorApp(
     val secureStore = secureStoreOverride ?: remember(context) {
         AndroidKeystoreSecureTotpSecretStore.create(context)
     }
+    val defaultDeviceRuntimeManager = remember(context, deviceRuntimeBaseUrl) {
+        deviceRuntimeBaseUrl?.let { baseUrl ->
+            DeviceRuntimeSessionManager(
+                sessionStore = AndroidKeystoreSecureDeviceSessionStore.create(context),
+                transport = HttpDeviceRuntimeTransport(baseUrl)
+            )
+        }
+    }
+    val deviceRuntimeManager = deviceRuntimeManagerOverride ?: defaultDeviceRuntimeManager
     val pushApprovalsRuntimeInteractor = rememberPushApprovalsRuntimeInteractor(
-        deviceRuntimeManagerOverride = deviceRuntimeManagerOverride,
+        deviceRuntimeManagerOverride = deviceRuntimeManager,
         pushApprovalDecisionCoordinatorOverride = pushApprovalDecisionCoordinatorOverride,
         deviceRuntimeBaseUrl = deviceRuntimeBaseUrl,
         onApprovePushChallenge = onApprovePushChallenge,
         onDenyPushChallenge = onDenyPushChallenge
     )
+    val defaultQrScanner = rememberDeviceOnboardingQrScanner()
+    val scanDeviceOnboardingQrPayload = onScanDeviceOnboardingQrPayload ?: defaultQrScanner
+    val activateDeviceOnboardingPayload: suspend (DeviceOnboardingPayload) -> DeviceOnboardingActivationResult =
+        onActivateDeviceOnboardingPayload ?: { payload ->
+        val runtimeManager = deviceRuntimeManager
+        if (runtimeManager == null) {
+            DeviceOnboardingActivationResult.Failure(
+                userMessage = "Runtime адрес не настроен. Проверьте сборку приложения."
+            )
+        } else {
+            runCatching {
+                runtimeManager.activateWithOnboardingPayload(
+                    activationPayload = payload.value,
+                    deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device"
+                )
+            }.fold(
+                onSuccess = { deviceId ->
+                    DeviceOnboardingActivationResult.Success(deviceId)
+                },
+                onFailure = { exception ->
+                    DeviceOnboardingActivationResult.Failure(
+                        userMessage = exception.toDeviceOnboardingStatusMessage()
+                    )
+                }
+            )
+        }
+    }
     var storedSecrets by remember {
         mutableStateOf<List<StoredTotpSecret>>(emptyList())
     }
@@ -161,6 +206,11 @@ internal fun AuthenticatorApp(
                     }
                 )
 
+                DeviceOnboardingRoute(
+                    onScanQrPayload = scanDeviceOnboardingQrPayload,
+                    onActivatePayload = activateDeviceOnboardingPayload
+                )
+
                 ProvisioningRoute(
                     onSaveImport = { preview ->
                         secureStore.save(preview.toStoredSecret())
@@ -186,5 +236,15 @@ internal fun AuthenticatorApp(
                 )
             }
         }
+    }
+}
+
+private fun Throwable.toDeviceOnboardingStatusMessage(): String {
+    return when (this) {
+        is DeviceRuntimeTransportException ->
+            "Не удалось подключить устройство. Проверьте срок действия QR и соединение."
+
+        else ->
+            "Не удалось подключить устройство. Проверьте QR и повторите попытку."
     }
 }

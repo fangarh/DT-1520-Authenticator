@@ -1,7 +1,9 @@
 import { LoginPanel } from "../features/auth/LoginPanel";
 import { DeliveryStatusWorkspace } from "../features/delivery-statuses/DeliveryStatusWorkspace";
+import { DeviceOnboardingWorkspace } from "../features/device-onboarding/DeviceOnboardingWorkspace";
 import { useAdminSession } from "../features/auth/useAdminSession";
 import { EnrollmentWorkspace } from "../features/enrollment-workspace/EnrollmentWorkspace";
+import { IntegrationClientWorkspace } from "../features/integration-clients/IntegrationClientWorkspace";
 import { UserDeviceWorkspace } from "../features/user-devices/UserDeviceWorkspace";
 import { WebhookSubscriptionWorkspace } from "../features/webhook-subscriptions/WebhookSubscriptionWorkspace";
 import { Button } from "../shared/ui/Button";
@@ -13,6 +15,7 @@ export default function App() {
   const currentSession = session.status === "authenticated" ? session.current : null;
   const canManageEnrollments = currentSession?.permissions.some((permission) => permission.startsWith("enrollments.")) ?? false;
   const canManageDevices = currentSession?.permissions.some((permission) => permission.startsWith("devices.")) ?? false;
+  const canManageIntegrationClients = currentSession?.permissions.some((permission) => permission.startsWith("integration-clients.")) ?? false;
   const canManageWebhooks = currentSession?.permissions.some((permission) => permission.startsWith("webhooks.")) ?? false;
   const canReadDeliveryStatuses = currentSession?.permissions.includes("webhooks.read") ?? false;
 
@@ -24,7 +27,7 @@ export default function App() {
           <h1 className={styles.title}>Operator console for enrollment and delivery visibility.</h1>
           <p className={styles.subtitle}>
             Browser contour now talks only to `/api/v1/admin/*`: session cookie,
-            CSRF, enrollment lifecycle, user device support, recent delivery outcomes and webhook subscription management.
+            CSRF, enrollment lifecycle, integration clients, QR device onboarding, user device support, recent delivery outcomes and webhook subscription management.
           </p>
         </div>
 
@@ -58,14 +61,16 @@ export default function App() {
       {session.status === "authenticated" && currentSession ? (
         <div className={styles.workspaceStack}>
           {canManageEnrollments ? <EnrollmentWorkspace session={currentSession} /> : null}
+          {canManageIntegrationClients ? <IntegrationClientWorkspace session={currentSession} /> : null}
+          {canManageDevices ? <DeviceOnboardingWorkspace session={currentSession} /> : null}
           {canManageDevices ? <UserDeviceWorkspace session={currentSession} /> : null}
           {canReadDeliveryStatuses ? <DeliveryStatusWorkspace session={currentSession} /> : null}
           {canManageWebhooks ? <WebhookSubscriptionWorkspace session={currentSession} /> : null}
-          {!canManageEnrollments && !canManageDevices && !canManageWebhooks && !canReadDeliveryStatuses ? (
+          {!canManageEnrollments && !canManageIntegrationClients && !canManageDevices && !canManageWebhooks && !canReadDeliveryStatuses ? (
             <Notice
               tone="neutral"
               title="Нет доступных operator surfaces"
-              detail="Текущая сессия не содержит permissions для enrollment, device или delivery/webhook management."
+              detail="Текущая сессия не содержит permissions для enrollment, integration client, device или delivery/webhook management."
             />
           ) : null}
         </div>

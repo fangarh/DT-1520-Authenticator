@@ -20,5 +20,7 @@ public sealed record DeviceActivationCodeArtifact
 
     public DateTimeOffset? ConsumedUtc { get; init; }
 
+    public DateTimeOffset? RevokedUtc { get; init; }
+
     public required DateTimeOffset CreatedUtc { get; init; }
 }

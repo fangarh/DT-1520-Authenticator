@@ -29,6 +29,7 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
                 code_hash as CodeHash,
                 expires_utc as ExpiresUtc,
                 consumed_utc as ConsumedUtc,
+                revoked_utc as RevokedUtc,
                 created_utc as CreatedUtc
             from auth.device_activation_codes
             where id = @ActivationCodeId
@@ -194,6 +195,7 @@ public sealed class PostgresDeviceRegistryStore : IDeviceRegistryStore
             set consumed_utc = @ActivatedAtUtc
             where id = @ActivationCodeId
               and consumed_utc is null
+              and revoked_utc is null
               and expires_utc > @ActivatedAtUtc;
             """,
             new

@@ -65,6 +65,7 @@ public sealed class ActivateDeviceHandler
         if (activationArtifact is null ||
             !_deviceRefreshTokenHasher.Verify(activationCodeSecret!, activationArtifact.CodeHash) ||
             activationArtifact.ConsumedUtc.HasValue ||
+            activationArtifact.RevokedUtc.HasValue ||
             activationArtifact.ExpiresUtc <= DateTimeOffset.UtcNow ||
             activationArtifact.TenantId != clientContext.TenantId ||
             activationArtifact.ApplicationClientId != clientContext.ApplicationClientId ||

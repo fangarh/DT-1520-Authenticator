@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/sdk/">
+    <Project Path="../lib/src/Dt1520.Authenticator.AspNetCore/Dt1520.Authenticator.AspNetCore.csproj" />
+    <Project Path="../lib/src/Dt1520.Authenticator.Client/Dt1520.Authenticator.Client.csproj" />
+    <Project Path="../lib/src/Dt1520.Authenticator.Desktop/Dt1520.Authenticator.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DesktopShell/DesktopShell.csproj" />
+    <Project Path="src/ReferenceBackend/ReferenceBackend.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ReferenceBackend.Tests/ReferenceBackend.Tests.csproj" />
+  </Folder>
+</Solution>

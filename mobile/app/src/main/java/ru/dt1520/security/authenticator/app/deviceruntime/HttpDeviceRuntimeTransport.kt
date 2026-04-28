@@ -41,6 +41,25 @@ internal class HttpDeviceRuntimeTransport(
         return parseActivationResponse(responseBody)
     }
 
+    override suspend fun activateWithOnboardingPayload(
+        command: DeviceOnboardingActivationCommand
+    ): ActivatedDeviceSession {
+        val responseBody = executeJsonRequest(
+            method = "POST",
+            path = "/api/v1/devices/activate-onboarding",
+            requestBody = JSONObject()
+                .put("activationPayload", command.activationPayload)
+                .put("platform", "android")
+                .put("installationId", command.installationId)
+                .applyOptional("deviceName", command.deviceName)
+                .applyOptional("pushToken", command.pushToken)
+                .applyOptional("publicKey", command.publicKey)
+                .toString()
+        )
+
+        return parseActivationResponse(responseBody)
+    }
+
     override suspend fun refresh(refreshToken: String): DeviceTokenEnvelope {
         val responseBody = executeJsonRequest(
             method = "POST",

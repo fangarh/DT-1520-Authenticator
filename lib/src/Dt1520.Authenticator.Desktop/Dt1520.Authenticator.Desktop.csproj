@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Dt1520.Authenticator.Desktop</PackageId>
+    <Description>Desktop approval session helpers for DT-1520 Authenticator integrations without desktop-held integration secrets.</Description>
+    <RootNamespace>Dt1520.Authenticator.Desktop</RootNamespace>
+  </PropertyGroup>
+</Project>

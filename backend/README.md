@@ -32,6 +32,34 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-backend.ps1
 
 Do not run backend `build` and `test` in parallel in this workspace.
 
+## Test hang workaround
+
+This Windows workspace frequently hits stale `dotnet`/`MSBuild` locks in `backend\artifacts\obj` or `backend\artifacts\bin`.
+
+When a backend test appears hung or fails with `Access denied`:
+
+1. Check running build processes:
+
+```powershell
+Get-Process dotnet, MSBuild, VBCSCompiler -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU,StartTime,Path
+```
+
+2. Stop only the stale processes from the current failed/hung verification attempt.
+3. Re-run through the sequential script:
+
+```powershell
+cd .\backend
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-backend.ps1
+```
+
+For targeted tests, keep build parallelism disabled:
+
+```powershell
+dotnet test .\OtpAuth.Infrastructure.Tests\OtpAuth.Infrastructure.Tests.csproj --filter "<filter>" --no-restore -p:BuildInParallel=false -p:RestoreBuildInParallel=false -maxcpucount:1
+```
+
+If the same command fails only inside the sandbox with `Access denied`, re-run the identical command outside the sandbox with approval instead of changing the test scope.
+
 ## Worker diagnostics
 
 `OtpAuth.Worker` now emits a sanitized heartbeat file for runtime diagnostics.
@@ -210,9 +238,42 @@ Security behavior:
 
 ## Integration client lifecycle operations
 
-Operational integration client management is performed outside `Api`.
+Runtime admin API now supports operator-safe read, creation and lifecycle flows for integration clients:
 
-Supported operations:
+- `GET /api/v1/admin/tenants/{tenantId}/integration-clients` requires `integration-clients.read`
+- `POST /api/v1/admin/integration-clients` requires `integration-clients.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/rotate-secret` requires `integration-clients.write` and `X-CSRF-TOKEN`
+- `PUT /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/scopes` requires `integration-clients.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/deactivate` requires `integration-clients.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/reactivate` requires `integration-clients.write` and `X-CSRF-TOKEN`
+- admin create generates the plaintext `clientSecret` server-side and returns it only in the `201 Created` response
+- admin rotate generates the plaintext `clientSecret` server-side and returns it only in the rotation command response
+- admin create rejects operator-provided `clientSecret`/`client_secret` payload fields and unsupported scopes
+- admin scope update accepts only whitelisted supported scopes and invalidates already issued access tokens through persisted auth state
+
+CLI lifecycle commands remain the operational fallback for bootstrap/recovery work.
+
+## Device onboarding artifacts
+
+Runtime admin API now has the backend contract for QR-based Android device onboarding:
+
+- `GET /api/v1/admin/tenants/{tenantId}/device-onboarding-artifacts` requires `devices.read`
+- `POST /api/v1/admin/device-onboarding-artifacts` requires `devices.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/admin/tenants/{tenantId}/device-onboarding-artifacts/{activationCodeId}/revoke` requires `devices.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/devices/activate-onboarding` is the mobile-facing QR consume endpoint and does not require an integration bearer token
+
+Security behavior:
+
+- create generates the activation payload server-side and returns plaintext only once in the `201 Created` response
+- list responses never include activation payloads or hashes
+- operator-provided activation payloads are rejected
+- mobile activation derives tenant/application/user binding from the server-side artifact, not from QR-provided claims
+- artifacts are one-time: activation consumes them atomically, `expires_utc` bounds lifetime, and `revoked_utc` blocks future activation
+- audit events `admin_device_onboarding.created` and `admin_device_onboarding.revoked` contain only sanitized metadata
+
+This is the backend foundation used by the Admin UI QR workspace and Android QR scan/import flow. The debug-only Android activation helper is pilot tooling only and is not required for the production-oriented QR path.
+
+Supported CLI operations:
 
 - rotate bootstrap client secret
 - deactivate integration client
@@ -224,6 +285,8 @@ Security behavior:
 - issued JWT access tokens become invalid when their `iat` is older than the current client auth state
 - this means secret rotation and deactivate/reactivate do not rely only on future token issuance
 - each lifecycle operation writes a sanitized event into `auth.security_audit_events`
+- admin create writes `admin_integration_client.created` with sanitized metadata only
+- runtime admin lifecycle writes `admin_integration_client.secret_rotated`, `admin_integration_client.scopes_changed`, `admin_integration_client.deactivated` and `admin_integration_client.reactivated`
 - audit payload stores only operation metadata and never includes `client_secret` or `client_secret_hash`
 
 Examples:
@@ -332,8 +395,14 @@ Required environment variable for `upsert-admin-user`:
 
 Supported bootstrap permissions:
 
+- `devices.read`
+- `devices.write`
 - `enrollments.read`
 - `enrollments.write`
+- `integration-clients.read`
+- `integration-clients.write`
+- `webhooks.read`
+- `webhooks.write`
 
 Example:
 
@@ -342,6 +411,15 @@ cd .\backend
 $env:ConnectionStrings__Postgres = 'Host=...;Port=5432;Database=...;Username=...;Password=...;SSL Mode=Disable'
 $env:OTPAUTH_ADMIN_PASSWORD = '<set-a-strong-password>'
 dotnet run --project .\OtpAuth.Migrations\OtpAuth.Migrations.csproj -- upsert-admin-user operator enrollments.read enrollments.write
+```
+
+For full operator lifecycle work during local productization, include all current admin permissions:
+
+```powershell
+cd .\backend
+$env:ConnectionStrings__Postgres = 'Host=...;Port=5432;Database=...;Username=...;Password=...;SSL Mode=Disable'
+$env:OTPAUTH_ADMIN_PASSWORD = '<set-a-strong-password>'
+dotnet run --project .\OtpAuth.Migrations\OtpAuth.Migrations.csproj -- upsert-admin-user operator enrollments.read enrollments.write webhooks.read webhooks.write devices.read devices.write integration-clients.read integration-clients.write
 ```
 
 ```powershell
