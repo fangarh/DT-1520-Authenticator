@@ -73,6 +73,8 @@ internal interface DeviceRuntimeTransport {
         integrationAccessToken: String
     ): ActivatedDeviceSession
 
+    suspend fun activateWithOnboardingPayload(command: DeviceOnboardingActivationCommand): ActivatedDeviceSession
+
     suspend fun refresh(refreshToken: String): DeviceTokenEnvelope
 
     suspend fun listPending(accessToken: String): List<PendingPushApproval>
@@ -91,3 +93,11 @@ internal interface DeviceRuntimeTransport {
         reason: String? = null
     )
 }
+
+internal data class DeviceOnboardingActivationCommand(
+    val activationPayload: String,
+    val installationId: String,
+    val deviceName: String? = null,
+    val pushToken: String? = null,
+    val publicKey: String? = null
+)

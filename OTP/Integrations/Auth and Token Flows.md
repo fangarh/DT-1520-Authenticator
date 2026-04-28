@@ -33,6 +33,7 @@ Scope-ы текущего draft:
 
 - `devices.read` / `devices.write`
 - `enrollments.read` / `enrollments.write`
+- `integration-clients.read` / `integration-clients.write`
 - `webhooks.read` / `webhooks.write`
 
 ## Текущий bootstrap implementation status
@@ -81,7 +82,7 @@ Security behavior:
 - rotate/deactivate/reactivate integration client инвалидируют уже выданные JWT через persisted `client auth state`
 - signing key rollout выполняется через смену current key, а старый key переводится в legacy с `RetireAtUtc = rollout time + token lifetime + clock skew`
 - audit snapshot signing key lifecycle пишется append-only в `auth.signing_key_audit_events` и содержит только sanitized metadata без signing material
-- bootstrap flow по-прежнему не заменяет полноценный auth subsystem: нет refresh token model, нет signing key rotation UI/API, нет token introspection caching, нет admin/API management surface для client lifecycle и нет общего audit contour для остальных security-событий
+- bootstrap flow по-прежнему не заменяет полноценный auth subsystem: нет refresh token model, нет signing key rotation UI/API, нет token introspection caching, admin client management backend уже закрывает read/create/rotate/scope/status lifecycle, но Admin UI workspace для этого lifecycle еще не реализован, и нет общего audit contour для остальных security-событий
 
 ## Mobile device tokens
 
@@ -90,6 +91,13 @@ Security behavior:
 1. Интеграционный backend или enrollment flow активирует устройство через `POST /api/v1/devices/activate`.
 2. В ответе устройство получает первую пару токенов.
 3. Для продления доступа используется `POST /api/v1/auth/device-tokens/refresh`.
+
+Для QR onboarding теперь есть отдельный mobile consume path:
+
+1. Admin/operator создает one-time artifact через `POST /api/v1/admin/device-onboarding-artifacts`.
+2. Android сканирует opaque `activationPayload`.
+3. Android вызывает `POST /api/v1/devices/activate-onboarding` без integration bearer и без integration `client_secret`.
+4. Backend извлекает `tenantId`, `applicationClientId` и `externalUserId` из server-side artifact, затем использует тот же atomic activation/consume path.
 
 После `ADR-030` для этого flow дополнительно зафиксированы обязательные security semantics:
 
@@ -109,7 +117,9 @@ Security behavior:
 
 - runtime `Device Registry` slice уже реализован в backend
 - `POST /api/v1/devices/activate` требует integration scope `devices:write`, валидирует one-time activation artifact и выдает первую пару `device access token + refresh token`
+- `POST /api/v1/devices/activate-onboarding` является mobile-facing QR activation path без integration bearer; он доверяет только server-side activation artifact metadata и не принимает tenant/user claims из QR payload
 - activation artifact теперь живет в `auth.device_activation_codes`, хранится hash-only и consume-ится атомарно при successful activation
+- operator-ready backend contract для QR onboarding теперь создает/list/revoke activation artifacts через admin API; plaintext payload возвращается только один раз при create, а explicit revoke фиксируется в `revoked_utc`
 - bootstrap/manual activation artifact можно создать explicit командой `seed-bootstrap-device-activation`
 - `POST /api/v1/auth/device-tokens/refresh` работает поверх `auth.device_refresh_tokens`, rotate-ит refresh token на каждый successful refresh и при reuse/expired/revoked token fail-closed блокирует устройство
 - device access token выпускается отдельным JWT contour с отдельным validator-ом; runtime принимает его только пока устройство `active` и `iat >= last_auth_state_changed_utc`
@@ -129,6 +139,7 @@ Security behavior:
 Минимальный `MVP` API contour остается таким:
 
 - `POST /api/v1/devices/activate`
+- `POST /api/v1/devices/activate-onboarding`
 - `POST /api/v1/auth/device-tokens/refresh`
 - `POST /api/v1/devices/{deviceId}/revoke`
 
@@ -254,6 +265,27 @@ Security semantics:
   - permissions `devices.read` / `devices.write`
   - revoke требует `CSRF` и fail-closed валидирует `tenantId + externalUserId + deviceId`, чтобы stale/wrong device binding не приводил к cross-user state change
   - operator action дополнительно пишет sanitized admin audit event `admin_device.revoked`, не меняя existing `device.revoked` lifecycle/webhook semantics
+- runtime backend path для operator/admin QR device onboarding теперь реализован:
+  - `GET /api/v1/admin/tenants/{tenantId}/device-onboarding-artifacts`
+  - `POST /api/v1/admin/device-onboarding-artifacts`
+  - `POST /api/v1/admin/tenants/{tenantId}/device-onboarding-artifacts/{activationCodeId}/revoke`
+  - permissions `devices.read` / `devices.write`
+  - create/revoke требуют `CSRF`
+  - create генерирует opaque activation payload server-side и возвращает plaintext только в command response
+  - list/revoke responses не раскрывают activation payload или hash
+  - admin audit events `admin_device_onboarding.created|revoked` sanitized
+- runtime backend path для operator/admin integration client management теперь реализован до lifecycle-команд:
+  - `GET /api/v1/admin/tenants/{tenantId}/integration-clients`
+  - `POST /api/v1/admin/integration-clients`
+  - `POST /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/rotate-secret`
+  - `PUT /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/scopes`
+  - `POST /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/deactivate`
+  - `POST /api/v1/admin/tenants/{tenantId}/integration-clients/{clientId}/reactivate`
+  - permissions `integration-clients.read` / `integration-clients.write`
+  - response отдает только `clientId`, tenant/application binding, lifecycle status, allowed scopes и timestamps
+  - create/rotate возвращают plaintext `clientSecret` только в command response
+  - scope/status/secret changes обновляют `last_auth_state_changed_utc`, чтобы уже выданные access token-ы invalidated
+  - `client_secret_hash` и plaintext `client_secret` не попадают в read model
 - endpoint validation для subscription URL повторяет callback hardening: обязательный `HTTPS`, reject `localhost` и private-network IP literals
 - `factor.revoked` теперь тоже публикуется через тот же subscription/outbox contour, причем revoke `TOTP` enrollment-а делает это атомарно с persisted state change без отдельного transport-а
-- management API/UI для subscriptions и operator device support contour больше не являются gap; следующий logical step смещается на pilot scenario definition и final hardening
+- management API/UI для subscriptions и operator device support contour больше не являются gap; для integration clients backend lifecycle уже закрыт, а Admin UI workspace/actions остаются следующими шагами productization

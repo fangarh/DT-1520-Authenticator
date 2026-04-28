@@ -2,8 +2,10 @@ package ru.dt1520.security.authenticator.app.pushapprovals
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
+import android.util.Log
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeSessionInvalidatedException
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeSessionManager
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeTransportException
@@ -54,6 +56,9 @@ internal class PushApprovalsRuntimeInteractor(
                 )
             },
             onFailure = { exception ->
+                runCatching {
+                    Log.w(LOG_TAG, "Pending push approval sync failed.", exception)
+                }
                 PushApprovalsPendingLoadResult(
                     challenges = emptyList(),
                     statusMessage = exception.toPushRuntimeStatusMessage()
@@ -135,6 +140,8 @@ internal fun rememberPushApprovalsRuntimeInteractor(
     }
 ): PushApprovalsRuntimeInteractor {
     val context = LocalContext.current
+    val approveFallback = rememberUpdatedState(onApprovePushChallenge)
+    val denyFallback = rememberUpdatedState(onDenyPushChallenge)
     val activity = context as? FragmentActivity
     val deviceRuntimeManager = deviceRuntimeManagerOverride ?: remember(context, deviceRuntimeBaseUrl) {
         deviceRuntimeBaseUrl?.let { baseUrl ->
@@ -164,9 +171,7 @@ internal fun rememberPushApprovalsRuntimeInteractor(
 
     return remember(
         deviceRuntimeManager,
-        pushApprovalDecisionCoordinator,
-        onApprovePushChallenge,
-        onDenyPushChallenge
+        pushApprovalDecisionCoordinator
     ) {
         PushApprovalsRuntimeInteractor(
             listPendingChallenges = deviceRuntimeManager?.let { runtimeManager ->
@@ -177,15 +182,17 @@ internal fun rememberPushApprovalsRuntimeInteractor(
             },
             approveChallenge = { challenge ->
                 pushApprovalDecisionCoordinator?.approve(challenge)
-                    ?: onApprovePushChallenge(challenge)
+                    ?: approveFallback.value(challenge)
             },
             denyChallenge = { challenge ->
                 pushApprovalDecisionCoordinator?.deny(challenge)
-                    ?: onDenyPushChallenge(challenge)
+                    ?: denyFallback.value(challenge)
             }
         )
     }
 }
+
+private const val LOG_TAG = "PushApprovalsRuntime"
 
 private fun Throwable.toPushRuntimeStatusMessage(): String {
     return when (this) {

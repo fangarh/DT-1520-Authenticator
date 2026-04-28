@@ -1,0 +1,51 @@
+.empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  gap: 16px;
+}
+
+.summary {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 250, 244, 0.8);
+}
+
+.summary strong,
+.summary p,
+.meta dd {
+  word-break: break-word;
+}
+
+.summary p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.meta {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.meta div {
+  display: grid;
+  gap: 4px;
+}
+
+.meta dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.meta dd {
+  margin: 0;
+}

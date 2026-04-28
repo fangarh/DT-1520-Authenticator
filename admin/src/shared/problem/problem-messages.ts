@@ -27,7 +27,7 @@ export function mapAdminProblem(problem: ProblemDetails | null, fallbackStatus?:
     return {
       title: "Недостаточно прав",
       detail: detail ?? "Текущая учетная запись не может выполнять это действие.",
-      actionHint: "Проверьте наличие operator permissions для enrollment, device или webhook management.",
+      actionHint: "Проверьте наличие operator permissions для enrollment, integration client, device или webhook management.",
     };
   }
 
@@ -42,8 +42,8 @@ export function mapAdminProblem(problem: ProblemDetails | null, fallbackStatus?:
   if (status === 404) {
     return {
       title: "Объект не найден",
-      detail: detail ?? "Backend не нашел enrollment, device, delivery scope, webhook subscription или application client для указанного контекста.",
-      actionHint: "Проверьте tenant, external user, filters, endpoint, device binding и при необходимости application client.",
+      detail: detail ?? "Backend не нашел enrollment, integration client, device, delivery scope, webhook subscription или application client для указанного контекста.",
+      actionHint: "Проверьте tenant, client id, external user, filters, endpoint, device binding и при необходимости application client.",
     };
   }
 
@@ -74,7 +74,7 @@ export function mapAdminProblem(problem: ProblemDetails | null, fallbackStatus?:
 
     return {
       title: "Состояние изменилось",
-      detail: detail ?? "Enrollment уже находится в другом состоянии.",
+      detail: detail ?? "Enrollment или integration client уже находится в другом состоянии.",
       actionHint: "Обновите current state и повторите допустимое действие только для допустимого lifecycle state.",
     };
   }

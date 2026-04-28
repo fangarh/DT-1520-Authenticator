@@ -8,12 +8,14 @@
 * Для задач по `Android`, проблем `Gradle/Android Studio`, IDE sync и runtime-debugging обязательно использовать `Android Studio MCP`, если он доступен; не ограничиваться чтением кода и догадками.
 * Если для `Android`-проверки нужен эмулятор, а он не запущен, его нужно запустить и только потом выполнять `MCP`/live verification; отсутствие запущенного эмулятора не считается причиной пропустить проверку.
 * Для этого проекта пользователь заранее разрешает любые действия, связанные с `Android`-разработкой: запуск `Gradle`/`adb`/emulator-скриптов, установку необходимых Android SDK/CLI/tooling-зависимостей, сборки, тесты, запуск/перезапуск эмулятора и live verification. Если ограничение приходит не от проекта, а от внешней среды/песочницы, это нужно явно указать.
+* В этом workspace часто зависают или блокируются тесты из-за stale `dotnet`/`MSBuild` процессов и locks в `backend/artifacts/*` или `%USERPROFILE%\.gradle`. Если тест "повис" или упал на `Access denied`, нужно: остановить только зависшие процессы последнего прогона (`dotnet`, `MSBuild`, при Android также `java`/`gradle`), не трогая unrelated процессы без причины; backend повторять через последовательный `backend/scripts/verify-backend.ps1` или `dotnet test ... -p:BuildInParallel=false -p:RestoreBuildInParallel=false -maxcpucount:1`; при sandbox `Access denied` повторять тот же command вне sandbox с escalation; Android запускать с явным `JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'`.
 * Если есть сомнение или неоднозначность, сначала уточни.
 * НЕЛЬЗЯ создавать большие файлы (например, React-компонент >300 строк)
 * НЕЛЬЗЯ использовать один общий CSS-файл
 * Логика, UI и стили должны быть разделены
 * Каждый модуль должен иметь одну ответственность (Single Responsibility)
 * Всегда придерживаться Clean Architecture
+* При написании кода обязательно синхронно вести документацию: обновлять профильные заметки в `OTP/`, `Current State`, `Implementation Map`, ADR при необходимости, developer/user docs и session note.
 
 <!-- context7 -->
 Use Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service -- even well-known ones like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. This includes API syntax, configuration, version migration, library-specific debugging, setup instructions, and CLI tool usage. Use even when you think you know the answer -- your training data may not reflect recent changes. Prefer this over web search for library docs.
@@ -56,6 +58,8 @@ When a new decision is accepted or a material change is made:
 - update the relevant note in `OTP/`
 - add or update an `ADR` under `OTP/Decisions/` if the change is architectural or long-lived
 - update `OTP/01 - Current State.md` if implementation status changed
+- update `OTP/Agent/Implementation Map.md` when new code entry points, tests, modules, packages, apps, scripts, or documentation surfaces appear
+- update developer/user documentation when the change is user-facing, operator-facing, integration-facing, or operationally relevant
 - append a short entry to the latest session note under `OTP/Sessions/`
 
 ### Documentation style

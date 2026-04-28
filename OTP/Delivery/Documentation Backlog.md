@@ -31,8 +31,16 @@
 - `OTP/Delivery/Local Development Runbook.md`
 - `OTP/Delivery/CI-CD and Release Flow.md`
 - `OTP/Delivery/Observability and Alerting.md`
-- `OTP/Integrations/SDK Strategy.md`
+- [[Official Dotnet Integration SDK]]
+- [[Reference Desktop Backend Stand]]
+- [[Documentation Handoff Plan]]
 - `OTP/Delivery/On-Prem Operations Runbook.md`
+
+## Current productization documentation focus
+
+После первого ручного pilot и обсуждения `.NET` SDK документационный фокус смещен с исторического backlog-а на living documentation для передачи коллегам.
+
+См. [[Documentation Handoff Plan]].
 
 ## Критерий завершения `P0`
 

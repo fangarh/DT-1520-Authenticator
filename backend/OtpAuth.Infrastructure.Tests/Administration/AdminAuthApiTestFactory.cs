@@ -63,6 +63,8 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.RemoveAll<IAdminDeviceAuditWriter>();
             services.RemoveAll<IAdminTotpEnrollmentAuditWriter>();
             services.RemoveAll<IAdminWebhookSubscriptionAuditWriter>();
+            services.RemoveAll<IAdminIntegrationClientAuditWriter>();
+            services.RemoveAll<IAdminDeviceOnboardingAuditWriter>();
             services.RemoveAll<IAdminLoginRateLimiter>();
             services.RemoveAll<IIntegrationClientStore>();
             services.RemoveAll<ITotpEnrollmentProvisioningStore>();
@@ -70,7 +72,9 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDeviceRegistryStore>();
             services.RemoveAll<IDeviceLifecycleAuditWriter>();
             services.RemoveAll<IAdminDeviceStore>();
+            services.RemoveAll<IAdminDeviceOnboardingStore>();
             services.RemoveAll<IAdminDeliveryStatusStore>();
+            services.RemoveAll<IAdminIntegrationClientStore>();
             services.RemoveAll<IWebhookSubscriptionStore>();
 
             services.AddSingleton<InMemoryAdminUserStore>();
@@ -78,6 +82,8 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<RecordingAdminDeviceAuditWriter>();
             services.AddSingleton<RecordingAdminTotpEnrollmentAuditWriter>();
             services.AddSingleton<RecordingAdminWebhookSubscriptionAuditWriter>();
+            services.AddSingleton<RecordingAdminIntegrationClientAuditWriter>();
+            services.AddSingleton<RecordingAdminDeviceOnboardingAuditWriter>();
             services.AddSingleton<RecordingTotpEnrollmentAuditWriter>();
             services.AddSingleton<InMemoryIntegrationClientStore>();
             services.AddSingleton<InMemoryEnrollmentApiStore>();
@@ -85,12 +91,15 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<RecordingDeviceLifecycleAuditWriter>();
             services.AddSingleton<InMemoryAdminDeviceStore>();
             services.AddSingleton<InMemoryAdminDeliveryStatusStore>();
+            services.AddSingleton<InMemoryAdminIntegrationClientStore>();
             services.AddSingleton<InMemoryWebhookSubscriptionStore>();
             services.AddSingleton<IAdminUserStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminUserStore>());
             services.AddSingleton<IAdminAuthAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminAuthAuditWriter>());
             services.AddSingleton<IAdminDeviceAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminDeviceAuditWriter>());
             services.AddSingleton<IAdminTotpEnrollmentAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminTotpEnrollmentAuditWriter>());
             services.AddSingleton<IAdminWebhookSubscriptionAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminWebhookSubscriptionAuditWriter>());
+            services.AddSingleton<IAdminIntegrationClientAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminIntegrationClientAuditWriter>());
+            services.AddSingleton<IAdminDeviceOnboardingAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminDeviceOnboardingAuditWriter>());
             services.AddSingleton<IAdminLoginRateLimiter, InMemoryAdminLoginRateLimiter>();
             services.AddSingleton<IIntegrationClientStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryIntegrationClientStore>());
             services.AddSingleton<ITotpEnrollmentProvisioningStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryEnrollmentApiStore>());
@@ -98,7 +107,9 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<IDeviceRegistryStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryDeviceRegistryStore>());
             services.AddSingleton<IDeviceLifecycleAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingDeviceLifecycleAuditWriter>());
             services.AddSingleton<IAdminDeviceStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminDeviceStore>());
+            services.AddSingleton<IAdminDeviceOnboardingStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryDeviceRegistryStore>());
             services.AddSingleton<IAdminDeliveryStatusStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminDeliveryStatusStore>());
+            services.AddSingleton<IAdminIntegrationClientStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminIntegrationClientStore>());
             services.AddSingleton<IWebhookSubscriptionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryWebhookSubscriptionStore>());
         });
     }
@@ -158,6 +169,16 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         return Services.GetRequiredService<RecordingAdminWebhookSubscriptionAuditWriter>();
     }
 
+    public RecordingAdminIntegrationClientAuditWriter GetAdminIntegrationClientAuditWriter()
+    {
+        return Services.GetRequiredService<RecordingAdminIntegrationClientAuditWriter>();
+    }
+
+    public RecordingAdminDeviceOnboardingAuditWriter GetAdminDeviceOnboardingAuditWriter()
+    {
+        return Services.GetRequiredService<RecordingAdminDeviceOnboardingAuditWriter>();
+    }
+
     internal InMemoryDeviceRegistryStore GetDevices()
     {
         return Services.GetRequiredService<InMemoryDeviceRegistryStore>();
@@ -171,6 +192,11 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
     public InMemoryAdminDeliveryStatusStore GetAdminDeliveryStatuses()
     {
         return Services.GetRequiredService<InMemoryAdminDeliveryStatusStore>();
+    }
+
+    public InMemoryAdminIntegrationClientStore GetAdminIntegrationClients()
+    {
+        return Services.GetRequiredService<InMemoryAdminIntegrationClientStore>();
     }
 
     public sealed class InMemoryAdminUserStore : IAdminUserStore
@@ -345,6 +371,101 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         }
     }
 
+    public sealed class RecordingAdminIntegrationClientAuditWriter : IAdminIntegrationClientAuditWriter
+    {
+        public List<(string EventType, Guid AdminUserId, string ClientId, Guid TenantId, Guid ApplicationClientId, IReadOnlyCollection<string> AllowedScopes)> Events { get; } = [];
+
+        public Task WriteCreatedAsync(
+            AdminContext adminContext,
+            AdminIntegrationClientView client,
+            CancellationToken cancellationToken)
+        {
+            Add("created", adminContext, client);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteSecretRotatedAsync(
+            AdminContext adminContext,
+            AdminIntegrationClientView client,
+            CancellationToken cancellationToken)
+        {
+            Add("secret_rotated", adminContext, client);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteScopesChangedAsync(
+            AdminContext adminContext,
+            AdminIntegrationClientView client,
+            CancellationToken cancellationToken)
+        {
+            Add("scopes_changed", adminContext, client);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteDeactivatedAsync(
+            AdminContext adminContext,
+            AdminIntegrationClientView client,
+            CancellationToken cancellationToken)
+        {
+            Add("deactivated", adminContext, client);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteReactivatedAsync(
+            AdminContext adminContext,
+            AdminIntegrationClientView client,
+            CancellationToken cancellationToken)
+        {
+            Add("reactivated", adminContext, client);
+            return Task.CompletedTask;
+        }
+
+        private void Add(string eventType, AdminContext adminContext, AdminIntegrationClientView client)
+        {
+            Events.Add((
+                eventType,
+                adminContext.AdminUserId,
+                client.ClientId,
+                client.TenantId,
+                client.ApplicationClientId,
+                client.AllowedScopes));
+        }
+    }
+
+    public sealed class RecordingAdminDeviceOnboardingAuditWriter : IAdminDeviceOnboardingAuditWriter
+    {
+        public List<(string EventType, Guid AdminUserId, Guid ActivationCodeId, Guid TenantId, Guid ApplicationClientId, string ExternalUserId)> Events { get; } = [];
+
+        public Task WriteCreatedAsync(
+            AdminContext adminContext,
+            AdminDeviceOnboardingView artifact,
+            CancellationToken cancellationToken)
+        {
+            Add("created", adminContext, artifact);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteRevokedAsync(
+            AdminContext adminContext,
+            AdminDeviceOnboardingView artifact,
+            CancellationToken cancellationToken)
+        {
+            Add("revoked", adminContext, artifact);
+            return Task.CompletedTask;
+        }
+
+        private void Add(string eventType, AdminContext adminContext, AdminDeviceOnboardingView artifact)
+        {
+            Events.Add((
+                eventType,
+                adminContext.AdminUserId,
+                artifact.ActivationCodeId,
+                artifact.TenantId,
+                artifact.ApplicationClientId,
+                artifact.ExternalUserId));
+        }
+    }
+
     public sealed class InMemoryIntegrationClientStore : IIntegrationClientStore
     {
         private readonly Dictionary<string, IntegrationClient> _clients = new(StringComparer.Ordinal);
@@ -475,6 +596,153 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
                 .ToArray();
 
             return Task.FromResult<IReadOnlyCollection<AdminDeliveryStatusView>>(deliveries);
+        }
+    }
+
+    public sealed class InMemoryAdminIntegrationClientStore : IAdminIntegrationClientStore
+    {
+        private readonly List<AdminIntegrationClientView> _clients = [];
+
+        public AdminIntegrationClientView Seed(AdminIntegrationClientView client)
+        {
+            _clients.Add(client);
+            return client;
+        }
+
+        public Task<IReadOnlyCollection<AdminIntegrationClientView>> ListByTenantAsync(
+            AdminIntegrationClientListRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var clients = _clients
+                .Where(client => client.TenantId == request.TenantId)
+                .OrderBy(client => client.ClientId, StringComparer.Ordinal)
+                .ToArray();
+
+            return Task.FromResult<IReadOnlyCollection<AdminIntegrationClientView>>(clients);
+        }
+
+        public Task<AdminIntegrationClientView?> GetByTenantAndClientIdAsync(
+            Guid tenantId,
+            string clientId,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var client = _clients.FirstOrDefault(item =>
+                item.TenantId == tenantId &&
+                string.Equals(item.ClientId, clientId, StringComparison.Ordinal));
+            return Task.FromResult(client);
+        }
+
+        public Task<AdminIntegrationClientView?> CreateAsync(
+            AdminIntegrationClientCreateDraft draft,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (_clients.Any(client => string.Equals(client.ClientId, draft.ClientId, StringComparison.Ordinal)))
+            {
+                return Task.FromResult<AdminIntegrationClientView?>(null);
+            }
+
+            var client = new AdminIntegrationClientView
+            {
+                ClientId = draft.ClientId,
+                TenantId = draft.TenantId,
+                ApplicationClientId = draft.ApplicationClientId,
+                Status = AdminIntegrationClientStatus.Active,
+                AllowedScopes = draft.AllowedScopes
+                    .OrderBy(static scope => scope, StringComparer.Ordinal)
+                    .ToArray(),
+                CreatedUtc = draft.CreatedUtc,
+                UpdatedUtc = draft.CreatedUtc,
+                LastSecretRotatedUtc = draft.CreatedUtc,
+                LastAuthStateChangedUtc = draft.CreatedUtc,
+            };
+
+            _clients.Add(client);
+            return Task.FromResult<AdminIntegrationClientView?>(client);
+        }
+
+        public Task<AdminIntegrationClientView?> RotateSecretAsync(
+            Guid tenantId,
+            string clientId,
+            string clientSecretHash,
+            DateTimeOffset changedAtUtc,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Update(
+                tenantId,
+                clientId,
+                client => client with
+                {
+                    UpdatedUtc = changedAtUtc,
+                    LastSecretRotatedUtc = changedAtUtc,
+                    LastAuthStateChangedUtc = changedAtUtc,
+                }));
+        }
+
+        public Task<AdminIntegrationClientView?> UpdateScopesAsync(
+            Guid tenantId,
+            string clientId,
+            IReadOnlyCollection<string> allowedScopes,
+            DateTimeOffset changedAtUtc,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Update(
+                tenantId,
+                clientId,
+                client => client with
+                {
+                    AllowedScopes = allowedScopes
+                        .OrderBy(static scope => scope, StringComparer.Ordinal)
+                        .ToArray(),
+                    UpdatedUtc = changedAtUtc,
+                    LastAuthStateChangedUtc = changedAtUtc,
+                }));
+        }
+
+        public Task<AdminIntegrationClientView?> SetIsActiveAsync(
+            Guid tenantId,
+            string clientId,
+            bool isActive,
+            DateTimeOffset changedAtUtc,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Update(
+                tenantId,
+                clientId,
+                client => client with
+                {
+                    Status = isActive
+                        ? AdminIntegrationClientStatus.Active
+                        : AdminIntegrationClientStatus.Inactive,
+                    UpdatedUtc = changedAtUtc,
+                    LastAuthStateChangedUtc = changedAtUtc,
+                }));
+        }
+
+        private AdminIntegrationClientView? Update(
+            Guid tenantId,
+            string clientId,
+            Func<AdminIntegrationClientView, AdminIntegrationClientView> update)
+        {
+            var index = _clients.FindIndex(item =>
+                item.TenantId == tenantId &&
+                string.Equals(item.ClientId, clientId, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                return null;
+            }
+
+            var updated = update(_clients[index]);
+            _clients[index] = updated;
+            return updated;
         }
     }
 

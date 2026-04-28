@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted mandatory follow-up task
+Completed on `2026-04-27`.
+
+Backend read/list `Iteration 1`, backend create `Iteration 2`, backend lifecycle `Iteration 3`, Admin UI read/create `Iteration 4`, Admin UI lifecycle `Iteration 5` and end-to-end hardening/documentation closure `Iteration 6` are complete.
+
+Detailed implementation breakdown: [[Admin Client Management Iteration Plan]]
 
 ## Trigger
 
@@ -49,6 +53,15 @@ Accepted mandatory follow-up task
 - deactivate/reactivate client
 - sanitized audit trail для admin client actions
 
+## Closure verification
+
+Закрытие `Iteration 6` подтвердило:
+
+- full backend verification: `backend/scripts/verify-backend.ps1` зеленый (`343/343` infrastructure tests, `19/19` worker tests); residual warning остается прежним и связан только с `IBM.Data.Db2` architecture mismatch в `OtpAuth.Migrations`
+- full `Admin UI` verification: `npm test` (`43/43`), `npm run build`, `npm run test:e2e` (`6/6`)
+- `docs/` handoff обновлен для operator onboarding, rotation, deactivation/reactivation и troubleshooting
+- security review подтверждает, что one-time `clientSecret` не попадает в read model, audit payloads, browser persistence or fixture snapshots
+
 ## Security requirements
 
 - plaintext secret показывается только в creation/rotation moment
@@ -71,3 +84,5 @@ Accepted mandatory follow-up task
 Выполнять эту задачу только после подтвержденного первого ручного pilot-теста.
 
 После ручного pilot-теста это должен быть следующий обязательный admin/productization track.
+
+После очистки контекста использовать [[Admin Client Management Context Reset Prompt]].

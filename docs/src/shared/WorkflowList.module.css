@@ -1,0 +1,85 @@
+.wrap {
+  padding: 40px 0;
+  border-top: 1px solid #d7dfec;
+}
+
+.heading {
+  display: grid;
+  gap: 8px;
+}
+
+.heading span {
+  color: #5b6472;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.heading h2 {
+  margin: 0;
+  color: #132033;
+  font-size: 2rem;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+  min-width: 0;
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #d8e1ee;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.card h3,
+.card p {
+  margin: 0;
+}
+
+.card h3 {
+  color: #1f2a3a;
+}
+
+.path,
+.audit {
+  color: #586579;
+  line-height: 1.55;
+}
+
+.permission {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #164478;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.card ol {
+  margin: 0;
+  padding-left: 22px;
+  color: #2f3b4d;
+  line-height: 1.6;
+}
+
+@media (max-width: 860px) {
+  .list {
+    grid-template-columns: 1fr;
+  }
+
+  .heading h2 {
+    font-size: 1.55rem;
+  }
+}

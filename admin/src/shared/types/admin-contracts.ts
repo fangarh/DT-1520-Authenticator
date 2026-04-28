@@ -123,3 +123,76 @@ export interface AdminUserDeviceView {
   revokedAtUtc?: string | null;
   blockedAtUtc?: string | null;
 }
+
+export type AdminDeviceOnboardingStatus = "pending" | "consumed" | "expired" | "revoked";
+
+export type AdminDeviceOnboardingPlatform = "android" | "ios" | "unknown";
+
+export interface AdminDeviceOnboardingArtifactView {
+  activationCodeId: string;
+  tenantId: string;
+  applicationClientId: string;
+  externalUserId: string;
+  platform: AdminDeviceOnboardingPlatform;
+  status: AdminDeviceOnboardingStatus;
+  expiresAtUtc: string;
+  consumedAtUtc?: string | null;
+  revokedAtUtc?: string | null;
+  createdAtUtc: string;
+}
+
+export interface AdminDeviceOnboardingListFilters {
+  externalUserId?: string;
+  applicationClientId?: string;
+  status?: AdminDeviceOnboardingStatus;
+  limit?: number;
+}
+
+export interface AdminCreateDeviceOnboardingArtifactRequest {
+  tenantId: string;
+  applicationClientId: string;
+  externalUserId: string;
+  platform: AdminDeviceOnboardingPlatform;
+  ttlMinutes: number;
+}
+
+export interface AdminCreateDeviceOnboardingArtifactResponse {
+  artifact: AdminDeviceOnboardingArtifactView;
+  activationPayload: string;
+}
+
+export type AdminIntegrationClientStatus = "active" | "inactive";
+
+export type AdminIntegrationClientScope =
+  | "challenges:read"
+  | "challenges:write"
+  | "enrollments:write"
+  | "devices:write";
+
+export interface AdminIntegrationClientView {
+  clientId: string;
+  tenantId: string;
+  applicationClientId: string;
+  status: AdminIntegrationClientStatus;
+  allowedScopes: AdminIntegrationClientScope[];
+  createdUtc: string;
+  updatedUtc?: string | null;
+  lastSecretRotatedUtc?: string | null;
+  lastAuthStateChangedUtc: string;
+}
+
+export interface AdminCreateIntegrationClientRequest {
+  clientId: string;
+  tenantId: string;
+  applicationClientId: string;
+  allowedScopes: AdminIntegrationClientScope[];
+}
+
+export interface AdminUpdateIntegrationClientScopesRequest {
+  allowedScopes: AdminIntegrationClientScope[];
+}
+
+export interface AdminIntegrationClientSecretResponse {
+  client: AdminIntegrationClientView;
+  clientSecret: string;
+}

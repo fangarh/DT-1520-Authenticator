@@ -1,11 +1,12 @@
 using OtpAuth.Application.Devices;
+using OtpAuth.Application.Administration;
 using OtpAuth.Application.Webhooks;
 using OtpAuth.Domain.Devices;
 using OtpAuth.Infrastructure.Devices;
 
 namespace OtpAuth.Infrastructure.Tests.Devices;
 
-internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
+internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore, IAdminDeviceOnboardingStore
 {
     private readonly Dictionary<Guid, DeviceActivationCodeArtifact> _activationCodes = [];
     private readonly Dictionary<Guid, RegisteredDevice> _devices = [];
@@ -89,6 +90,7 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
 
         if (!_activationCodes.TryGetValue(activationCodeId, out var activationCode) ||
             activationCode.ConsumedUtc.HasValue ||
+            activationCode.RevokedUtc.HasValue ||
             activationCode.ExpiresUtc <= activatedAtUtc)
         {
             return Task.FromResult(false);
@@ -193,7 +195,8 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
         string externalUserId,
         DevicePlatform platform,
         string secret,
-        DateTimeOffset? expiresUtc = null)
+        DateTimeOffset? expiresUtc = null,
+        DateTimeOffset? revokedUtc = null)
     {
         var activationCodeId = Guid.NewGuid();
         var seeded = new SeededActivationCode
@@ -214,10 +217,97 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
             Platform = platform,
             CodeHash = _hasher.Hash(secret),
             ExpiresUtc = seeded.ExpiresUtc,
+            RevokedUtc = revokedUtc,
             CreatedUtc = DateTimeOffset.UtcNow,
         };
 
         return seeded;
+    }
+
+    public Task<IReadOnlyCollection<AdminDeviceOnboardingView>> ListAsync(
+        AdminDeviceOnboardingListRequest request,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var artifacts = _activationCodes.Values
+            .Where(artifact =>
+                artifact.TenantId == request.TenantId &&
+                (!request.ApplicationClientId.HasValue || artifact.ApplicationClientId == request.ApplicationClientId.Value) &&
+                (request.ExternalUserId is null || string.Equals(artifact.ExternalUserId, request.ExternalUserId, StringComparison.Ordinal)))
+            .Select(artifact => ToAdminView(artifact, nowUtc))
+            .Where(artifact => !request.Status.HasValue || artifact.Status == request.Status.Value)
+            .OrderByDescending(artifact => artifact.CreatedUtc)
+            .ThenByDescending(artifact => artifact.ActivationCodeId)
+            .Take(request.Limit)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyCollection<AdminDeviceOnboardingView>>(artifacts);
+    }
+
+    public Task<AdminDeviceOnboardingView?> CreateAsync(
+        AdminDeviceOnboardingCreateDraft draft,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_activationCodes.ContainsKey(draft.ActivationCodeId))
+        {
+            return Task.FromResult<AdminDeviceOnboardingView?>(null);
+        }
+
+        var artifact = new DeviceActivationCodeArtifact
+        {
+            ActivationCodeId = draft.ActivationCodeId,
+            TenantId = draft.TenantId,
+            ApplicationClientId = draft.ApplicationClientId,
+            ExternalUserId = draft.ExternalUserId,
+            Platform = draft.Platform,
+            CodeHash = draft.CodeHash,
+            ExpiresUtc = draft.ExpiresUtc,
+            CreatedUtc = draft.CreatedUtc,
+        };
+        _activationCodes[draft.ActivationCodeId] = artifact;
+        return Task.FromResult<AdminDeviceOnboardingView?>(ToAdminView(artifact, draft.CreatedUtc));
+    }
+
+    public Task<AdminDeviceOnboardingRevokeStoreResult> RevokeAsync(
+        Guid tenantId,
+        Guid activationCodeId,
+        DateTimeOffset revokedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_activationCodes.TryGetValue(activationCodeId, out var artifact) || artifact.TenantId != tenantId)
+        {
+            return Task.FromResult(new AdminDeviceOnboardingRevokeStoreResult
+            {
+                IsFound = false,
+                WasRevoked = false,
+            });
+        }
+
+        var wasRevoked = false;
+        if (!artifact.ConsumedUtc.HasValue &&
+            !artifact.RevokedUtc.HasValue &&
+            artifact.ExpiresUtc > revokedAtUtc)
+        {
+            wasRevoked = true;
+            artifact = artifact with
+            {
+                RevokedUtc = revokedAtUtc,
+            };
+            _activationCodes[activationCodeId] = artifact;
+        }
+
+        return Task.FromResult(new AdminDeviceOnboardingRevokeStoreResult
+        {
+            IsFound = true,
+            WasRevoked = wasRevoked,
+            Artifact = ToAdminView(artifact, revokedAtUtc),
+        });
     }
 
     public SeededDevice SeedActiveDevice(
@@ -321,6 +411,40 @@ internal sealed class InMemoryDeviceRegistryStore : IDeviceRegistryStore
                 CreatedUtc = publication.OccurredAtUtc,
             });
         }
+    }
+
+    private static AdminDeviceOnboardingView ToAdminView(DeviceActivationCodeArtifact artifact, DateTimeOffset nowUtc)
+    {
+        return new AdminDeviceOnboardingView
+        {
+            ActivationCodeId = artifact.ActivationCodeId,
+            TenantId = artifact.TenantId,
+            ApplicationClientId = artifact.ApplicationClientId,
+            ExternalUserId = artifact.ExternalUserId,
+            Platform = artifact.Platform,
+            Status = GetStatus(artifact, nowUtc),
+            ExpiresUtc = artifact.ExpiresUtc,
+            ConsumedUtc = artifact.ConsumedUtc,
+            RevokedUtc = artifact.RevokedUtc,
+            CreatedUtc = artifact.CreatedUtc,
+        };
+    }
+
+    private static AdminDeviceOnboardingStatus GetStatus(DeviceActivationCodeArtifact artifact, DateTimeOffset nowUtc)
+    {
+        if (artifact.RevokedUtc.HasValue)
+        {
+            return AdminDeviceOnboardingStatus.Revoked;
+        }
+
+        if (artifact.ConsumedUtc.HasValue)
+        {
+            return AdminDeviceOnboardingStatus.Consumed;
+        }
+
+        return artifact.ExpiresUtc <= nowUtc
+            ? AdminDeviceOnboardingStatus.Expired
+            : AdminDeviceOnboardingStatus.Pending;
     }
 
     public sealed record SeededActivationCode

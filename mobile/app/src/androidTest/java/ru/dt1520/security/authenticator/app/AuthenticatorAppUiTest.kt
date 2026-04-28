@@ -42,14 +42,22 @@ class AuthenticatorAppUiTest {
         }
 
         composeRule.onNodeWithTag(ProvisioningTestTags.ManualIssuerField)
+            .performScrollTo()
             .performTextInput("Contoso")
         composeRule.onNodeWithTag(ProvisioningTestTags.ManualAccountField)
+            .performScrollTo()
             .performTextInput("operator@example.local")
         composeRule.onNodeWithTag(ProvisioningTestTags.ManualSecretField)
+            .performScrollTo()
             .performTextInput("JBSWY3DPEHPK3PXP")
         composeRule.onNodeWithTag(ProvisioningTestTags.PreviewManualButton)
+            .performScrollTo()
             .performClick()
 
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(ProvisioningTestTags.PreviewCard)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag(ProvisioningTestTags.PreviewCard).assertExists()
         composeRule.onNodeWithTag(ProvisioningTestTags.SaveButton)
             .performScrollTo()

@@ -24,6 +24,20 @@ Accepted working guideline
 - mobile уже имеет pending inbox shell, secure device session storage и runtime transport для `activate/refresh/pending/approve/deny`
 - `Iteration 4` закрыла последний mobile gap для `push` runtime: approve теперь проходит через локальный biometric gate, а базовая история решений хранится локально в sanitized encrypted store без transport-данных
 
+## Live pilot checkpoint на `2026-04-24`
+
+- Проверка выполнена на `emulator-5554` против live runtime `https://admin.ghostring.ru:18443`.
+- Для pilot-пользователя `externalUserId=f1d6afaa-8a5d-4fd3-9f75-0a5c0177df81` активировано Android-устройство `077d09f9-8637-4583-8864-9b29ced707b4` с non-empty `pushToken`, поэтому integration lookup возвращает active push-capable device.
+- Основной `Push Approvals` UI показывает live pending challenge после сборки с `-PdeviceRuntimeBaseUrl=https://admin.ghostring.ru:18443`.
+- `deny` path подтвержден end-to-end: Android UI отправил решение, а live challenge перешел в `denied`.
+- `approve` path подтвержден end-to-end через device PIN `1234`: Android `BiometricPrompt`/device credential gate завершился успешно, а live challenge `a202ef93-c2f5-4645-80cf-06af37d1d86d` перешел в `approved`.
+- Первый ручной ProjectManager-created pilot также подтвердил появление challenge на Android emulator и успешное пользовательское подтверждение, но observed lag между запросом в `ProjectManager` и появлением в Android UI составляет около `~60s`.
+- `~60s` lag считается delivery/polling UX issue, а не дефектом основного device-bound approve contour: до внедрения real push provider или более агрессивного foreground polling это ожидаемый residual.
+- Offline verification не проводилась: live checkpoint не подтверждает поведение Android app без сети или при недоступном runtime.
+- Latency follow-up вынесен в отдельный обязательный delivery step: [[../Delivery/Push Delivery Latency Follow-Up]].
+- Найденные и закрытые mobile runtime gaps: network calls перенесены с main thread в `DeviceRuntimeSessionManager` через `Dispatchers.IO`, `MainActivity` переведена на `FragmentActivity` для реального `BiometricPrompt`, а runtime base URL передается явно из `BuildConfig`.
+- Добавлен debug-only helper `PilotDeviceActivationActivity` под `mobile/app/src/debug` для controlled pilot activation/pending checks; это не production onboarding UX.
+
 ## Scope текущего трека
 
 Входит:
@@ -147,4 +161,4 @@ Status:
 2. читать `OTP/Agent/Implementation Map.md`
 3. читать эту заметку
 4. проверить `backend/OtpAuth.Api/Endpoints/DevicesEndpoints.cs` и `backend/OtpAuth.Application/Challenges/ListPendingPushChallengesForDeviceHandler.cs`
-5. `Iteration 1-4` считать закрытыми и не возвращаться к уже реализованным mobile transport/biometric/history slices без нового product decision
+5. `Iteration 1-4` и live emulator pilot checkpoint `2026-04-24` считать закрытыми и не возвращаться к уже реализованным mobile transport/biometric/history slices без нового product decision

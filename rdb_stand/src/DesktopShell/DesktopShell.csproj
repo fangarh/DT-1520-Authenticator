@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Dt1520.Authenticator.ReferenceDesktop</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\lib\src\Dt1520.Authenticator.Desktop\Dt1520.Authenticator.Desktop.csproj" />
+  </ItemGroup>
+</Project>

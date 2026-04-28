@@ -19,6 +19,21 @@ public sealed record ActivateDeviceHttpRequest
     public string? PublicKey { get; init; }
 }
 
+public sealed record ActivateDeviceWithOnboardingPayloadHttpRequest
+{
+    public required string ActivationPayload { get; init; }
+
+    public required string Platform { get; init; }
+
+    public required string InstallationId { get; init; }
+
+    public string? DeviceName { get; init; }
+
+    public string? PushToken { get; init; }
+
+    public string? PublicKey { get; init; }
+}
+
 public sealed record RefreshDeviceTokenHttpRequest
 {
     public required string RefreshToken { get; init; }

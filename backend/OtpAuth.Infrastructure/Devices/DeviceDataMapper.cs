@@ -82,6 +82,8 @@ internal sealed record DeviceActivationCodePersistenceModel
 
     public DateTimeOffset? ConsumedUtc { get; init; }
 
+    public DateTimeOffset? RevokedUtc { get; init; }
+
     public required DateTimeOffset CreatedUtc { get; init; }
 }
 

@@ -40,6 +40,39 @@ public static class DeviceRequestMapper
         return true;
     }
 
+    public static bool TryMap(
+        ActivateDeviceWithOnboardingPayloadHttpRequest request,
+        out ActivateDeviceWithOnboardingPayloadRequest? applicationRequest,
+        out string? validationError)
+    {
+        applicationRequest = null;
+        validationError = null;
+
+        var platform = request.Platform?.Trim().ToLowerInvariant() switch
+        {
+            "android" => DevicePlatform.Android,
+            "ios" => DevicePlatform.Ios,
+            _ => DevicePlatform.Unknown,
+        };
+        if (platform == DevicePlatform.Unknown)
+        {
+            validationError = "Platform must be 'android' or 'ios'.";
+            return false;
+        }
+
+        applicationRequest = new ActivateDeviceWithOnboardingPayloadRequest
+        {
+            ActivationPayload = request.ActivationPayload,
+            Platform = platform,
+            InstallationId = request.InstallationId,
+            DeviceName = request.DeviceName,
+            PushToken = request.PushToken,
+            PublicKey = request.PublicKey,
+        };
+
+        return true;
+    }
+
     public static RefreshDeviceTokenRequest Map(RefreshDeviceTokenHttpRequest request)
     {
         return new RefreshDeviceTokenRequest

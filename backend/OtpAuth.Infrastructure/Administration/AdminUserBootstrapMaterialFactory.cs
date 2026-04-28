@@ -10,6 +10,8 @@ public sealed class AdminUserBootstrapMaterialFactory
         AdminPermissions.DevicesWrite,
         AdminPermissions.EnrollmentsRead,
         AdminPermissions.EnrollmentsWrite,
+        AdminPermissions.IntegrationClientsRead,
+        AdminPermissions.IntegrationClientsWrite,
         AdminPermissions.WebhooksRead,
         AdminPermissions.WebhooksWrite,
     ];

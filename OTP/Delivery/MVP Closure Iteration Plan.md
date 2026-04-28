@@ -40,8 +40,12 @@ Accepted working plan
 Обязательный follow-up сразу после первого подтвержденного ручного pilot-теста:
 
 - [[Admin Client Management Follow-Up]]
+- [[QR Device Onboarding Follow-Up]]
+- [[Official Dotnet Integration SDK]]
+- [[Reference Desktop Backend Stand]]
+- [[Push Delivery Latency Follow-Up]]
 
-Это не блокирует формальное прохождение `Iteration 3`, но является обязательным следующим productization step после ручного pilot proof.
+Эти задачи не блокируют сам факт ручного pilot proof, но являются обязательными productization steps перед нормальным pilot usage. Latency hardening больше не должен диагностироваться в первую очередь через `ProjectManager`; основной повторный контур переносится на reference `Desktop + Backend` stand.
 
 ## Working Rules
 
@@ -265,7 +269,7 @@ Status on `2026-04-21`:
 - canonical `externalUserId` для integration path равен existing `Keycloak sub`, который `ProjectManager` уже использует в `JitProvisioningMiddleware`
 - transport boundary зафиксирован как `ProjectManager backend -> Authenticator client_credentials -> signed callback back to ProjectManager`, без прямого SPA-to-Authenticator secret-bearing path
 
-#### Slice 3B. Hardening review
+#### Slice 3B. Productization prerequisites and hardening gates
 
 - rate limiting review
 - retention/cleanup review
@@ -273,13 +277,67 @@ Status on `2026-04-21`:
 - backup/restore review
 - installer handoff review
 
-#### Slice 3C. End-to-end verification
+#### Slice 3B1. Admin client management
+
+- закрыть [[Admin Client Management Follow-Up]]
+- реализовывать по [[Admin Client Management Iteration Plan]]
+- дать operator-ready lifecycle для integration clients без ручных bootstrap workaround-ов
+- включить create, one-time secret display, scopes, rotate, deactivate/reactivate и sanitized audit
+
+Status on `2026-04-27`:
+
+- закрыт [[Admin Client Management Follow-Up]] как operator-ready productization track
+- backend admin contour поддерживает list/create/rotate/update scopes/deactivate/reactivate integration clients с one-time `clientSecret` только в create/rotate response
+- `Admin UI` содержит workspace для list/detail/create и lifecycle actions, включая discard one-time secret, whitelist-only scopes и explicit confirmation для sensitive actions
+- full verification закрыта: `backend/scripts/verify-backend.ps1` зеленый (`343/343` infra, `19/19` worker), `admin` зеленый (`npm test` `43/43`, `npm run build`, `npm run test:e2e` `6/6`)
+- docs/vault sync выполнен; следующий productization continuation point смещен на [[QR Device Onboarding Follow-Up]]
+
+#### Slice 3B2. QR device onboarding
+
+- закрыть [[QR Device Onboarding Follow-Up]]
+- заменить debug/manual activation на operator-ready QR flow
+- QR payload остается one-time opaque activation artifact with TTL and server-side consume/revoke semantics
+
+Status on `2026-04-27`:
+
+- закрыт [[QR Device Onboarding Follow-Up]] как operator-ready Android activation track
+- backend/admin contour умеет create/list/revoke one-time onboarding artifacts поверх `auth.device_activation_codes`
+- `Admin UI` содержит QR workspace: create показывает opaque activation payload только один раз в текущем UI state, list/detail не раскрывают payload/hash, revoke требует confirmation
+- Android содержит production-oriented `:feature:device-onboarding`, `CameraX + ML Kit` scanner и `POST /api/v1/devices/activate-onboarding` без integration secret/token в mobile app
+- full verification закрыта: backend `357/357` infra + `19/19` worker, admin `52/52` unit + `7/7` Playwright, Android `14/14` connected tests и live MCP smoke на `emulator-5554`
+- следующий continuation point: [[Official Dotnet Integration SDK]]
+
+#### Slice 3C. Official `.NET` SDK
+
+- реализовать [[Official Dotnet Integration SDK]]
+- first-class backend integration path через `Dt1520.Authenticator.Client` и `Dt1520.Authenticator.AspNetCore`
+- desktop package остается UX/session helper layer и не хранит `client_secret`
+- docs and samples входят в Definition of Done
+
+Status on `2026-04-24`:
+
+- первый ручной ProjectManager-created pilot подтвержден, но observed lag до Android prompt составляет около `~60s`
+- follow-up оформлен отдельной заметкой [[Push Delivery Latency Follow-Up]]
+- offline verification не проводилась; текущий checkpoint подтверждает только online/live contour
+- после обсуждения latency hardening переносится на reference [[Reference Desktop Backend Stand]], потому что `ProjectManager` слишком шумный стенд для первичной диагностики delivery/polling path
+- offline-code fallback в ближайшем плане означает: `Android` генерирует `TOTP` локально, а backend/`DT-1520` остаются online и сохраняют centralized verification/audit/rate limiting
+
+#### Slice 3D. Reference Desktop + Backend stand and latency hardening
+
+- реализовать [[Reference Desktop Backend Stand]]
+- проверить SDK, Android QR activation, push approval и online `TOTP` fallback
+- разобрать observed `~60s` lag уже на минимальном стенде
+- измерить timestamps: desktop submit, backend receive, challenge creation, delivery enqueue, worker processing, pending inbox visibility, Android UI visible, terminal state
+- принять pilot decision: tighter polling для открытого приложения или real push provider для near-real-time delivery
+- зафиксировать acceptable pilot latency target
+
+#### Slice 3E. End-to-end verification
 
 - scripted or documented pilot verification path
 - backend + admin + mobile/device where needed
 - явная фиксация remaining environment blockers отдельно от code blockers
 
-#### Slice 3D. MVP closure note
+#### Slice 3F. MVP closure note
 
 - зафиксировать, что именно считается `MVP done`
 - перечислить оставшиеся post-MVP tracks отдельно
@@ -327,8 +385,12 @@ Status on `2026-04-21`:
 
 ## Current Next Step
 
-Следующий continuation point: `Iteration 3 / Slice 3B` — hardening review поверх уже зафиксированного `ProjectManager` pilot scenario.
+Следующий practical continuation point после закрытия `Iteration 3 / Slice 3B1`: [[QR Device Onboarding Follow-Up]].
 
 Обязательный шаг после первого успешного ручного pilot-теста:
 
-- перейти к [[Admin Client Management Follow-Up]]
+- [[Admin Client Management Follow-Up]] закрыт на `2026-04-27`
+- закрыть [[QR Device Onboarding Follow-Up]]
+- реализовать [[Official Dotnet Integration SDK]]
+- пройти повторный цикл на [[Reference Desktop Backend Stand]]
+- закрыть или явно принять как limitation [[Push Delivery Latency Follow-Up]]

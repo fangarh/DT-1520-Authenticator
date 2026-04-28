@@ -41,6 +41,29 @@ class DeviceRuntimeSessionManagerTest {
     }
 
     @Test
+    fun activateWithOnboardingPayloadPersistsSessionWithoutIntegrationAuthorization() = runBlocking {
+        val store = InMemorySecureDeviceSessionStore()
+        val transport = RecordingDeviceRuntimeTransport()
+        val manager = DeviceRuntimeSessionManager(
+            sessionStore = store,
+            transport = transport,
+            currentEpochSecondsProvider = { 1_700_000_000L },
+            installationIdFactory = { "installation-generated" }
+        )
+
+        val deviceId = manager.activateWithOnboardingPayload(
+            activationPayload = "dac_0123456789abcdef0123456789abcdef.secret",
+            deviceName = "Pixel 10 Pro"
+        )
+
+        assertEquals(DEVICE_ID, deviceId)
+        assertEquals("installation-generated", transport.lastOnboardingActivationCommand?.installationId)
+        assertEquals(null, transport.lastIntegrationAuthorization)
+        assertEquals("access-1", store.session?.accessToken)
+        assertEquals("refresh-1", store.session?.refreshToken)
+    }
+
+    @Test
     fun listPendingReturnsEmptyWhenSessionIsMissing() = runBlocking {
         val manager = DeviceRuntimeSessionManager(
             sessionStore = InMemorySecureDeviceSessionStore(),
@@ -184,6 +207,7 @@ class DeviceRuntimeSessionManagerTest {
     private class RecordingDeviceRuntimeTransport : DeviceRuntimeTransport {
         var lastIntegrationAuthorization: String? = null
         var lastActivationCommand: DeviceActivationCommand? = null
+        var lastOnboardingActivationCommand: DeviceOnboardingActivationCommand? = null
         var lastPendingAuthorization: String? = null
         var pendingInvocations: Int = 0
         var refreshInvocations: Int = 0
@@ -197,6 +221,22 @@ class DeviceRuntimeSessionManagerTest {
         ): ActivatedDeviceSession {
             lastActivationCommand = command
             lastIntegrationAuthorization = "Bearer $integrationAccessToken"
+            return ActivatedDeviceSession(
+                deviceId = DEVICE_ID,
+                tokens = DeviceTokenEnvelope(
+                    accessToken = "access-1",
+                    refreshToken = "refresh-1",
+                    tokenType = "Bearer",
+                    expiresInSeconds = 900,
+                    scope = "challenge"
+                )
+            )
+        }
+
+        override suspend fun activateWithOnboardingPayload(
+            command: DeviceOnboardingActivationCommand
+        ): ActivatedDeviceSession {
+            lastOnboardingActivationCommand = command
             return ActivatedDeviceSession(
                 deviceId = DEVICE_ID,
                 tokens = DeviceTokenEnvelope(

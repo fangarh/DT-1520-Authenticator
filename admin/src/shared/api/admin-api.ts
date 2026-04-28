@@ -1,8 +1,16 @@
 import { runtimeConfig } from "../config/runtime";
 import { isProblemDetails } from "../problem/problem-details";
 import type {
+  AdminCreateDeviceOnboardingArtifactRequest,
+  AdminCreateDeviceOnboardingArtifactResponse,
   AdminDeliveryStatusListFilters,
   AdminDeliveryStatusView,
+  AdminDeviceOnboardingArtifactView,
+  AdminDeviceOnboardingListFilters,
+  AdminCreateIntegrationClientRequest,
+  AdminIntegrationClientSecretResponse,
+  AdminUpdateIntegrationClientScopesRequest,
+  AdminIntegrationClientView,
   AdminSession,
   AdminUserDeviceView,
   ConfirmEnrollmentRequest,
@@ -99,6 +107,98 @@ class AdminApiClient {
     );
   }
 
+  async listDeviceOnboardingArtifacts(
+    tenantId: string,
+    filters: AdminDeviceOnboardingListFilters = {},
+  ): Promise<AdminDeviceOnboardingArtifactView[]> {
+    const queryParts: string[] = [];
+    const externalUserId = filters.externalUserId?.trim();
+    const applicationClientId = filters.applicationClientId?.trim();
+
+    if (externalUserId) {
+      queryParts.push(`externalUserId=${encodeURIComponent(externalUserId)}`);
+    }
+
+    if (applicationClientId) {
+      queryParts.push(`applicationClientId=${encodeURIComponent(applicationClientId)}`);
+    }
+
+    if (filters.status) {
+      queryParts.push(`status=${encodeURIComponent(filters.status)}`);
+    }
+
+    if (typeof filters.limit === "number") {
+      queryParts.push(`limit=${encodeURIComponent(filters.limit.toString())}`);
+    }
+
+    const suffix = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+    return this.requestJson<AdminDeviceOnboardingArtifactView[]>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/device-onboarding-artifacts${suffix}`,
+    );
+  }
+
+  async createDeviceOnboardingArtifact(
+    request: AdminCreateDeviceOnboardingArtifactRequest,
+  ): Promise<AdminCreateDeviceOnboardingArtifactResponse> {
+    return this.postJson<AdminCreateDeviceOnboardingArtifactResponse>(
+      "/api/v1/admin/device-onboarding-artifacts",
+      request,
+    );
+  }
+
+  async revokeDeviceOnboardingArtifact(
+    tenantId: string,
+    activationCodeId: string,
+  ): Promise<AdminDeviceOnboardingArtifactView> {
+    return this.postWithoutBody<AdminDeviceOnboardingArtifactView>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/device-onboarding-artifacts/${encodeURIComponent(activationCodeId)}/revoke`,
+    );
+  }
+
+  async listIntegrationClients(tenantId: string): Promise<AdminIntegrationClientView[]> {
+    return this.requestJson<AdminIntegrationClientView[]>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/integration-clients`,
+    );
+  }
+
+  async createIntegrationClient(
+    request: AdminCreateIntegrationClientRequest,
+  ): Promise<AdminIntegrationClientSecretResponse> {
+    return this.postJson<AdminIntegrationClientSecretResponse>("/api/v1/admin/integration-clients", request);
+  }
+
+  async rotateIntegrationClientSecret(
+    tenantId: string,
+    clientId: string,
+  ): Promise<AdminIntegrationClientSecretResponse> {
+    return this.postWithoutBody<AdminIntegrationClientSecretResponse>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/integration-clients/${encodeURIComponent(clientId)}/rotate-secret`,
+    );
+  }
+
+  async updateIntegrationClientScopes(
+    tenantId: string,
+    clientId: string,
+    request: AdminUpdateIntegrationClientScopesRequest,
+  ): Promise<AdminIntegrationClientView> {
+    return this.putJson<AdminIntegrationClientView>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/integration-clients/${encodeURIComponent(clientId)}/scopes`,
+      request,
+    );
+  }
+
+  async deactivateIntegrationClient(tenantId: string, clientId: string): Promise<AdminIntegrationClientView> {
+    return this.postWithoutBody<AdminIntegrationClientView>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/integration-clients/${encodeURIComponent(clientId)}/deactivate`,
+    );
+  }
+
+  async reactivateIntegrationClient(tenantId: string, clientId: string): Promise<AdminIntegrationClientView> {
+    return this.postWithoutBody<AdminIntegrationClientView>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/integration-clients/${encodeURIComponent(clientId)}/reactivate`,
+    );
+  }
+
   async confirmEnrollment(enrollmentId: string, request: ConfirmEnrollmentRequest): Promise<TotpEnrollmentCommandResponse> {
     return this.postJson<TotpEnrollmentCommandResponse>(
       `/api/v1/admin/enrollments/totp/${encodeURIComponent(enrollmentId)}/confirm`,
@@ -144,6 +244,21 @@ class AdminApiClient {
     });
 
     return this.handleResponse<T>(response, "POST request failed.");
+  }
+
+  private async putJson<T>(path: string, body: object): Promise<T> {
+    const csrfToken = await this.ensureCsrfToken();
+    const response = await fetch(this.toUrl(path), {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": csrfToken,
+      },
+      body: JSON.stringify(body),
+    });
+
+    return this.handleResponse<T>(response, "PUT request failed.");
   }
 
   private async postWithoutBody<T>(path: string): Promise<T> {

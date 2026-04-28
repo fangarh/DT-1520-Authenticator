@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dt1520.Authenticator.AspNetCore/Dt1520.Authenticator.AspNetCore.csproj" />
+    <Project Path="src/Dt1520.Authenticator.Client/Dt1520.Authenticator.Client.csproj" />
+    <Project Path="src/Dt1520.Authenticator.Desktop/Dt1520.Authenticator.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dt1520.Authenticator.AspNetCore.Tests/Dt1520.Authenticator.AspNetCore.Tests.csproj" />
+    <Project Path="tests/Dt1520.Authenticator.Client.Tests/Dt1520.Authenticator.Client.Tests.csproj" />
+    <Project Path="tests/Dt1520.Authenticator.Desktop.Tests/Dt1520.Authenticator.Desktop.Tests.csproj" />
+  </Folder>
+</Solution>

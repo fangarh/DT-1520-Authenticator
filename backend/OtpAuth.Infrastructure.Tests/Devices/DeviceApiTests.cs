@@ -46,6 +46,78 @@ public sealed class DeviceApiTests
     }
 
     [Fact]
+    public async Task ActivateDeviceWithOnboardingPayload_ReturnsCreated_WithoutIntegrationBearer()
+    {
+        await using var factory = new DeviceApiTestFactory();
+        var seededActivation = factory.GetStore().SeedActivationCode(
+            DeviceApiTestFactory.TenantId,
+            DeviceApiTestFactory.ApplicationClientId,
+            "user-qr",
+            DevicePlatform.Android,
+            "qr-activation-secret");
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/devices/activate-onboarding",
+            new ActivateDeviceWithOnboardingPayloadHttpRequest
+            {
+                ActivationPayload = seededActivation.PlaintextCode,
+                Platform = "android",
+                InstallationId = "installation-qr",
+                DeviceName = "Pixel QR",
+                PushToken = "push-token",
+            });
+        var body = await response.Content.ReadFromJsonAsync<DeviceActivationHttpResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal("active", body!.Device.Status);
+        Assert.False(string.IsNullOrWhiteSpace(body.Tokens.AccessToken));
+    }
+
+    [Fact]
+    public async Task ActivateDeviceWithOnboardingPayload_ReturnsUnprocessableEntity_WhenPayloadIsInvalid()
+    {
+        await using var factory = new DeviceApiTestFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/devices/activate-onboarding",
+            new ActivateDeviceWithOnboardingPayloadHttpRequest
+            {
+                ActivationPayload = "not-a-device-activation-payload",
+                Platform = "android",
+                InstallationId = "installation-qr",
+            });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ActivateDeviceWithOnboardingPayload_ReturnsUnprocessableEntity_WhenArtifactPlatformDiffers()
+    {
+        await using var factory = new DeviceApiTestFactory();
+        var seededActivation = factory.GetStore().SeedActivationCode(
+            DeviceApiTestFactory.TenantId,
+            DeviceApiTestFactory.ApplicationClientId,
+            "user-qr-ios",
+            DevicePlatform.Ios,
+            "qr-ios-secret");
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/devices/activate-onboarding",
+            new ActivateDeviceWithOnboardingPayloadHttpRequest
+            {
+                ActivationPayload = seededActivation.PlaintextCode,
+                Platform = "android",
+                InstallationId = "installation-qr",
+            });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ActivateDevice_ReturnsConflict_WhenInstallationAlreadyActive()
     {
         await using var factory = new DeviceApiTestFactory();
@@ -68,6 +140,26 @@ public sealed class DeviceApiTests
             CreateActivationRequest(seededActivation.PlaintextCode, externalUserId: "user-conflict"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ActivateDevice_ReturnsBadRequest_WhenActivationCodeWasRevoked()
+    {
+        await using var factory = new DeviceApiTestFactory();
+        var seededActivation = factory.GetStore().SeedActivationCode(
+            DeviceApiTestFactory.TenantId,
+            DeviceApiTestFactory.ApplicationClientId,
+            "user-revoked",
+            DevicePlatform.Android,
+            "revoked-activation-secret",
+            revokedUtc: DateTimeOffset.UtcNow);
+        using var client = factory.CreateAuthorizedClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/devices/activate",
+            CreateActivationRequest(seededActivation.PlaintextCode, externalUserId: "user-revoked"));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact]

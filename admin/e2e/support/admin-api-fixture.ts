@@ -2,17 +2,29 @@ import { expect, type Page } from "@playwright/test";
 import { matchesTotpCode } from "../../test-support/totp-code";
 import {
   createArtifact,
+  createDeviceOnboardingArtifact,
+  createIntegrationClient,
+  createSeedDeviceOnboardingArtifacts,
   createSeedDeliveryStatuses,
+  createSeedIntegrationClients,
   createSeedUserDevices,
   jsonResponse,
   listDeliveryStatuses,
+  listDeviceOnboardingArtifacts,
+  listIntegrationClients,
   listUserDevices,
   problemResponse,
+  revokeDeviceOnboardingArtifact,
   revokeUserDevice,
+  rotateIntegrationClientSecret,
+  setIntegrationClientActiveState,
   toCommandResponse,
   toCurrentResponse,
+  updateIntegrationClientScopes,
   type ArtifactRecord,
+  type DeviceOnboardingArtifactRecord,
   type EnrollmentRecord,
+  type IntegrationClientRecord,
   type UserDeviceRecord,
   type WebhookSubscriptionRecord,
 } from "./admin-api-fixture-models";
@@ -23,15 +35,33 @@ export async function installAdminApiFixture(page: Page) {
   const session = {
     adminUserId: "f82103dc-2d30-46b7-94d5-7e9bf1dc7d4f",
     username: "operator",
-    permissions: ["enrollments.read", "enrollments.write", "devices.read", "devices.write", "webhooks.read", "webhooks.write"],
+    permissions: [
+      "enrollments.read",
+      "enrollments.write",
+      "devices.read",
+      "devices.write",
+      "webhooks.read",
+      "webhooks.write",
+      "integration-clients.read",
+      "integration-clients.write",
+    ],
   };
   let isAuthenticated = false;
   let enrollment: EnrollmentRecord | null = null;
   let activeArtifact: ArtifactRecord | null = null;
   let replacementArtifact: ArtifactRecord | null = null;
   let webhookSubscriptions: WebhookSubscriptionRecord[] = [];
+  let integrationClients: IntegrationClientRecord[] = createSeedIntegrationClients(
+    "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb",
+    defaultApplicationClientId,
+  );
   const deliveryStatuses = createSeedDeliveryStatuses("6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb", defaultApplicationClientId);
   let userDevices: UserDeviceRecord[] = createSeedUserDevices("6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb", "user-device");
+  let deviceOnboardingArtifacts: DeviceOnboardingArtifactRecord[] = createSeedDeviceOnboardingArtifacts(
+    "6e8c2d4d-7eb0-4cb9-b582-5ff0afc6d3fb",
+    defaultApplicationClientId,
+    "user-device",
+  );
 
   await page.route("**/api/v1/admin/**", async (route) => {
     const request = route.request();
@@ -110,10 +140,22 @@ export async function installAdminApiFixture(page: Page) {
       return;
     }
 
+    if (url.pathname.endsWith("/integration-clients") && request.method() === "GET") {
+      const tenantId = url.pathname.split("/")[5];
+      await route.fulfill(jsonResponse(200, listIntegrationClients(integrationClients, tenantId)));
+      return;
+    }
+
     if (url.pathname.endsWith("/devices") && request.method() === "GET") {
       const tenantId = url.pathname.split("/")[5];
       const externalUserId = decodeURIComponent(url.pathname.split("/")[7] ?? "");
       await route.fulfill(jsonResponse(200, listUserDevices(userDevices, tenantId, externalUserId)));
+      return;
+    }
+
+    if (url.pathname.endsWith("/device-onboarding-artifacts") && request.method() === "GET") {
+      const tenantId = decodeURIComponent(url.pathname.split("/")[5] ?? "");
+      await route.fulfill(jsonResponse(200, listDeviceOnboardingArtifacts(deviceOnboardingArtifacts, tenantId, url.searchParams)));
       return;
     }
 
@@ -198,6 +240,22 @@ export async function installAdminApiFixture(page: Page) {
       return;
     }
 
+    if (url.pathname.endsWith("/revoke") && url.pathname.includes("/device-onboarding-artifacts/") && request.method() === "POST") {
+      const parts = url.pathname.split("/");
+      const tenantId = decodeURIComponent(parts[5] ?? "");
+      const activationCodeId = decodeURIComponent(parts[7] ?? "");
+      const result = revokeDeviceOnboardingArtifact(deviceOnboardingArtifacts, tenantId, activationCodeId);
+
+      if (result.errorStatus) {
+        await route.fulfill(problemResponse(result.errorStatus, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      deviceOnboardingArtifacts = result.artifacts;
+      await route.fulfill(jsonResponse(200, result.artifact));
+      return;
+    }
+
     if (url.pathname.endsWith("/revoke") && request.method() === "POST") {
       if (!enrollment) {
         await route.fulfill(problemResponse(404, "Enrollment not found.", "Current TOTP enrollment was not found."));
@@ -246,6 +304,103 @@ export async function installAdminApiFixture(page: Page) {
       }
 
       await route.fulfill(jsonResponse(200, subscription));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/integration-clients" && request.method() === "POST") {
+      const payload = await request.postDataJSON();
+      const result = createIntegrationClient(integrationClients, payload);
+      if (result.errorStatus) {
+        await route.fulfill(problemResponse(result.errorStatus, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      integrationClients = result.clients;
+      await route.fulfill(jsonResponse(201, {
+        client: result.client,
+        clientSecret: result.clientSecret,
+      }));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/admin/device-onboarding-artifacts" && request.method() === "POST") {
+      const payload = await request.postDataJSON();
+      const result = createDeviceOnboardingArtifact(deviceOnboardingArtifacts, payload);
+      if (result.errorStatus || !result.artifact) {
+        await route.fulfill(problemResponse(result.errorStatus ?? 400, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      deviceOnboardingArtifacts = result.artifacts;
+      const { activationPayload, ...artifact } = result.artifact;
+      await route.fulfill(jsonResponse(201, {
+        artifact,
+        activationPayload,
+      }));
+      return;
+    }
+
+    if (url.pathname.endsWith("/rotate-secret") && url.pathname.includes("/integration-clients/") && request.method() === "POST") {
+      const parts = url.pathname.split("/");
+      const tenantId = decodeURIComponent(parts[5] ?? "");
+      const clientId = decodeURIComponent(parts[7] ?? "");
+      const result = rotateIntegrationClientSecret(integrationClients, tenantId, clientId);
+      if (result.errorStatus) {
+        await route.fulfill(problemResponse(result.errorStatus, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      integrationClients = result.clients;
+      await route.fulfill(jsonResponse(200, {
+        client: result.client,
+        clientSecret: result.clientSecret,
+      }));
+      return;
+    }
+
+    if (url.pathname.endsWith("/scopes") && url.pathname.includes("/integration-clients/") && request.method() === "PUT") {
+      const parts = url.pathname.split("/");
+      const tenantId = decodeURIComponent(parts[5] ?? "");
+      const clientId = decodeURIComponent(parts[7] ?? "");
+      const payload = await request.postDataJSON();
+      const result = updateIntegrationClientScopes(integrationClients, tenantId, clientId, payload.allowedScopes ?? []);
+      if (result.errorStatus) {
+        await route.fulfill(problemResponse(result.errorStatus, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      integrationClients = result.clients;
+      await route.fulfill(jsonResponse(200, result.client));
+      return;
+    }
+
+    if (url.pathname.endsWith("/deactivate") && url.pathname.includes("/integration-clients/") && request.method() === "POST") {
+      const parts = url.pathname.split("/");
+      const tenantId = decodeURIComponent(parts[5] ?? "");
+      const clientId = decodeURIComponent(parts[7] ?? "");
+      const result = setIntegrationClientActiveState(integrationClients, tenantId, clientId, "inactive");
+      if (result.errorStatus) {
+        await route.fulfill(problemResponse(result.errorStatus, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      integrationClients = result.clients;
+      await route.fulfill(jsonResponse(200, result.client));
+      return;
+    }
+
+    if (url.pathname.endsWith("/reactivate") && url.pathname.includes("/integration-clients/") && request.method() === "POST") {
+      const parts = url.pathname.split("/");
+      const tenantId = decodeURIComponent(parts[5] ?? "");
+      const clientId = decodeURIComponent(parts[7] ?? "");
+      const result = setIntegrationClientActiveState(integrationClients, tenantId, clientId, "active");
+      if (result.errorStatus) {
+        await route.fulfill(problemResponse(result.errorStatus, result.errorTitle ?? "Request failed.", result.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      integrationClients = result.clients;
+      await route.fulfill(jsonResponse(200, result.client));
       return;
     }
 

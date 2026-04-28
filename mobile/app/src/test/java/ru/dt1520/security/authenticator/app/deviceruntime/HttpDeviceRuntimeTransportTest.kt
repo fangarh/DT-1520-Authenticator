@@ -60,6 +60,54 @@ class HttpDeviceRuntimeTransportTest {
     }
 
     @Test
+    fun sendsOnboardingActivationPayloadWithoutAuthorizationHeader() = runBlocking {
+        var capturedAuthorization: String? = "not-called"
+        var capturedBody: String? = null
+        val server = HttpServer.create(InetSocketAddress(0), 0).apply {
+            createContext("/api/v1/devices/activate-onboarding") { exchange ->
+                capturedAuthorization = exchange.requestHeaders.getFirst("Authorization")
+                capturedBody = exchange.requestBody.bufferedReader().use { it.readText() }
+                val response = """
+                    {
+                      "device": {
+                        "id": "73092591-d55c-49a6-bb50-6d7d64d32499"
+                      },
+                      "tokens": {
+                        "accessToken": "access-token",
+                        "refreshToken": "refresh-token",
+                        "tokenType": "Bearer",
+                        "expiresIn": 900,
+                        "scope": "challenge"
+                      }
+                    }
+                """.trimIndent()
+                exchange.sendResponseHeaders(201, response.toByteArray().size.toLong())
+                exchange.responseBody.use { it.write(response.toByteArray()) }
+            }
+            start()
+        }
+
+        try {
+            val transport = HttpDeviceRuntimeTransport("http://127.0.0.1:${server.address.port}")
+
+            val activated = transport.activateWithOnboardingPayload(
+                DeviceOnboardingActivationCommand(
+                    activationPayload = "dac_0123456789abcdef0123456789abcdef.secret",
+                    installationId = "installation-1234",
+                    deviceName = "Pixel 10 Pro"
+                )
+            )
+
+            assertEquals(null, capturedAuthorization)
+            assertTrue(capturedBody!!.contains("\"activationPayload\""))
+            assertTrue(capturedBody!!.contains("\"platform\":\"android\""))
+            assertEquals(UUID.fromString("73092591-d55c-49a6-bb50-6d7d64d32499"), activated.deviceId)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun parsesPendingApprovalsFromDeviceEndpoint() = runBlocking {
         val server = HttpServer.create(InetSocketAddress(0), 0).apply {
             createContext("/api/v1/devices/me/challenges/pending") { exchange ->

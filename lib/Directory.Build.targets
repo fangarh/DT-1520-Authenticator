@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildProjectDirectory)\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

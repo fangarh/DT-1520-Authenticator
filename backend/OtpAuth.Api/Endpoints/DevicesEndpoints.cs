@@ -22,6 +22,9 @@ public static class DevicesEndpoints
             .RequireAuthorization("DevicesWrite")
             .WithName("ActivateDevice");
 
+        app.MapPost("/api/v1/devices/activate-onboarding", ActivateDeviceWithOnboardingPayloadAsync)
+            .WithName("ActivateDeviceWithOnboardingPayload");
+
         app.MapPost("/api/v1/devices/{deviceId:guid}/revoke", RevokeDeviceAsync)
             .RequireAuthorization("DevicesWrite")
             .WithName("RevokeDevice");
@@ -151,6 +154,42 @@ public static class DevicesEndpoints
         var location = $"/api/v1/devices/{result.Device.DeviceId}";
         httpContext.Response.Headers.Location = location;
 
+        return Results.Created(
+            location,
+            DeviceRequestMapper.MapActivationResponse(result.Device, result.Tokens));
+    }
+
+    private static async Task<IResult> ActivateDeviceWithOnboardingPayloadAsync(
+        ActivateDeviceWithOnboardingPayloadHttpRequest request,
+        ActivateDeviceWithOnboardingPayloadHandler handler,
+        CancellationToken cancellationToken)
+    {
+        if (!DeviceRequestMapper.TryMap(request, out var applicationRequest, out var validationError))
+        {
+            return CreateProblem(StatusCodes.Status400BadRequest, "Invalid device activation request.", validationError);
+        }
+
+        var result = await handler.HandleAsync(applicationRequest!, cancellationToken);
+        if (!result.IsSuccess || result.Device is null || result.Tokens is null)
+        {
+            return result.ErrorCode switch
+            {
+                ActivateDeviceErrorCode.InvalidActivationCode => CreateProblem(
+                    StatusCodes.Status422UnprocessableEntity,
+                    "Device activation failed.",
+                    result.ErrorMessage),
+                ActivateDeviceErrorCode.Conflict => CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    "Device activation could not be completed.",
+                    result.ErrorMessage),
+                _ => CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    "Invalid device activation request.",
+                    result.ErrorMessage),
+            };
+        }
+
+        var location = $"/api/v1/devices/{result.Device.DeviceId}";
         return Results.Created(
             location,
             DeviceRequestMapper.MapActivationResponse(result.Device, result.Tokens));

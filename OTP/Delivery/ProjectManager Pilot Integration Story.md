@@ -4,7 +4,7 @@
 
 Accepted working note
 
-`ProjectManager`-side implementation completed, live wiring pending
+`ProjectManager`-side implementation completed, live Authenticator device path verified, first ProjectManager-created manual pilot completed with a delivery latency residual
 
 ## Goal
 
@@ -127,12 +127,28 @@ Accepted working note
 - encrypted pending payload at rest
 - transparent encryption для сохраненного `VCS` password
 
-Незакрытый operational остаток перед первым live pilot:
+Live Authenticator/device verification на `2026-04-24`:
 
-- заполнить live `Authenticator` config в `ProjectManager`
-- одинаково настроить `Security:SecretProtection` для `ProjectManager.Server` и `ProjectManager.Worker`
-- один раз сверить фактические endpoint paths и callback header/signature contract с live runtime `DT-1520`
-- провести первый ручной end-to-end прогон с реальным push-capable device
+- `ProjectManager` integration client `otpauth-projectmanager` уже имеет scopes `challenges:read`, `challenges:write`, `devices:write`.
+- `ProjectManager` pilot user использует canonical `externalUserId=f1d6afaa-8a5d-4fd3-9f75-0a5c0177df81`.
+- Android emulator активирован как device `077d09f9-8637-4583-8864-9b29ced707b4` и проходит device lookup как active push-capable device.
+- Synthetic live challenges, созданные напрямую через `DT-1520` contract, отображаются в Android `Push Approvals` UI.
+- Android `deny` path подтвержден server-side через terminal state `denied`.
+- Android `approve` path подтвержден server-side через `BiometricPrompt`/device credential и terminal state `approved` для challenge `a202ef93-c2f5-4645-80cf-06af37d1d86d`.
+- Первый ручной прогон через реальный `ProjectManager` login и protected `VCS` operation завершился успешно: вход остается обычным `Keycloak` flow, step-up approval появляется только при защищенной операции, а подтверждение проходит через Android emulator.
+- Наблюдаемый lag между запросом в `ProjectManager` и появлением challenge на Android emulator составляет около `~60s`; это зафиксировано как delivery/polling UX residual для следующего hardening шага.
+- Offline verification не проводилась: этот checkpoint подтверждает только online/live contour через `ghostring`, `ProjectManager`, `Keycloak` и Android emulator; поведение при недоступной сети, недоступном `DT-1520` runtime или offline fallback отдельно не проверено.
+
+Незакрытые operational остатки после первого ProjectManager-created live pilot:
+
+- разобраться с observed `~60s` lag до появления challenge в Android UI: проверить worker enqueue/delivery timings, mobile foreground polling interval и текущий `PushDelivery:Provider=logging` profile
+- отдельно решить, нужна ли offline/fallback проверка для pilot scope, и если да, оформить отдельный сценарий с ожидаемым fail-closed поведением
+- зафиксировать expected manual pilot UX copy в `ProjectManager`, чтобы пользователь понимал, что step-up approval появляется на защищенной операции, а не на login
+- перед продуктовым pilot решить, оставляем ли временный polling-only режим или подключаем real push provider для near-real-time delivery
+
+Отдельный plan item:
+
+- [[Push Delivery Latency Follow-Up]]
 
 ## Failure Handling
 

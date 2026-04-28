@@ -1,6 +1,8 @@
 package ru.dt1520.security.authenticator.app.deviceruntime
 
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import ru.dt1520.security.authenticator.feature.pushapprovals.PendingPushApproval
 import ru.dt1520.security.authenticator.security.storage.SecureDeviceSessionStore
 import ru.dt1520.security.authenticator.security.storage.StoredDeviceInstallation
@@ -32,7 +34,7 @@ internal class DeviceRuntimeSessionManager(
         deviceName: String? = null,
         pushToken: String? = null,
         publicKey: String? = null
-    ): UUID {
+    ): UUID = withContext(Dispatchers.IO) {
         val activation = transport.activate(
             command = DeviceActivationCommand(
                 tenantId = tenantId,
@@ -57,20 +59,49 @@ internal class DeviceRuntimeSessionManager(
             )
         )
 
-        return activation.deviceId
+        activation.deviceId
     }
 
-    suspend fun listPendingPushApprovals(): List<PendingPushApproval> {
-        val session = sessionStore.readSession()
-            ?.toRuntimeSession()
-            ?: return emptyList()
+    suspend fun activateWithOnboardingPayload(
+        activationPayload: String,
+        deviceName: String? = null,
+        pushToken: String? = null,
+        publicKey: String? = null
+    ): UUID = withContext(Dispatchers.IO) {
+        val activation = transport.activateWithOnboardingPayload(
+            command = DeviceOnboardingActivationCommand(
+                activationPayload = activationPayload,
+                installationId = getOrCreateInstallationId(),
+                deviceName = deviceName,
+                pushToken = pushToken,
+                publicKey = publicKey
+            )
+        )
 
-        return withAuthorizedSession(session) { authorizedSession ->
+        sessionStore.saveSession(
+            StoredDeviceSession(
+                deviceId = activation.deviceId,
+                accessToken = activation.tokens.accessToken,
+                refreshToken = activation.tokens.refreshToken,
+                tokenType = activation.tokens.tokenType,
+                scope = activation.tokens.scope,
+                accessTokenExpiresAtEpochSeconds = currentEpochSecondsProvider() + activation.tokens.expiresInSeconds
+            )
+        )
+
+        activation.deviceId
+    }
+
+    suspend fun listPendingPushApprovals(): List<PendingPushApproval> = withContext(Dispatchers.IO) {
+        val session = sessionStore.readSession()
+            ?.toRuntimeSession() ?: return@withContext emptyList()
+
+        withAuthorizedSession(session) { authorizedSession ->
             transport.listPending(authorizedSession.authorizationHeader)
         }
     }
 
-    suspend fun approvePushChallenge(challenge: PendingPushApproval) {
+    suspend fun approvePushChallenge(challenge: PendingPushApproval) = withContext(Dispatchers.IO) {
         withRequiredSession { session ->
             withAuthorizedSession(session) { authorizedSession ->
                 transport.approve(
@@ -86,7 +117,7 @@ internal class DeviceRuntimeSessionManager(
     suspend fun denyPushChallenge(
         challenge: PendingPushApproval,
         reason: String? = null
-    ) {
+    ) = withContext(Dispatchers.IO) {
         withRequiredSession { session ->
             withAuthorizedSession(session) { authorizedSession ->
                 transport.deny(

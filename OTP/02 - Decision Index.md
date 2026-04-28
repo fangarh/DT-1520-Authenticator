@@ -36,6 +36,7 @@
 - `ADR-032`: `push delivery` использует configurable provider adapter с `FCM-first` и logging fallback
 - `ADR-033`: top-level `webhooks` используют отдельный subscription outbox contour
 - `ADR-034`: pilot integrations сохраняют existing primary auth и добавляют step-up `MFA` только для sensitive operations
+- `ADR-035`: официальный `.NET` SDK и reference `Desktop + Backend` стенд становятся отдельным productization path после admin client management и QR onboarding
 
 ## Reading Path
 
@@ -74,6 +75,7 @@
 31. [[Decisions/ADR-032 - Push Delivery Uses Configurable Provider Adapter]]
 32. [[Decisions/ADR-033 - Top-Level Webhooks Use Subscription Outbox]]
 33. [[Decisions/ADR-034 - Pilot Integrations Keep Existing Primary Auth and Use Step-Up MFA]]
+34. [[Decisions/ADR-035 - Official Dotnet Integration SDK and Reference Stand]]
 
 Если задача относится к процессу и поддержанию контекста:
 
