@@ -106,6 +106,36 @@ services:
     networks:
       - runtime
 
+  reference-backend:
+    build:
+      context: ..
+      dockerfile: infra/docker/reference-backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5188
+      Dt1520Authenticator__BaseUrl: ${REFERENCE_BACKEND_DT1520_BASE_URL:-http://api:8080/}
+      Dt1520Authenticator__ClientId: ${REFERENCE_BACKEND_DT1520_CLIENT_ID:?Set REFERENCE_BACKEND_DT1520_CLIENT_ID in your runtime env file.}
+      Dt1520Authenticator__ClientSecret: ${REFERENCE_BACKEND_DT1520_CLIENT_SECRET:?Set REFERENCE_BACKEND_DT1520_CLIENT_SECRET in your runtime env file.}
+      Dt1520Authenticator__CallbackSigningSecret: ${REFERENCE_BACKEND_CALLBACK_SIGNING_SECRET:?Set REFERENCE_BACKEND_CALLBACK_SIGNING_SECRET in your runtime env file. It must match ChallengeCallbacks__SigningKey for this runtime.}
+      Dt1520Authenticator__Scope: ${REFERENCE_BACKEND_DT1520_SCOPE:-challenges:read challenges:write}
+      ReferenceBackend__TenantId: ${REFERENCE_BACKEND_TENANT_ID:?Set REFERENCE_BACKEND_TENANT_ID in your runtime env file.}
+      ReferenceBackend__ApplicationClientId: ${REFERENCE_BACKEND_APPLICATION_CLIENT_ID:?Set REFERENCE_BACKEND_APPLICATION_CLIENT_ID in your runtime env file.}
+      ReferenceBackend__CallbackUrl: ${REFERENCE_BACKEND_CALLBACK_URL:-https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520}
+      ReferenceBackend__CallbackUrlPolicyMode: ${REFERENCE_BACKEND_CALLBACK_URL_POLICY_MODE:-PublicInternet}
+      ReferenceBackend__AllowInsecureCallbackHttp: ${REFERENCE_BACKEND_ALLOW_INSECURE_CALLBACK_HTTP:-false}
+    depends_on:
+      api:
+        condition: service_started
+    expose:
+      - "5188"
+    ports:
+      - 127.0.0.1:${REFERENCE_BACKEND_HOST_HTTP_PORT:-15188}:5188
+    mem_limit: 256m
+    mem_reservation: 128m
+    networks:
+      - runtime
+
   admin:
     build:
       context: ..

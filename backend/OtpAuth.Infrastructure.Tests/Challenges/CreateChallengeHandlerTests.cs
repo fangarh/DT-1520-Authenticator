@@ -188,7 +188,7 @@ public sealed class CreateChallengeHandlerTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CreateChallengeErrorCode.ValidationFailed, result.ErrorCode);
-        Assert.Equal("CallbackUrl must use HTTPS.", result.ErrorMessage);
+        Assert.Equal("CallbackUrl is rejected by PublicInternet policy: HTTPS is required.", result.ErrorMessage);
     }
 
     [Theory]
@@ -207,7 +207,25 @@ public sealed class CreateChallengeHandlerTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CreateChallengeErrorCode.ValidationFailed, result.ErrorCode);
-        Assert.Equal("CallbackUrl must not target localhost or private network IP literals.", result.ErrorMessage);
+        Assert.Equal(
+            "CallbackUrl is rejected by PublicInternet policy: localhost and private network IP literals are not allowed.",
+            result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AllowsPrivateLiteralCallbackUrl_WhenPrivateNetworkPolicyIsConfigured()
+    {
+        var handler = CreateHandler(new ChallengeCallbackUrlPolicy(ChallengeCallbackUrlPolicyMode.PrivateNetwork));
+        var request = CreateValidRequest() with
+        {
+            CallbackUrl = new Uri("https://10.0.0.5/hooks/otpauth"),
+        };
+
+        var result = await handler.HandleAsync(request, CreateClientContext(request), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Challenge);
+        Assert.Equal(request.CallbackUrl, result.Challenge!.CallbackUrl);
     }
 
     [Fact]
@@ -257,9 +275,13 @@ public sealed class CreateChallengeHandlerTests
         Assert.Equal("Request tenant is outside the authenticated client scope.", result.ErrorMessage);
     }
 
-    private CreateChallengeHandler CreateHandler()
+    private CreateChallengeHandler CreateHandler(ChallengeCallbackUrlPolicy? callbackUrlPolicy = null)
     {
-        return new CreateChallengeHandler(_repository, _deviceStore, _policyEvaluator);
+        return new CreateChallengeHandler(
+            _repository,
+            _deviceStore,
+            _policyEvaluator,
+            callbackUrlPolicy ?? ChallengeCallbackUrlPolicy.PublicInternet);
     }
 
     private static CreateChallengeRequest CreateValidRequest()

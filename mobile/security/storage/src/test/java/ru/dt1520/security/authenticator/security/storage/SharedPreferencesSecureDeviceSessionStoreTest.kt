@@ -7,6 +7,7 @@ import kotlin.coroutines.startCoroutine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class SharedPreferencesSecureDeviceSessionStoreTest {
@@ -23,7 +24,8 @@ class SharedPreferencesSecureDeviceSessionStoreTest {
             refreshToken = "refresh-token",
             tokenType = "Bearer",
             scope = "challenge",
-            accessTokenExpiresAtEpochSeconds = 1_800_000_000
+            accessTokenExpiresAtEpochSeconds = 1_800_000_000,
+            runtimeBaseUrl = "https://admin.ghostring.ru:18443"
         )
 
         runSuspend {
@@ -33,6 +35,45 @@ class SharedPreferencesSecureDeviceSessionStoreTest {
 
         assertEquals(installation, runSuspend { store.readInstallation() })
         assertEquals(session, runSuspend { store.readSession() })
+    }
+
+    @Test
+    fun restoresLegacySessionSnapshotWithoutRuntimeBaseUrl() {
+        val serialized = StoredDeviceSessionSnapshotSerializer.serialize(
+            StoredDeviceSessionSnapshot(
+                deviceId = "e3140ae8-5fc2-4e9d-a6c2-b91b8fe57e79",
+                accessToken = "access-token",
+                refreshToken = "refresh-token",
+                tokenType = "Bearer",
+                scope = "challenge",
+                accessTokenExpiresAtEpochSeconds = 1_800_000_000,
+                runtimeBaseUrl = null
+            )
+        )
+        val legacySerialized = serialized
+            .split("|")
+            .take(7)
+            .joinToString("|")
+
+        val snapshot = StoredDeviceSessionSnapshotSerializer.deserialize(legacySerialized)
+
+        assertNull(snapshot.runtimeBaseUrl)
+        assertEquals("access-token", snapshot.accessToken)
+    }
+
+    @Test
+    fun rejectsCredentialBearingRuntimeBaseUrl() {
+        assertThrows(IllegalArgumentException::class.java) {
+            StoredDeviceSession(
+                deviceId = UUID.randomUUID(),
+                accessToken = "access-token",
+                refreshToken = "refresh-token",
+                tokenType = "Bearer",
+                scope = "challenge",
+                accessTokenExpiresAtEpochSeconds = 1_800_000_000,
+                runtimeBaseUrl = "https://operator:secret@example.test"
+            )
+        }
     }
 
     @Test

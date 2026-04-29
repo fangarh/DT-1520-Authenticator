@@ -13,7 +13,9 @@ describe("documentation content", () => {
       "sdk",
       "roadmap",
     ]);
-    expect(workflows).toHaveLength(6);
+    expect(workflows).toHaveLength(8);
+    expect(workflows.some((workflow) => workflow.title === "Tenant directory")).toBe(true);
+    expect(workflows.some((workflow) => workflow.title === "Tenant management")).toBe(true);
   });
 
   it("keeps examples secret-safe", () => {

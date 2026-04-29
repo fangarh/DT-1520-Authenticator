@@ -51,9 +51,14 @@ If the failure is sandbox-only access to `%USERPROFILE%\.gradle`, repeat the sam
 The production-oriented Android onboarding path is:
 
 1. Operator creates a one-time QR artifact in Admin UI.
-2. Android scans the opaque `dac_...` activation payload.
-3. `:feature:device-onboarding` validates/imports the payload and passes it to `DeviceRuntimeSessionManager.activateWithOnboardingPayload`.
-4. The app calls `POST /api/v1/devices/activate-onboarding` without integration `client_secret` or integration bearer token.
-5. The backend derives tenant/application/user binding from the server-side artifact and atomically consumes it during activation.
+2. Android scans a v1 QR envelope `{ v, runtimeBaseUrl, activationPayload }`; legacy raw `dac_...` payloads are temporarily still accepted.
+3. `:feature:device-onboarding` validates/imports the envelope or legacy payload, exposing `activationPayload` and nullable `runtimeBaseUrl`.
+4. The app calls `POST /api/v1/devices/activate-onboarding` through the QR `runtimeBaseUrl` when present; legacy raw payloads temporarily fall back to `-PdeviceRuntimeBaseUrl`.
+5. After successful activation, the QR runtime URL is stored with the encrypted device session and reused after app restart for refresh, pending push polling, approve and deny.
+6. The backend derives tenant/application/user binding from the server-side artifact and atomically consumes it during activation.
+
+Runtime URL parsing is fail-closed: only `https` URLs with a non-empty host and no embedded credentials/userinfo are accepted.
+If a legacy raw payload is used without a configured runtime URL, activation fails with a generic user-facing message that the QR does not contain a runtime address.
+Productized QR onboarding no longer requires building the APK with `-PdeviceRuntimeBaseUrl`; that flag remains only a temporary compatibility path for legacy raw `dac_...` payloads and debug tooling.
 
 `mobile/app/src/debug/PilotDeviceActivationActivity.kt` remains debug-only pilot tooling and is not part of production onboarding handoff.

@@ -65,6 +65,7 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.RemoveAll<IAdminWebhookSubscriptionAuditWriter>();
             services.RemoveAll<IAdminIntegrationClientAuditWriter>();
             services.RemoveAll<IAdminDeviceOnboardingAuditWriter>();
+            services.RemoveAll<IAdminTenantDirectoryAuditWriter>();
             services.RemoveAll<IAdminLoginRateLimiter>();
             services.RemoveAll<IIntegrationClientStore>();
             services.RemoveAll<ITotpEnrollmentProvisioningStore>();
@@ -75,6 +76,8 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.RemoveAll<IAdminDeviceOnboardingStore>();
             services.RemoveAll<IAdminDeliveryStatusStore>();
             services.RemoveAll<IAdminIntegrationClientStore>();
+            services.RemoveAll<IAdminTenantDirectoryStore>();
+            services.RemoveAll<IAdminTenantDirectoryIdGenerator>();
             services.RemoveAll<IWebhookSubscriptionStore>();
 
             services.AddSingleton<InMemoryAdminUserStore>();
@@ -84,6 +87,7 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<RecordingAdminWebhookSubscriptionAuditWriter>();
             services.AddSingleton<RecordingAdminIntegrationClientAuditWriter>();
             services.AddSingleton<RecordingAdminDeviceOnboardingAuditWriter>();
+            services.AddSingleton<RecordingAdminTenantDirectoryAuditWriter>();
             services.AddSingleton<RecordingTotpEnrollmentAuditWriter>();
             services.AddSingleton<InMemoryIntegrationClientStore>();
             services.AddSingleton<InMemoryEnrollmentApiStore>();
@@ -92,6 +96,8 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<InMemoryAdminDeviceStore>();
             services.AddSingleton<InMemoryAdminDeliveryStatusStore>();
             services.AddSingleton<InMemoryAdminIntegrationClientStore>();
+            services.AddSingleton<InMemoryAdminTenantDirectoryStore>();
+            services.AddSingleton<FixedAdminTenantDirectoryIdGenerator>();
             services.AddSingleton<InMemoryWebhookSubscriptionStore>();
             services.AddSingleton<IAdminUserStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminUserStore>());
             services.AddSingleton<IAdminAuthAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminAuthAuditWriter>());
@@ -100,6 +106,7 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<IAdminWebhookSubscriptionAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminWebhookSubscriptionAuditWriter>());
             services.AddSingleton<IAdminIntegrationClientAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminIntegrationClientAuditWriter>());
             services.AddSingleton<IAdminDeviceOnboardingAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminDeviceOnboardingAuditWriter>());
+            services.AddSingleton<IAdminTenantDirectoryAuditWriter>(serviceProvider => serviceProvider.GetRequiredService<RecordingAdminTenantDirectoryAuditWriter>());
             services.AddSingleton<IAdminLoginRateLimiter, InMemoryAdminLoginRateLimiter>();
             services.AddSingleton<IIntegrationClientStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryIntegrationClientStore>());
             services.AddSingleton<ITotpEnrollmentProvisioningStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryEnrollmentApiStore>());
@@ -110,6 +117,8 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             services.AddSingleton<IAdminDeviceOnboardingStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryDeviceRegistryStore>());
             services.AddSingleton<IAdminDeliveryStatusStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminDeliveryStatusStore>());
             services.AddSingleton<IAdminIntegrationClientStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminIntegrationClientStore>());
+            services.AddSingleton<IAdminTenantDirectoryStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryAdminTenantDirectoryStore>());
+            services.AddSingleton<IAdminTenantDirectoryIdGenerator>(serviceProvider => serviceProvider.GetRequiredService<FixedAdminTenantDirectoryIdGenerator>());
             services.AddSingleton<IWebhookSubscriptionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryWebhookSubscriptionStore>());
         });
     }
@@ -179,6 +188,11 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
         return Services.GetRequiredService<RecordingAdminDeviceOnboardingAuditWriter>();
     }
 
+    public RecordingAdminTenantDirectoryAuditWriter GetAdminTenantDirectoryAuditWriter()
+    {
+        return Services.GetRequiredService<RecordingAdminTenantDirectoryAuditWriter>();
+    }
+
     internal InMemoryDeviceRegistryStore GetDevices()
     {
         return Services.GetRequiredService<InMemoryDeviceRegistryStore>();
@@ -197,6 +211,11 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
     public InMemoryAdminIntegrationClientStore GetAdminIntegrationClients()
     {
         return Services.GetRequiredService<InMemoryAdminIntegrationClientStore>();
+    }
+
+    public InMemoryAdminTenantDirectoryStore GetAdminTenants()
+    {
+        return Services.GetRequiredService<InMemoryAdminTenantDirectoryStore>();
     }
 
     public sealed class InMemoryAdminUserStore : IAdminUserStore
@@ -463,6 +482,51 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
                 artifact.TenantId,
                 artifact.ApplicationClientId,
                 artifact.ExternalUserId));
+        }
+    }
+
+    public sealed class RecordingAdminTenantDirectoryAuditWriter : IAdminTenantDirectoryAuditWriter
+    {
+        public List<(string EventType, Guid AdminUserId, Guid TenantId, string? ClientId)> Events { get; } = [];
+
+        public Task WriteTenantCreatedAsync(
+            AdminContext adminContext,
+            AdminTenantDirectoryTenantView tenant,
+            CancellationToken cancellationToken)
+        {
+            Events.Add(("created", adminContext.AdminUserId, tenant.TenantId, null));
+            return Task.CompletedTask;
+        }
+
+        public Task WriteQuickCreatedAsync(
+            AdminContext adminContext,
+            AdminTenantDirectoryDetailView directory,
+            AdminIntegrationClientView client,
+            CancellationToken cancellationToken)
+        {
+            Events.Add(("quick_created", adminContext.AdminUserId, directory.Tenant.TenantId, client.ClientId));
+            return Task.CompletedTask;
+        }
+    }
+
+    public sealed class FixedAdminTenantDirectoryIdGenerator : IAdminTenantDirectoryIdGenerator
+    {
+        public Guid NewTenantId()
+        {
+            return Guid.Parse("10101010-1010-1010-1010-101010101010");
+        }
+
+        public Guid NewApplicationClientId()
+        {
+            return Guid.Parse("20202020-2020-2020-2020-202020202020");
+        }
+
+        public string NewIntegrationClientId(
+            string tenantDisplayName,
+            string applicationDisplayName,
+            string integrationClientDisplayName)
+        {
+            return "generated-client";
         }
     }
 
@@ -743,6 +807,184 @@ public sealed class AdminAuthApiTestFactory : WebApplicationFactory<Program>
             var updated = update(_clients[index]);
             _clients[index] = updated;
             return updated;
+        }
+    }
+
+    public sealed class InMemoryAdminTenantDirectoryStore : IAdminTenantDirectoryStore
+    {
+        private readonly List<AdminTenantDirectoryTenantView> _tenants = [];
+        private readonly List<AdminTenantDirectoryApplicationView> _applications = [];
+        private readonly List<AdminIntegrationClientView> _clients = [];
+
+        public AdminTenantDirectoryDetailView Seed(
+            AdminTenantDirectoryTenantView tenant,
+            IReadOnlyCollection<AdminTenantDirectoryApplicationView>? applications = null,
+            IReadOnlyCollection<AdminIntegrationClientView>? clients = null)
+        {
+            _tenants.Add(tenant);
+            if (applications is not null)
+            {
+                _applications.AddRange(applications);
+            }
+
+            if (clients is not null)
+            {
+                _clients.AddRange(clients);
+            }
+
+            return BuildDirectory(tenant.TenantId)!;
+        }
+
+        public Task<IReadOnlyCollection<AdminTenantDirectoryTenantView>> ListTenantsAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var tenants = _tenants
+                .Select(RefreshCounts)
+                .OrderBy(tenant => tenant.DisplayName, StringComparer.Ordinal)
+                .ToArray();
+            return Task.FromResult<IReadOnlyCollection<AdminTenantDirectoryTenantView>>(tenants);
+        }
+
+        public Task<AdminTenantDirectoryDetailView?> GetDirectoryAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(BuildDirectory(tenantId));
+        }
+
+        public Task<AdminTenantDirectoryTenantView?> CreateTenantAsync(
+            AdminTenantCreateDraft draft,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (TenantConflicts(draft.TenantId, draft.DisplayName, draft.Slug))
+            {
+                return Task.FromResult<AdminTenantDirectoryTenantView?>(null);
+            }
+
+            var tenant = new AdminTenantDirectoryTenantView
+            {
+                TenantId = draft.TenantId,
+                DisplayName = draft.DisplayName,
+                Slug = draft.Slug,
+                Status = draft.Status,
+                ApplicationCount = 0,
+                IntegrationClientCount = 0,
+                CreatedUtc = draft.CreatedUtc,
+                UpdatedUtc = draft.CreatedUtc,
+            };
+            _tenants.Add(tenant);
+            return Task.FromResult<AdminTenantDirectoryTenantView?>(tenant);
+        }
+
+        public Task<AdminTenantDirectoryDetailView?> QuickCreateAsync(
+            AdminTenantQuickCreateDraft draft,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (TenantConflicts(draft.TenantId, draft.TenantDisplayName, draft.TenantSlug) ||
+                _clients.Any(client => string.Equals(client.ClientId, draft.ClientId, StringComparison.Ordinal)))
+            {
+                return Task.FromResult<AdminTenantDirectoryDetailView?>(null);
+            }
+
+            var tenant = new AdminTenantDirectoryTenantView
+            {
+                TenantId = draft.TenantId,
+                DisplayName = draft.TenantDisplayName,
+                Slug = draft.TenantSlug,
+                Status = AdminTenantDirectoryStatus.Active,
+                ApplicationCount = 1,
+                IntegrationClientCount = 1,
+                CreatedUtc = draft.CreatedUtc,
+                UpdatedUtc = draft.CreatedUtc,
+            };
+            var application = new AdminTenantDirectoryApplicationView
+            {
+                ApplicationClientId = draft.ApplicationClientId,
+                TenantId = draft.TenantId,
+                DisplayName = draft.ApplicationDisplayName,
+                Slug = draft.ApplicationSlug,
+                Status = AdminTenantDirectoryStatus.Active,
+                IntegrationClientCount = 1,
+                CreatedUtc = draft.CreatedUtc,
+                UpdatedUtc = draft.CreatedUtc,
+            };
+            var client = new AdminIntegrationClientView
+            {
+                ClientId = draft.ClientId,
+                TenantId = draft.TenantId,
+                ApplicationClientId = draft.ApplicationClientId,
+                Status = AdminIntegrationClientStatus.Active,
+                AllowedScopes = draft.AllowedScopes
+                    .OrderBy(static scope => scope, StringComparer.Ordinal)
+                    .ToArray(),
+                CreatedUtc = draft.CreatedUtc,
+                UpdatedUtc = draft.CreatedUtc,
+                LastSecretRotatedUtc = draft.CreatedUtc,
+                LastAuthStateChangedUtc = draft.CreatedUtc,
+            };
+
+            _tenants.Add(tenant);
+            _applications.Add(application);
+            _clients.Add(client);
+
+            return Task.FromResult(BuildDirectory(draft.TenantId));
+        }
+
+        private bool TenantConflicts(Guid tenantId, string displayName, string? slug)
+        {
+            return _tenants.Any(tenant =>
+                tenant.TenantId == tenantId ||
+                string.Equals(tenant.DisplayName, displayName, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(slug) && string.Equals(tenant.Slug, slug, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private AdminTenantDirectoryDetailView? BuildDirectory(Guid tenantId)
+        {
+            var tenant = _tenants.FirstOrDefault(item => item.TenantId == tenantId);
+            if (tenant is null)
+            {
+                return null;
+            }
+
+            var applications = _applications
+                .Where(application => application.TenantId == tenantId)
+                .OrderBy(application => application.DisplayName, StringComparer.Ordinal)
+                .Select(RefreshApplicationCounts)
+                .ToArray();
+            var clients = _clients
+                .Where(client => client.TenantId == tenantId)
+                .OrderBy(client => client.ClientId, StringComparer.Ordinal)
+                .ToArray();
+
+            return new AdminTenantDirectoryDetailView
+            {
+                Tenant = RefreshCounts(tenant),
+                Applications = applications,
+                IntegrationClients = clients,
+            };
+        }
+
+        private AdminTenantDirectoryTenantView RefreshCounts(AdminTenantDirectoryTenantView tenant)
+        {
+            return tenant with
+            {
+                ApplicationCount = _applications.Count(application => application.TenantId == tenant.TenantId),
+                IntegrationClientCount = _clients.Count(client => client.TenantId == tenant.TenantId),
+            };
+        }
+
+        private AdminTenantDirectoryApplicationView RefreshApplicationCounts(AdminTenantDirectoryApplicationView application)
+        {
+            return application with
+            {
+                IntegrationClientCount = _clients.Count(client =>
+                    client.TenantId == application.TenantId &&
+                    client.ApplicationClientId == application.ApplicationClientId),
+            };
         }
     }
 

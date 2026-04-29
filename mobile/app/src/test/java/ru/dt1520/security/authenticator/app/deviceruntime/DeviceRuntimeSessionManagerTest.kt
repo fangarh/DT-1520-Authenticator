@@ -19,6 +19,7 @@ class DeviceRuntimeSessionManagerTest {
         val manager = DeviceRuntimeSessionManager(
             sessionStore = store,
             transport = transport,
+            runtimeBaseUrl = "https://admin.ghostring.ru:18443",
             currentEpochSecondsProvider = { 1_700_000_000L },
             installationIdFactory = { "installation-generated" }
         )
@@ -36,6 +37,7 @@ class DeviceRuntimeSessionManagerTest {
         assertEquals("access-1", store.session?.accessToken)
         assertEquals("refresh-1", store.session?.refreshToken)
         assertEquals(1_700_000_900L, store.session?.accessTokenExpiresAtEpochSeconds)
+        assertEquals("https://admin.ghostring.ru:18443", store.session?.runtimeBaseUrl)
         assertEquals("Bearer integration-access-token", transport.lastIntegrationAuthorization)
         assertEquals("installation-generated", transport.lastActivationCommand?.installationId)
     }
@@ -47,6 +49,7 @@ class DeviceRuntimeSessionManagerTest {
         val manager = DeviceRuntimeSessionManager(
             sessionStore = store,
             transport = transport,
+            runtimeBaseUrl = "https://admin.ghostring.ru:18443",
             currentEpochSecondsProvider = { 1_700_000_000L },
             installationIdFactory = { "installation-generated" }
         )
@@ -61,6 +64,7 @@ class DeviceRuntimeSessionManagerTest {
         assertEquals(null, transport.lastIntegrationAuthorization)
         assertEquals("access-1", store.session?.accessToken)
         assertEquals("refresh-1", store.session?.refreshToken)
+        assertEquals("https://admin.ghostring.ru:18443", store.session?.runtimeBaseUrl)
     }
 
     @Test
@@ -85,7 +89,8 @@ class DeviceRuntimeSessionManagerTest {
                 refreshToken = "refresh-1",
                 tokenType = "Bearer",
                 scope = "challenge",
-                accessTokenExpiresAtEpochSeconds = 1_700_000_010L
+                accessTokenExpiresAtEpochSeconds = 1_700_000_010L,
+                runtimeBaseUrl = "https://admin.ghostring.ru:18443"
             )
         )
         val transport = RecordingDeviceRuntimeTransport().apply {
@@ -110,6 +115,7 @@ class DeviceRuntimeSessionManagerTest {
         assertEquals("Bearer access-2", transport.lastPendingAuthorization)
         assertEquals("access-2", store.session?.accessToken)
         assertEquals("refresh-2", store.session?.refreshToken)
+        assertEquals("https://admin.ghostring.ru:18443", store.session?.runtimeBaseUrl)
     }
 
     @Test

@@ -13,6 +13,7 @@ import {
   type LookupDraft,
   type OneTimeActivationPayload,
 } from "./deviceOnboardingWorkspaceModel";
+import { resolveDeviceOnboardingRuntimeBaseUrl } from "./deviceOnboardingQrEnvelope";
 
 export function useDeviceOnboardingWorkspace(session: AdminSession) {
   const canRead = session.permissions.includes("devices.read");
@@ -103,6 +104,7 @@ export function useDeviceOnboardingWorkspace(session: AdminSession) {
         setOneTimePayload({
           activationCodeId: response.artifact.activationCodeId,
           activationPayload: response.activationPayload,
+          runtimeBaseUrl: resolveDeviceOnboardingRuntimeBaseUrl(),
           expiresAtUtc: response.artifact.expiresAtUtc,
         });
         setPendingAction(null);

@@ -20,7 +20,8 @@ internal data class StoredDeviceSessionSnapshot(
     val refreshToken: String,
     val tokenType: String,
     val scope: String,
-    val accessTokenExpiresAtEpochSeconds: Long
+    val accessTokenExpiresAtEpochSeconds: Long,
+    val runtimeBaseUrl: String?
 ) {
     init {
         require(deviceId.isNotBlank()) {
@@ -40,6 +41,9 @@ internal data class StoredDeviceSessionSnapshot(
         }
         require(accessTokenExpiresAtEpochSeconds > 0) {
             "accessTokenExpiresAtEpochSeconds must be positive."
+        }
+        runtimeBaseUrl?.let { value ->
+            requireSafeDeviceRuntimeBaseUrl(value)
         }
     }
 }
@@ -102,13 +106,14 @@ internal object StoredDeviceSessionSnapshotSerializer {
             encode(snapshot.refreshToken),
             encode(snapshot.tokenType),
             encode(snapshot.scope),
-            snapshot.accessTokenExpiresAtEpochSeconds.toString()
+            snapshot.accessTokenExpiresAtEpochSeconds.toString(),
+            encode(snapshot.runtimeBaseUrl.orEmpty())
         ).joinToString(SEPARATOR)
     }
 
     fun deserialize(serialized: String): StoredDeviceSessionSnapshot {
         val parts = serialized.split(SEPARATOR)
-        require(parts.size == SESSION_PARTS_COUNT) {
+        require(parts.size == LEGACY_SESSION_PARTS_COUNT || parts.size == SESSION_PARTS_COUNT) {
             "Stored device session snapshot has invalid format."
         }
         require(parts[0].toIntOrNull() == SecureDeviceSessionRecord.CURRENT_SCHEMA_VERSION) {
@@ -122,7 +127,10 @@ internal object StoredDeviceSessionSnapshotSerializer {
             tokenType = decode(parts[4]),
             scope = decode(parts[5]),
             accessTokenExpiresAtEpochSeconds = parts[6].toLongOrNull()
-                ?: throw IllegalArgumentException("Stored device session expiry is invalid.")
+                ?: throw IllegalArgumentException("Stored device session expiry is invalid."),
+            runtimeBaseUrl = parts.getOrNull(7)
+                ?.let(::decode)
+                ?.takeIf(String::isNotBlank)
         )
     }
 }
@@ -168,7 +176,8 @@ internal fun StoredDeviceSessionSnapshot.toSession(): StoredDeviceSession = Stor
     refreshToken = refreshToken,
     tokenType = tokenType,
     scope = scope,
-    accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds
+    accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds,
+    runtimeBaseUrl = runtimeBaseUrl
 )
 
 internal fun StoredDeviceInstallation.toSnapshot(): StoredDeviceInstallationSnapshot = StoredDeviceInstallationSnapshot(
@@ -181,7 +190,8 @@ internal fun StoredDeviceSession.toSnapshot(): StoredDeviceSessionSnapshot = Sto
     refreshToken = refreshToken,
     tokenType = tokenType,
     scope = scope,
-    accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds
+    accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds,
+    runtimeBaseUrl = runtimeBaseUrl
 )
 
 private fun encode(value: String): String {
@@ -196,5 +206,6 @@ private fun decode(value: String): String {
 
 private const val SEPARATOR: String = "|"
 private const val INSTALLATION_PARTS_COUNT: Int = 2
-private const val SESSION_PARTS_COUNT: Int = 7
+private const val LEGACY_SESSION_PARTS_COUNT: Int = 7
+private const val SESSION_PARTS_COUNT: Int = 8
 private const val RECORD_PARTS_COUNT: Int = 4

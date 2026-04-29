@@ -11,6 +11,7 @@ import ru.dt1520.security.authenticator.security.storage.StoredDeviceSession
 internal class DeviceRuntimeSessionManager(
     private val sessionStore: SecureDeviceSessionStore,
     private val transport: DeviceRuntimeTransport,
+    private val runtimeBaseUrl: String? = null,
     private val currentEpochSecondsProvider: () -> Long = { System.currentTimeMillis() / 1_000L },
     private val installationIdFactory: () -> String = { UUID.randomUUID().toString() },
     private val refreshSkewSeconds: Long = DEFAULT_REFRESH_SKEW_SECONDS
@@ -55,7 +56,8 @@ internal class DeviceRuntimeSessionManager(
                 refreshToken = activation.tokens.refreshToken,
                 tokenType = activation.tokens.tokenType,
                 scope = activation.tokens.scope,
-                accessTokenExpiresAtEpochSeconds = currentEpochSecondsProvider() + activation.tokens.expiresInSeconds
+                accessTokenExpiresAtEpochSeconds = currentEpochSecondsProvider() + activation.tokens.expiresInSeconds,
+                runtimeBaseUrl = runtimeBaseUrl
             )
         )
 
@@ -85,7 +87,8 @@ internal class DeviceRuntimeSessionManager(
                 refreshToken = activation.tokens.refreshToken,
                 tokenType = activation.tokens.tokenType,
                 scope = activation.tokens.scope,
-                accessTokenExpiresAtEpochSeconds = currentEpochSecondsProvider() + activation.tokens.expiresInSeconds
+                accessTokenExpiresAtEpochSeconds = currentEpochSecondsProvider() + activation.tokens.expiresInSeconds,
+                runtimeBaseUrl = runtimeBaseUrl
             )
         )
 
@@ -208,7 +211,8 @@ internal class DeviceRuntimeSessionManager(
         val refreshToken: String,
         val tokenType: String,
         val scope: String,
-        val accessTokenExpiresAtEpochSeconds: Long
+        val accessTokenExpiresAtEpochSeconds: Long,
+        val runtimeBaseUrl: String?
     ) {
         val authorizationHeader: String
             get() = "$tokenType $accessToken"
@@ -225,7 +229,8 @@ internal class DeviceRuntimeSessionManager(
         refreshToken = refreshToken,
         tokenType = tokenType,
         scope = scope,
-        accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds
+        accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds,
+        runtimeBaseUrl = runtimeBaseUrl
     )
 
     private fun RuntimeDeviceSession.toStoredSession(): StoredDeviceSession = StoredDeviceSession(
@@ -234,7 +239,8 @@ internal class DeviceRuntimeSessionManager(
         refreshToken = refreshToken,
         tokenType = tokenType,
         scope = scope,
-        accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds
+        accessTokenExpiresAtEpochSeconds = accessTokenExpiresAtEpochSeconds,
+        runtimeBaseUrl = runtimeBaseUrl
     )
 
     private fun DeviceRuntimeTransportException.shouldRetryWithRefresh(): Boolean {

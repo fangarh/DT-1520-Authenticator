@@ -11,7 +11,13 @@ import type {
   AdminIntegrationClientSecretResponse,
   AdminUpdateIntegrationClientScopesRequest,
   AdminIntegrationClientView,
+  AdminCreateTenantRequest,
+  AdminQuickCreateTenantRequest,
+  AdminQuickCreateTenantResponse,
+  AdminRuntimeConfigurationView,
   AdminSession,
+  AdminTenantDirectoryDetailView,
+  AdminTenantDirectoryTenantView,
   AdminUserDeviceView,
   ConfirmEnrollmentRequest,
   ProblemDetails,
@@ -159,6 +165,28 @@ class AdminApiClient {
     return this.requestJson<AdminIntegrationClientView[]>(
       `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/integration-clients`,
     );
+  }
+
+  async listTenants(): Promise<AdminTenantDirectoryTenantView[]> {
+    return this.requestJson<AdminTenantDirectoryTenantView[]>("/api/v1/admin/tenants");
+  }
+
+  async getTenantDirectory(tenantId: string): Promise<AdminTenantDirectoryDetailView> {
+    return this.requestJson<AdminTenantDirectoryDetailView>(
+      `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}/directory`,
+    );
+  }
+
+  async createTenant(request: AdminCreateTenantRequest): Promise<AdminTenantDirectoryTenantView> {
+    return this.postJson<AdminTenantDirectoryTenantView>("/api/v1/admin/tenants", request);
+  }
+
+  async quickCreateTenant(request: AdminQuickCreateTenantRequest): Promise<AdminQuickCreateTenantResponse> {
+    return this.postJson<AdminQuickCreateTenantResponse>("/api/v1/admin/tenants/quick-create", request);
+  }
+
+  async getRuntimeConfiguration(): Promise<AdminRuntimeConfigurationView> {
+    return this.requestJson<AdminRuntimeConfigurationView>("/api/v1/admin/runtime-configuration");
   }
 
   async createIntegrationClient(

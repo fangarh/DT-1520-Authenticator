@@ -194,7 +194,11 @@ Security semantics:
 
 Security semantics:
 
-- `callbackUrl` по-прежнему требует `HTTPS`, а create-path теперь дополнительно reject-ит `localhost` и private-network IP literals как obvious SSRF path
+- `callbackUrl` валидируется через explicit runtime policy `ChallengeCallbackUrlPolicy`
+- `PublicInternet` является production default: требует `HTTPS`, reject-ит `localhost`, loopback/private IP literals, embedded credentials/userinfo, fragments и root-only path
+- `PrivateNetwork` позволяет private DNS/private IP HTTPS callbacks для закрытых/on-prem контуров; `HTTP` для private contour допускается только при явном `AllowInsecureHttp=true`
+- `LocalDevelopment` допускает `localhost`/`127.0.0.1` и `HTTP` только для local/demo/reference stand usage
+- validation errors называют active policy, но не echo-ят rejected callback URL
 - gateway не логирует полный callback URL и не хранит secret material в outbox/payload
 - outbox не разрешает несколько delivery rows для одного `challenge + event_type`
 - synchronous integration flows не зависят от callback success: callback contour остается внешним notification path, а не частью approve/verify transaction result

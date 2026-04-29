@@ -6,9 +6,11 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/DesktopShell/DesktopShell.csproj" />
+    <Project Path="src/DesktopWpfTest/DesktopWpfTest.csproj" />
     <Project Path="src/ReferenceBackend/ReferenceBackend.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/DesktopWpfTest.Tests/DesktopWpfTest.Tests.csproj" />
     <Project Path="tests/ReferenceBackend.Tests/ReferenceBackend.Tests.csproj" />
   </Folder>
 </Solution>

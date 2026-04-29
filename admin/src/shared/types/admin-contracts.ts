@@ -196,3 +196,60 @@ export interface AdminIntegrationClientSecretResponse {
   client: AdminIntegrationClientView;
   clientSecret: string;
 }
+
+export type AdminTenantDirectoryStatus = "active" | "disabled" | "archived" | "test";
+
+export interface AdminTenantDirectoryTenantView {
+  tenantId: string;
+  displayName: string;
+  slug?: string | null;
+  status: AdminTenantDirectoryStatus;
+  applicationCount: number;
+  integrationClientCount: number;
+  createdUtc: string;
+  updatedUtc?: string | null;
+}
+
+export interface AdminTenantDirectoryApplicationView {
+  applicationClientId: string;
+  tenantId: string;
+  displayName: string;
+  slug?: string | null;
+  status: AdminTenantDirectoryStatus;
+  integrationClientCount: number;
+  createdUtc: string;
+  updatedUtc?: string | null;
+}
+
+export interface AdminTenantDirectoryDetailView {
+  tenant: AdminTenantDirectoryTenantView;
+  applications: AdminTenantDirectoryApplicationView[];
+  integrationClients: AdminIntegrationClientView[];
+}
+
+export interface AdminCreateTenantRequest {
+  tenantId?: string;
+  displayName: string;
+  slug?: string;
+  status?: AdminTenantDirectoryStatus;
+}
+
+export interface AdminQuickCreateTenantRequest {
+  tenantDisplayName: string;
+  applicationDisplayName: string;
+  integrationClientDisplayName: string;
+  allowedScopes: AdminIntegrationClientScope[];
+}
+
+export interface AdminQuickCreateTenantResponse {
+  directory: AdminTenantDirectoryDetailView;
+  client: AdminIntegrationClientView;
+  clientSecret: string;
+}
+
+export interface AdminRuntimeConfigurationView {
+  callbackUrlPolicy: {
+    mode: string;
+    allowInsecureHttp: boolean;
+  };
+}

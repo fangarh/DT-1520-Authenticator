@@ -57,6 +57,10 @@ if (!builder.Environment.IsDevelopment() &&
 var totpProtectionOptions = builder.Configuration
     .GetSection("TotpProtection")
     .Get<TotpProtectionOptions>() ?? new TotpProtectionOptions();
+var challengeCallbackUrlPolicy = ChallengeCallbackUrlPolicy.FromOptions(
+    builder.Configuration
+        .GetSection("ChallengeCallbackUrlPolicy")
+        .Get<ChallengeCallbackUrlPolicyOptions>() ?? new ChallengeCallbackUrlPolicyOptions());
 var clientSecretHasher = new Pbkdf2ClientSecretHasher();
 var adminPasswordHasher = new Pbkdf2AdminPasswordHasher();
 var postgresDataSource = new NpgsqlDataSourceBuilder(postgresConnectionString).Build();
@@ -78,6 +82,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddSingleton(bootstrapOAuthOptions);
 builder.Services.AddSingleton(deviceTokenOptions);
 builder.Services.AddSingleton(totpProtectionOptions);
+builder.Services.AddSingleton(challengeCallbackUrlPolicy);
 builder.Services.AddSingleton(postgresDataSource);
 builder.Services.AddSingleton<IClientSecretHasher>(clientSecretHasher);
 builder.Services.AddSingleton<IAdminPasswordHasher>(adminPasswordHasher);
@@ -220,6 +225,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AdminAuthenticationDefaults.IntegrationClientsWritePolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.IntegrationClientsWrite));
+    options.AddPolicy(AdminAuthenticationDefaults.TenantsReadPolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.TenantsRead));
+    options.AddPolicy(AdminAuthenticationDefaults.TenantsWritePolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.TenantsWrite));
     options.AddPolicy(AdminAuthenticationDefaults.WebhooksReadPolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.WebhooksRead));
@@ -234,13 +245,16 @@ builder.Services.AddSingleton<IAdminTotpEnrollmentAuditWriter, AdminTotpEnrollme
 builder.Services.AddSingleton<IAdminWebhookSubscriptionAuditWriter, AdminWebhookSubscriptionAuditWriter>();
 builder.Services.AddSingleton<IAdminIntegrationClientAuditWriter, AdminIntegrationClientAuditWriter>();
 builder.Services.AddSingleton<IAdminDeviceOnboardingAuditWriter, AdminDeviceOnboardingAuditWriter>();
+builder.Services.AddSingleton<IAdminTenantDirectoryAuditWriter, AdminTenantDirectoryAuditWriter>();
 builder.Services.AddSingleton<IAdminApplicationClientResolver, AdminApplicationClientResolver>();
 builder.Services.AddSingleton<IAdminIntegrationClientSecretGenerator, AdminIntegrationClientSecretGenerator>();
+builder.Services.AddSingleton<IAdminTenantDirectoryIdGenerator, AdminTenantDirectoryIdGenerator>();
 builder.Services.AddSingleton<IAdminDeviceActivationSecretGenerator, AdminDeviceActivationSecretGenerator>();
 builder.Services.AddSingleton<IAdminDeviceStore, PostgresAdminDeviceStore>();
 builder.Services.AddSingleton<IAdminDeviceOnboardingStore, PostgresAdminDeviceOnboardingStore>();
 builder.Services.AddSingleton<IAdminDeliveryStatusStore, PostgresAdminDeliveryStatusStore>();
 builder.Services.AddSingleton<IAdminIntegrationClientStore, PostgresAdminIntegrationClientStore>();
+builder.Services.AddSingleton<IAdminTenantDirectoryStore, PostgresAdminTenantDirectoryStore>();
 builder.Services.AddSingleton<AdminLoginHandler>();
 builder.Services.AddSingleton<AdminListUserDevicesHandler>();
 builder.Services.AddSingleton<AdminRevokeUserDeviceHandler>();
@@ -253,6 +267,10 @@ builder.Services.AddSingleton<AdminCreateIntegrationClientHandler>();
 builder.Services.AddSingleton<AdminRotateIntegrationClientSecretHandler>();
 builder.Services.AddSingleton<AdminUpdateIntegrationClientScopesHandler>();
 builder.Services.AddSingleton<AdminSetIntegrationClientActiveStateHandler>();
+builder.Services.AddSingleton<AdminListTenantDirectoryHandler>();
+builder.Services.AddSingleton<AdminGetTenantDirectoryHandler>();
+builder.Services.AddSingleton<AdminCreateTenantHandler>();
+builder.Services.AddSingleton<AdminQuickCreateTenantHandler>();
 builder.Services.AddSingleton<AdminStartTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminConfirmTotpEnrollmentHandler>();
 builder.Services.AddSingleton<AdminReplaceTotpEnrollmentHandler>();
@@ -323,6 +341,8 @@ app.MapAdminEnrollmentReadEndpoints();
 app.MapAdminEnrollmentCommandEndpoints();
 app.MapAdminDeliveryStatusEndpoints();
 app.MapAdminIntegrationClientEndpoints();
+app.MapAdminRuntimeConfigurationEndpoints();
+app.MapAdminTenantDirectoryEndpoints();
 app.MapAdminWebhookSubscriptionEndpoints();
 app.MapAuthEndpoints();
 app.MapChallengesEndpoints();

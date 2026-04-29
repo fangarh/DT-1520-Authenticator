@@ -1,9 +1,10 @@
 import { LoginPanel } from "../features/auth/LoginPanel";
+import { useAdminSession } from "../features/auth/useAdminSession";
 import { DeliveryStatusWorkspace } from "../features/delivery-statuses/DeliveryStatusWorkspace";
 import { DeviceOnboardingWorkspace } from "../features/device-onboarding/DeviceOnboardingWorkspace";
-import { useAdminSession } from "../features/auth/useAdminSession";
 import { EnrollmentWorkspace } from "../features/enrollment-workspace/EnrollmentWorkspace";
 import { IntegrationClientWorkspace } from "../features/integration-clients/IntegrationClientWorkspace";
+import { TenantDirectoryWorkspace } from "../features/tenant-directory/TenantDirectoryWorkspace";
 import { UserDeviceWorkspace } from "../features/user-devices/UserDeviceWorkspace";
 import { WebhookSubscriptionWorkspace } from "../features/webhook-subscriptions/WebhookSubscriptionWorkspace";
 import { Button } from "../shared/ui/Button";
@@ -16,8 +17,10 @@ export default function App() {
   const canManageEnrollments = currentSession?.permissions.some((permission) => permission.startsWith("enrollments.")) ?? false;
   const canManageDevices = currentSession?.permissions.some((permission) => permission.startsWith("devices.")) ?? false;
   const canManageIntegrationClients = currentSession?.permissions.some((permission) => permission.startsWith("integration-clients.")) ?? false;
+  const canManageTenants = currentSession?.permissions.some((permission) => permission.startsWith("tenants.")) ?? false;
   const canManageWebhooks = currentSession?.permissions.some((permission) => permission.startsWith("webhooks.")) ?? false;
   const canReadDeliveryStatuses = currentSession?.permissions.includes("webhooks.read") ?? false;
+  const showLegacySurfaces = !canManageTenants;
 
   return (
     <main className={styles.shell}>
@@ -27,7 +30,7 @@ export default function App() {
           <h1 className={styles.title}>Operator console for enrollment and delivery visibility.</h1>
           <p className={styles.subtitle}>
             Browser contour now talks only to `/api/v1/admin/*`: session cookie,
-            CSRF, enrollment lifecycle, integration clients, QR device onboarding, user device support, recent delivery outcomes and webhook subscription management.
+            CSRF and a tenant-centric workspace for setup, client lifecycle, QR device onboarding, runtime policy and reporting. Legacy copy-paste workspaces remain fallback-only for sessions without tenant permissions.
           </p>
         </div>
 
@@ -60,17 +63,18 @@ export default function App() {
 
       {session.status === "authenticated" && currentSession ? (
         <div className={styles.workspaceStack}>
-          {canManageEnrollments ? <EnrollmentWorkspace session={currentSession} /> : null}
-          {canManageIntegrationClients ? <IntegrationClientWorkspace session={currentSession} /> : null}
-          {canManageDevices ? <DeviceOnboardingWorkspace session={currentSession} /> : null}
-          {canManageDevices ? <UserDeviceWorkspace session={currentSession} /> : null}
-          {canReadDeliveryStatuses ? <DeliveryStatusWorkspace session={currentSession} /> : null}
-          {canManageWebhooks ? <WebhookSubscriptionWorkspace session={currentSession} /> : null}
-          {!canManageEnrollments && !canManageIntegrationClients && !canManageDevices && !canManageWebhooks && !canReadDeliveryStatuses ? (
+          {canManageTenants ? <TenantDirectoryWorkspace session={currentSession} /> : null}
+          {showLegacySurfaces && canManageEnrollments ? <EnrollmentWorkspace session={currentSession} /> : null}
+          {showLegacySurfaces && canManageIntegrationClients ? <IntegrationClientWorkspace session={currentSession} /> : null}
+          {showLegacySurfaces && canManageDevices ? <DeviceOnboardingWorkspace session={currentSession} /> : null}
+          {showLegacySurfaces && canManageDevices ? <UserDeviceWorkspace session={currentSession} /> : null}
+          {showLegacySurfaces && canReadDeliveryStatuses ? <DeliveryStatusWorkspace session={currentSession} /> : null}
+          {showLegacySurfaces && canManageWebhooks ? <WebhookSubscriptionWorkspace session={currentSession} /> : null}
+          {!canManageTenants && !canManageEnrollments && !canManageIntegrationClients && !canManageDevices && !canManageWebhooks && !canReadDeliveryStatuses ? (
             <Notice
               tone="neutral"
               title="Нет доступных operator surfaces"
-              detail="Текущая сессия не содержит permissions для enrollment, integration client, device или delivery/webhook management."
+              detail="Текущая сессия не содержит permissions для tenant, enrollment, integration client, device или delivery/webhook management."
             />
           ) : null}
         </div>

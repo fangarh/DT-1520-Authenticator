@@ -48,8 +48,10 @@ $requiredFiles = @(
     "infra/docker/worker.Dockerfile",
     "infra/docker/bootstrap.Dockerfile",
     "infra/docker/admin.Dockerfile",
+    "infra/docker/reference-backend.Dockerfile",
     "infra/nginx/admin.conf",
     "infra/nginx/admin.ghostring.ru.conf.example",
+    "infra/nginx/reference-backend.ghostring.ru.conf.example",
     "infra/env/runtime.env.example",
     "infra/env/ghostring.runtime.env.example",
     "infra/scripts/Installer.Contract.ps1",
@@ -86,6 +88,7 @@ Assert-FileContains $ghostringComposePath "(?ms)services:\s+redis:"
 Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+bootstrap:"
 Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+api:"
 Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+worker:"
+Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+reference-backend:"
 Assert-FileContains $ghostringComposePath "(?ms)services:.*\s+admin:"
 Assert-FileNotContains $ghostringComposePath "(?ms)services:\s+postgres:"
 Assert-FileContains $ghostringComposePath "127\.0\.0\.1:\$\{OTPAUTH_GHOSTRING_ADMIN_HTTPS_PORT:-18443\}:8443"
@@ -94,6 +97,9 @@ Assert-FileContains $ghostringComposePath "Webhooks__SigningKey"
 Assert-FileContains $ghostringComposePath "PushDelivery__Provider"
 Assert-FileContains $ghostringComposePath "ReverseProxy__KnownNetworks__0"
 Assert-FileContains $ghostringComposePath "OTPAUTH_RUNTIME_NETWORK_CIDR"
+Assert-FileContains $ghostringComposePath "REFERENCE_BACKEND_DT1520_CLIENT_ID"
+Assert-FileContains $ghostringComposePath "REFERENCE_BACKEND_CALLBACK_SIGNING_SECRET"
+Assert-FileContains $ghostringComposePath "127\.0\.0\.1:\$\{REFERENCE_BACKEND_HOST_HTTP_PORT:-15188\}:5188"
 
 $nginxConfigPath = Join-Path $repoRoot "infra/nginx/admin.conf"
 Assert-FileContains $nginxConfigPath "listen 8443 ssl;"
@@ -107,6 +113,11 @@ Assert-FileContains $ghostringNginxConfigPath "proxy_pass https://127\.0\.0\.1:1
 Assert-FileContains $ghostringNginxConfigPath "proxy_ssl_verify on;"
 Assert-FileContains $ghostringNginxConfigPath "proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates\.crt;"
 
+$referenceBackendNginxConfigPath = Join-Path $repoRoot "infra/nginx/reference-backend.ghostring.ru.conf.example"
+Assert-FileContains $referenceBackendNginxConfigPath "listen 18444 ssl http2;"
+Assert-FileContains $referenceBackendNginxConfigPath "server_name admin\.ghostring\.ru;"
+Assert-FileContains $referenceBackendNginxConfigPath "proxy_pass http://127\.0\.0\.1:15188;"
+
 $ghostringEnvPath = Join-Path $repoRoot "infra/env/ghostring.runtime.env.example"
 Assert-FileContains $ghostringEnvPath "ConnectionStrings__Postgres=Host=127\.0\.0\.1;Port=5432;Database=dt-auth;"
 Assert-FileContains $ghostringEnvPath "ChallengeCallbacks__SigningKey"
@@ -114,6 +125,8 @@ Assert-FileContains $ghostringEnvPath "Webhooks__SigningKey"
 Assert-FileContains $ghostringEnvPath "OTPAUTH_GHOSTRING_ADMIN_HTTPS_PORT=18443"
 Assert-FileContains $ghostringEnvPath "OTPAUTH_RUNTIME_NETWORK_CIDR=172\.29\.152\.0/24"
 Assert-FileContains $ghostringEnvPath "ReverseProxy__Enabled=true"
+Assert-FileContains $ghostringEnvPath "REFERENCE_BACKEND_CALLBACK_URL=https://admin\.ghostring\.ru:18444/api/reference/callbacks/dt1520"
+Assert-FileContains $ghostringEnvPath "REFERENCE_BACKEND_DT1520_SCOPE=challenges:read challenges:write"
 
 $runtimeEnvPath = Join-Path $repoRoot "infra/env/runtime.env.example"
 Assert-FileContains $runtimeEnvPath "OTPAUTH_RUNTIME_NETWORK_CIDR=172\.29\.152\.0/24"
@@ -122,6 +135,10 @@ Assert-FileContains $runtimeEnvPath "ReverseProxy__Enabled=true"
 $adminDockerfilePath = Join-Path $repoRoot "infra/docker/admin.Dockerfile"
 Assert-FileContains $adminDockerfilePath "nginx-unprivileged"
 Assert-FileContains $adminDockerfilePath "VITE_ADMIN_API_BASE_URL"
+
+$referenceBackendDockerfilePath = Join-Path $repoRoot "infra/docker/reference-backend.Dockerfile"
+Assert-FileContains $referenceBackendDockerfilePath "ReferenceBackend/ReferenceBackend\.csproj"
+Assert-FileContains $referenceBackendDockerfilePath 'ENTRYPOINT \["dotnet", "ReferenceBackend\.dll"\]'
 
 $apiDockerfilePath = Join-Path $repoRoot "infra/docker/api.Dockerfile"
 Assert-FileContains $apiDockerfilePath "ASPNETCORE_URLS=http://\+:8080"

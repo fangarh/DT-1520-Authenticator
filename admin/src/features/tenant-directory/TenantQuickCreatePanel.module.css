@@ -1,0 +1,114 @@
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field,
+.scopeGroup {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--panel-strong);
+}
+
+.scope,
+.scopeLabel {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.scopeList {
+  display: grid;
+  gap: 8px;
+}
+
+.scopeItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.78);
+}
+
+.scopeItem input {
+  grid-row: span 2;
+  margin-top: 0.2rem;
+}
+
+.scopeItem span {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.scopeItem small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.secretPanel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(138, 47, 61, 0.28);
+  border-radius: 18px;
+  background: rgba(138, 47, 61, 0.08);
+}
+
+.secretPanel p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.secretPanel code {
+  display: block;
+  max-width: 100%;
+  padding: 0.85rem;
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--panel-strong);
+  overflow-wrap: anywhere;
+}
+
+.secretMeta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.secretMeta div {
+  display: grid;
+  gap: 3px;
+}
+
+.secretMeta dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.secretMeta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

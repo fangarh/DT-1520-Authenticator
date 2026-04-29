@@ -11,6 +11,8 @@ public static class AdminAuthenticationDefaults
     public const string EnrollmentsWritePolicy = "AdminEnrollmentsWrite";
     public const string IntegrationClientsReadPolicy = "AdminIntegrationClientsRead";
     public const string IntegrationClientsWritePolicy = "AdminIntegrationClientsWrite";
+    public const string TenantsReadPolicy = "AdminTenantsRead";
+    public const string TenantsWritePolicy = "AdminTenantsWrite";
     public const string WebhooksReadPolicy = "AdminWebhooksRead";
     public const string WebhooksWritePolicy = "AdminWebhooksWrite";
 }

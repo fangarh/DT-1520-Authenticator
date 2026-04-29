@@ -9,6 +9,14 @@ import { DeviceOnboardingListPanel } from "./DeviceOnboardingListPanel";
 import { DeviceOnboardingLookupPanel } from "./DeviceOnboardingLookupPanel";
 import { DeviceOnboardingQrPanel } from "./DeviceOnboardingQrPanel";
 
+vi.mock("qrcode.react", () => ({
+  QRCodeSVG: (props: { value: string; title?: string; role?: string; "aria-label"?: string }) => (
+    <svg data-qr-value={props.value} role={props.role} aria-label={props["aria-label"]}>
+      <title>{props.title}</title>
+    </svg>
+  ),
+}));
+
 function LookupHarness(props: { onSubmit: () => Promise<void> }) {
   const [tenantId, setTenantId] = useState("");
   const [externalUserId, setExternalUserId] = useState("");
@@ -101,12 +109,15 @@ describe("Device onboarding panels", () => {
   it("renders QR and discards one-time activation payload", async () => {
     const user = userEvent.setup();
     const onDiscard = vi.fn();
+    localStorage.clear();
+    sessionStorage.clear();
 
     render(
       <DeviceOnboardingQrPanel
         payload={{
           activationCodeId: "11111111-1111-1111-1111-111111111111",
-          activationPayload: "one-time-activation-payload",
+          activationPayload: "dac_11111111-1111-1111-1111-111111111111.secret",
+          runtimeBaseUrl: "https://admin.ghostring.ru:18443",
           expiresAtUtc: "2026-04-27T10:15:00Z",
         }}
         pending={null}
@@ -115,8 +126,23 @@ describe("Device onboarding panels", () => {
       />,
     );
 
-    expect(screen.getByLabelText("One-time device activation QR")).toBeTruthy();
-    expect(screen.getByText("one-time-activation-payload")).toBeTruthy();
+    const qr = screen.getByLabelText("One-time device activation QR");
+    const qrEnvelope = JSON.parse(qr.getAttribute("data-qr-value") ?? "{}") as {
+      v?: number;
+      runtimeBaseUrl?: string;
+      activationPayload?: string;
+    };
+
+    expect(qrEnvelope).toEqual({
+      v: 1,
+      runtimeBaseUrl: "https://admin.ghostring.ru:18443",
+      activationPayload: "dac_11111111-1111-1111-1111-111111111111.secret",
+    });
+    expect(screen.getByText("dac_11111111-1111-1111-1111-111111111111.secret")).toBeTruthy();
+    expect(screen.getByText("Runtime: https://admin.ghostring.ru:18443")).toBeTruthy();
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+
     await user.click(screen.getByRole("button", { name: "Discard payload" }));
 
     expect(onDiscard).toHaveBeenCalledOnce();
