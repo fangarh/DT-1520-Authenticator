@@ -174,6 +174,18 @@ Preferred server-owned `ghostring` contour:
 
 The live end-to-end flow is therefore blocked on deploying the server-owned `reference-backend` service/nginx site, confirming or redoing QR device activation for the current emulator, then retrying push approve/deny plus online `TOTP` fallback through `https://admin.ghostring.ru:18444/`.
 
+`2026-04-29` server-owned `ghostring` contour status:
+
+- Server report confirmed `reference-backend` image `sha256:e4e9cc50...`, public `https://admin.ghostring.ru:18444/health` healthy, live-readiness ready, callback URL `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`, internal DT-1520 base URL `http://api:8080/` and scope `challenges:read challenges:write`.
+- Local Node/OpenSSL confirmed public `health` and `live-readiness`; PowerShell/Windows SChannel still fails before HTTP response, matching the known local TLS client limitation.
+- Android MCP confirmed `emulator-5554` online, `ru.dt1520.security.authenticator` installed/launched and empty pending inbox visible.
+- First live `POST /api/reference/operations` through `https://admin.ghostring.ru:18444/` reached ReferenceBackend but returned `502` with SDK validation title `Request path must stay under the configured DT-1520 base URL.`
+- Root cause: SDK URI guard treated rooted API paths as platform-dependent absolute URIs in Linux containers before combining them with the configured DT-1520 base URL.
+- Fix added in `lib/src/Dt1520.Authenticator.Client/Dt1520AuthenticatorHttpPipeline.cs`: only absolute `http/https` URIs are accepted as absolute request targets; rooted API paths are combined with the validated base URL. Regression coverage added in `lib/tests/Dt1520.Authenticator.Client.Tests/ClientHttpFoundationTests.cs`.
+- Verification after fix: `dotnet test .\lib\Dt1520.Authenticator.slnx --no-build -maxcpucount:1` green (`88/88`), `dotnet build .\rdb_stand\ReferenceDesktopBackendStand.slnx --no-restore -maxcpucount:1` green, `dotnet test .\rdb_stand\ReferenceDesktopBackendStand.slnx --no-build -maxcpucount:1` green (`28/28`).
+
+Next live step: redeploy `reference-backend` with the SDK URI guard fix, then retry `POST /api/reference/operations` for the target `externalUserId`, Android pending approve/deny terminal flow and online `TOTP` fallback through `https://admin.ghostring.ru:18444/`.
+
 ## Productization Direction
 
 The reference backend is now the proving ground for the optional boxed `Integration Gateway`.

@@ -24,9 +24,14 @@ internal sealed class Dt1520AuthenticatorHttpPipeline
 
     public bool TryBuildRequestUri(string path, out Uri requestUri)
     {
-        requestUri = Uri.TryCreate(path, UriKind.Absolute, out var absolute)
-            ? absolute
-            : new Uri(_options.BaseUrl, path.TrimStart('/'));
+        if (!path.StartsWith("/", StringComparison.Ordinal)
+            && Uri.TryCreate(path, UriKind.Absolute, out var absolute))
+        {
+            requestUri = absolute;
+            return IsHttpScheme(requestUri) && _options.BaseUrl.IsBaseOf(requestUri);
+        }
+
+        requestUri = new Uri(_options.BaseUrl, path.TrimStart('/'));
 
         return _options.BaseUrl.IsBaseOf(requestUri);
     }
@@ -106,5 +111,11 @@ internal sealed class Dt1520AuthenticatorHttpPipeline
         request.Headers.UserAgent.Add(string.IsNullOrWhiteSpace(_options.ProductVersion)
             ? new ProductInfoHeaderValue(_options.ProductName)
             : new ProductInfoHeaderValue(_options.ProductName, _options.ProductVersion));
+    }
+
+    private static bool IsHttpScheme(Uri uri)
+    {
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 }

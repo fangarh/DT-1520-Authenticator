@@ -102,5 +102,38 @@ public sealed class ClientHttpFoundationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public void TryBuildRequestUriCombinesRootedApiPathWithDockerServiceBaseUrl()
+    {
+        using var httpClient = new HttpClient();
+        var options = new Dt1520AuthenticatorClientOptions
+        {
+            BaseUrl = new Uri("http://api:8080/"),
+            Credentials = new Dt1520AuthenticatorClientCredentials("client-one", "secret-one"),
+        }.Validate();
+        var pipeline = new Dt1520AuthenticatorHttpPipeline(httpClient, options);
+
+        var isValid = pipeline.TryBuildRequestUri("/api/v1/challenges", out var requestUri);
+
+        Assert.True(isValid);
+        Assert.Equal("http://api:8080/api/v1/challenges", requestUri.AbsoluteUri);
+    }
+
+    [Fact]
+    public void TryBuildRequestUriRejectsNonHttpAbsoluteUris()
+    {
+        using var httpClient = new HttpClient();
+        var options = new Dt1520AuthenticatorClientOptions
+        {
+            BaseUrl = new Uri("http://api:8080/"),
+            Credentials = new Dt1520AuthenticatorClientCredentials("client-one", "secret-one"),
+        }.Validate();
+        var pipeline = new Dt1520AuthenticatorHttpPipeline(httpClient, options);
+
+        var isValid = pipeline.TryBuildRequestUri("file:///api/v1/challenges", out _);
+
+        Assert.False(isValid);
+    }
+
     private sealed record TestResponse(bool Ok);
 }
