@@ -18,14 +18,16 @@ public sealed class IssueIntegrationTokenResponseTests
             Scope = "challenges:read challenges:write",
         });
 
-        var json = JsonSerializer.Serialize(response);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response));
+        var root = document.RootElement;
 
-        Assert.Contains("\"access_token\":\"token-one\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"token_type\":\"Bearer\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"expires_in\":3600", json, StringComparison.Ordinal);
-        Assert.Contains("\"scope\":\"challenges:read challenges:write\"", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("accessToken", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("tokenType", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("expiresIn", json, StringComparison.Ordinal);
+        Assert.True(root.TryGetProperty("access_token", out var accessToken));
+        Assert.Equal("token-one", accessToken.GetString());
+        Assert.Equal("Bearer", root.GetProperty("token_type").GetString());
+        Assert.Equal(3600, root.GetProperty("expires_in").GetInt32());
+        Assert.Equal("challenges:read challenges:write", root.GetProperty("scope").GetString());
+        Assert.False(root.TryGetProperty("accessToken", out _));
+        Assert.False(root.TryGetProperty("tokenType", out _));
+        Assert.False(root.TryGetProperty("expiresIn", out _));
     }
 }

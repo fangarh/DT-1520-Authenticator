@@ -140,6 +140,7 @@ Required local-only values:
 
 Security constraints:
 
+- current gate scope is `challenges:read challenges:write`; do not request `devices:read` or another device-routing scope until the stand explicitly enables target-device selection.
 - `ReferenceBackend__CallbackUrlPolicyMode` defaults to `PublicInternet`: external `HTTPS`, no `localhost`, no loopback/private IP literal and no credential-bearing URL.
 - `ReferenceBackend__CallbackUrlPolicyMode=PrivateNetwork` is allowed for closed HTTPS contours; `AllowInsecureCallbackHttp=true` is an explicit demo/on-prem relaxation and must stay visible in readiness/preflight output.
 - `ReferenceBackend__CallbackUrlPolicyMode=LocalDevelopment` is allowed only for local/demo HTTP callback tests.
@@ -193,6 +194,15 @@ The reference backend is now the proving ground for the optional boxed `Integrat
 The target product shape is not a third-party tunnel or a desktop-only demo. It is a customer-owned deployable gateway that can safely hold backend integration credentials, validate callbacks, expose desktop/legacy polling endpoints and provide online `TOTP` fallback while keeping customer business commits in the integrating application.
 
 `RDP + TOTP` is intentionally kept as a separate future access connector track. Gateway and SDK changes must preserve reusable lower-level services for that track, especially DT-1520 client calls, challenge creation, `TOTP` verification, callback validation, audit and identity mapping. Do not introduce desktop polling assumptions into those shared services.
+
+## Latest Ghostring Runtime Alignment
+
+`2026-04-28` runtime alignment work:
+
+- `OtpAuth.Api` token response contract now explicitly serializes OAuth fields as `access_token`, `token_type`, `expires_in` and `scope`.
+- `ReferenceBackend` sample configuration and runbook now request only `challenges:read challenges:write` for the current gate.
+- Targeted backend contract test `IssueIntegrationTokenResponseTests` passes in a `.NET 10` Docker SDK container.
+- Ghostring public token check returns `HTTP 200`, `token_type=Bearer`, `expires_in=3600` and granted scope `challenges:read challenges:write` without printing the access token.
 
 ## Related notes
 

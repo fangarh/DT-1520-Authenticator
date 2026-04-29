@@ -118,7 +118,7 @@ $env:Dt1520Authenticator__BaseUrl = "https://admin.ghostring.ru:18443/"
 $env:Dt1520Authenticator__ClientId = "<integration-client-id>"
 $env:Dt1520Authenticator__ClientSecret = "<backend-secret-store>"
 $env:Dt1520Authenticator__CallbackSigningSecret = "<challenge-callback-signing-secret>"
-$env:Dt1520Authenticator__Scope = "challenges:read challenges:write devices:read"
+$env:Dt1520Authenticator__Scope = "challenges:read challenges:write"
 $env:ReferenceBackend__TenantId = "<tenant-guid>"
 $env:ReferenceBackend__ApplicationClientId = "<application-client-guid>"
 $env:ReferenceBackend__CallbackUrl = "https://<public-https-host>/api/reference/callbacks/dt1520"
@@ -152,7 +152,7 @@ dotnet run --project .\src\DesktopWpfTest\DesktopWpfTest.csproj
 
 Live run checklist:
 
-1. Create or select an active integration client in Admin UI with `challenges:read`, `challenges:write` and `devices:read`.
+1. Create or select an active integration client in Admin UI with `challenges:read` and `challenges:write`. Do not add a device-routing scope unless the stand is explicitly changed to select a target device.
 2. Use Admin UI QR device onboarding to activate an Android device for the target `externalUserId`.
 3. Start `ReferenceBackend` with backend-only DT-1520 credentials, callback URL and explicit callback URL policy.
 4. Start `DesktopShell`, enter the same `externalUserId`, then approve or deny the pending push in Android.
