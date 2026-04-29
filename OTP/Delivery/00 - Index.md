@@ -27,6 +27,7 @@
 - [[Official Dotnet Integration SDK]]
 - [[Official Dotnet Integration SDK Context Reset Prompt]]
 - [[Reference Desktop Backend Stand]]
+- [[Optional Boxed Integration Gateway]]
 - [[Documentation Handoff Plan]]
 - [[Documentation Session Starter Prompt]]
 - [[Push Delivery Latency Follow-Up]]
@@ -44,3 +45,4 @@
 - [[../Decisions/ADR-002 - REST-First 2FA Server]]
 - [[../Decisions/ADR-003 - Modular Monolith for MVP]]
 - [[../Decisions/ADR-035 - Official Dotnet Integration SDK and Reference Stand]]
+- [[../Decisions/ADR-036 - Optional Boxed Integration Gateway and Access Connector Boundary]]

@@ -37,6 +37,7 @@
 - `ADR-033`: top-level `webhooks` используют отдельный subscription outbox contour
 - `ADR-034`: pilot integrations сохраняют existing primary auth и добавляют step-up `MFA` только для sensitive operations
 - `ADR-035`: официальный `.NET` SDK и reference `Desktop + Backend` стенд становятся отдельным productization path после admin client management и QR onboarding
+- `ADR-036`: optional boxed `Integration Gateway` принят как рекомендуемый productization path; `RDP + TOTP` фиксируется как отдельный будущий access connector track, который нужно учитывать в границах gateway/SDK уже сейчас
 
 ## Reading Path
 
@@ -76,6 +77,7 @@
 32. [[Decisions/ADR-033 - Top-Level Webhooks Use Subscription Outbox]]
 33. [[Decisions/ADR-034 - Pilot Integrations Keep Existing Primary Auth and Use Step-Up MFA]]
 34. [[Decisions/ADR-035 - Official Dotnet Integration SDK and Reference Stand]]
+35. [[Decisions/ADR-036 - Optional Boxed Integration Gateway and Access Connector Boundary]]
 
 Если задача относится к процессу и поддержанию контекста:
 

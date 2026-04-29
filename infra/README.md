@@ -6,9 +6,10 @@
 
 - `docker-compose.yml` - runtime contour `postgres + redis + api + worker + admin`
 - `docker-compose.ghostring.yml` - server-specific pilot profile для `ghostring` без локального `postgres` и с internal-only `admin`
-- `docker/` - Dockerfile для `api`, `worker`, `admin` и отдельного `bootstrap` image на базе `OtpAuth.Migrations`
+- `docker/` - Dockerfile для `api`, `worker`, `admin`, `reference-backend` и отдельного `bootstrap` image на базе `OtpAuth.Migrations`
 - `nginx/admin.conf` - HTTPS edge для `Admin UI` и reverse proxy на `api`
 - `nginx/admin.ghostring.ru.conf.example` - host-level `nginx` site template для `admin.ghostring.ru -> 127.0.0.1:18443`
+- `nginx/reference-backend.ghostring.ru.conf.example` - host-level `nginx` site template для server-owned ReferenceBackend stand на `admin.ghostring.ru:18444 -> 127.0.0.1:15188`
 - `env/runtime.env.example` - пример install-time/runtime env contract без секретов в репозитории
 - `env/ghostring.runtime.env.example` - пример env contract для pilot rollout на `ghostring`
 - `scripts/install.ps1` - installer entry point с режимами `Install`, `Update`, `Recover`
@@ -26,6 +27,20 @@
 - `api` остается внутренним сервисом compose-сети; `admin` в этом первом slice выступает HTTPS edge и проксирует `/api/*` и `/oauth2/*`
 - `api` принимает `X-Forwarded-Proto` только от доверенной runtime-сети `OTPAUTH_RUNTIME_NETWORK_CIDR`, чтобы `Secure` cookies и antiforgery корректно работали за reverse proxy без trust-all proxy режима
 - install-time bootstrap вынесен в отдельный `bootstrap` profile и использует уже существующий `OtpAuth.Migrations`, а не runtime `Admin UI`
+- reference desktop/backend stand для live verification может быть опубликован через наш `ghostring` на отдельном HTTPS port `18444`, без third-party tunnel; DT-1520 secrets остаются в server-side `runtime.env`
+
+## Ghostring ReferenceBackend stand
+
+Для live desktop/reference verification без сторонних tunnel-сервисов используйте server-owned contour:
+
+- Docker service: `reference-backend`
+- Internal DT-1520 base URL: `http://api:8080/`
+- Host loopback backend: `http://127.0.0.1:15188/`
+- Public HTTPS backend URL for desktop/WPF: `https://admin.ghostring.ru:18444/`
+- Public callback URL: `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`
+- Host nginx template: `infra/nginx/reference-backend.ghostring.ru.conf.example`
+
+Required runtime env values are in `infra/env/ghostring.runtime.env.example` under `REFERENCE_BACKEND_*`. `REFERENCE_BACKEND_CALLBACK_SIGNING_SECRET` must match `ChallengeCallbacks__SigningKey` for the same runtime. The reference integration client should use least-privilege scopes `challenges:read challenges:write` unless explicit device routing is enabled.
 
 ## Happy path
 

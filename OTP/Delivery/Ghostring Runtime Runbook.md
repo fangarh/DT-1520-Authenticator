@@ -38,6 +38,14 @@ Accepted working note
 
 - `https://admin.ghostring.ru:18443/health/api`
 
+ReferenceBackend stand endpoint after server-owned contour rollout:
+
+- `https://admin.ghostring.ru:18444/`
+
+ReferenceBackend callback URL:
+
+- `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`
+
 Текущий internal health:
 
 - `https://127.0.0.1:18443/health/api`
@@ -53,10 +61,12 @@ Host-level runtime root:
 - `/opt/dt-1520-authenticator/runtime.env`
 - `/opt/dt-1520-authenticator/tls/admin-internal.crt`
 - `/opt/dt-1520-authenticator/tls/admin-internal.key`
+- `/etc/nginx/sites-available/reference-backend.ghostring.ru` or equivalent host-level `nginx` site for `:18444`
 
 Compose profile:
 
 - `infra/docker-compose.ghostring.yml`
+- `infra/nginx/reference-backend.ghostring.ru.conf.example`
 
 Deterministic runtime network:
 
@@ -105,6 +115,18 @@ curl -sk https://127.0.0.1:18443/health/api
 
 ```powershell
 curl -sk https://admin.ghostring.ru:18443/health/api
+```
+
+### ReferenceBackend health
+
+```powershell
+curl -sk https://admin.ghostring.ru:18444/health
+```
+
+### ReferenceBackend readiness
+
+```powershell
+curl -sk https://admin.ghostring.ru:18444/api/reference/live-readiness
 ```
 
 ### CSRF

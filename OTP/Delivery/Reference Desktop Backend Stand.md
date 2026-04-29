@@ -149,6 +149,16 @@ Security constraints:
 - real secrets stay in environment variables or ignored local settings.
 - next live execution must use Admin UI QR onboarding for the Android device and then run push approve/deny plus online `TOTP` fallback.
 
+Preferred server-owned `ghostring` contour:
+
+- `infra/docker/reference-backend.Dockerfile` builds `rdb_stand/src/ReferenceBackend`.
+- `infra/docker-compose.ghostring.yml` includes `reference-backend` on the runtime network and exposes it only on host loopback `127.0.0.1:${REFERENCE_BACKEND_HOST_HTTP_PORT:-15188}`.
+- `infra/nginx/reference-backend.ghostring.ru.conf.example` publishes `https://admin.ghostring.ru:18444/` through host `nginx`.
+- `ReferenceBackend:CallbackUrl` should be `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`.
+- `RDB_BACKEND_BASE_URL` for `DesktopShell`/WPF should be `https://admin.ghostring.ru:18444/`.
+- `Dt1520Authenticator:BaseUrl` inside the server-side reference service should normally be `http://api:8080/` to stay on the private compose network.
+- `Dt1520Authenticator:Scope` should stay least-privilege `challenges:read challenges:write` unless explicit device routing is added.
+
 ## Latest Live Diagnostics
 
 `2026-04-28` `Final Integrated Verification Gate` status:
@@ -158,13 +168,26 @@ Security constraints:
 - `ReferenceBackend --preflight` is ready with local ignored config and a public callback URL, but direct live operation returns `502` because Windows/.NET fails the TLS transport to `https://admin.ghostring.ru:18443` before any HTTP response.
 - Node/OpenSSL from the same workstation reaches `https://admin.ghostring.ru:18443/health/api` and receives expected token endpoint responses, so ghostring is reachable; this is a Windows SChannel contour issue.
 - A loopback-only diagnostic proxy surfaced the next live blockers: current local `Dt1520Authenticator:Scope` includes `devices:read`, which the selected live integration client does not allow, and the deployed token endpoint still returns camelCase token fields until the backend snake_case fix is deployed.
+- After server redeploy `b91f590`, local scope was changed to `challenges:read challenges:write` and `POST /api/reference/operations` succeeds through the loopback-only Node/OpenSSL proxy with an accepted `Waiting` session.
+- Android MCP still shows an empty pending inbox on `emulator-5554`; third-party tunnel services are rejected for the target contour.
+- Repo now contains server-owned `ghostring` assets for ReferenceBackend on `https://admin.ghostring.ru:18444/`; deploy this contour before retrying terminal callback/polling flow.
 
-The live end-to-end flow is therefore blocked on redeploying the OAuth token response fix, aligning integration client scopes/config, and either fixing the Windows SChannel path or running `ReferenceBackend` from an OpenSSL/Linux contour.
+The live end-to-end flow is therefore blocked on deploying the server-owned `reference-backend` service/nginx site, confirming or redoing QR device activation for the current emulator, then retrying push approve/deny plus online `TOTP` fallback through `https://admin.ghostring.ru:18444/`.
+
+## Productization Direction
+
+The reference backend is now the proving ground for the optional boxed `Integration Gateway`.
+
+The target product shape is not a third-party tunnel or a desktop-only demo. It is a customer-owned deployable gateway that can safely hold backend integration credentials, validate callbacks, expose desktop/legacy polling endpoints and provide online `TOTP` fallback while keeping customer business commits in the integrating application.
+
+`RDP + TOTP` is intentionally kept as a separate future access connector track. Gateway and SDK changes must preserve reusable lower-level services for that track, especially DT-1520 client calls, challenge creation, `TOTP` verification, callback validation, audit and identity mapping. Do not introduce desktop polling assumptions into those shared services.
 
 ## Related notes
 
 - [[Official Dotnet Integration SDK]]
+- [[Optional Boxed Integration Gateway]]
 - [[QR Device Onboarding Follow-Up]]
 - [[Push Delivery Latency Follow-Up]]
 - [[Documentation Handoff Plan]]
 - [[../Decisions/ADR-035 - Official Dotnet Integration SDK and Reference Stand]]
+- [[../Decisions/ADR-036 - Optional Boxed Integration Gateway and Access Connector Boundary]]

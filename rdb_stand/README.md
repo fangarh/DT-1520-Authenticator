@@ -100,6 +100,15 @@ The reference backend must be reachable by DT-1520 for signed challenge callback
 - keep `ReferenceBackend:CallbackUrlPolicyMode=PublicInternet` for public live runs; use `PrivateNetwork` for closed HTTPS contours and `LocalDevelopment` only for local HTTP callback tests;
 - keep `Dt1520Authenticator:ClientSecret` and `Dt1520Authenticator:CallbackSigningSecret` in environment variables or a local untracked settings file.
 
+For the preferred `ghostring` contour, avoid third-party tunnel services and run `ReferenceBackend` on the server through `infra/docker-compose.ghostring.yml`:
+
+- public backend URL for `DesktopShell`/WPF: `https://admin.ghostring.ru:18444/`;
+- public callback URL: `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`;
+- host nginx template: `infra/nginx/reference-backend.ghostring.ru.conf.example`;
+- compose service: `reference-backend`;
+- internal DT-1520 base URL from the reference service: `http://api:8080/`;
+- reference integration scopes: `challenges:read challenges:write` unless explicit device routing is enabled.
+
 PowerShell environment example:
 
 ```powershell
