@@ -159,7 +159,7 @@ export function useTenantManagementWorkspace(
 
     setPendingAction("copy");
     try {
-      await navigator.clipboard.writeText("clientSecret" in secret ? secret.clientSecret : secret.activationPayload);
+      await navigator.clipboard.writeText("clientSecret" in secret ? secret.clientSecret : secret.qrEnvelopeValue);
       showNotice("success", "Copied", "One-time value copied. Discard it after handing it off.");
     } catch {
       showNotice("danger", "Clipboard unavailable", "Browser denied clipboard access. Select the one-time value manually.");

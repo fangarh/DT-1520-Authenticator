@@ -208,6 +208,25 @@ Push-capable activation fix:
 - Verification: `mobile :app:testDebugUnitTest :app:assembleDebug` passed outside sandbox with Android Studio JBR after `%USERPROFILE%\.gradle` lock `Access denied`; MCP installed the fresh debug APK on `emulator-5554` and launched `MainActivity`.
 - Next live step: install the fresh `mobile/app/build/outputs/apk/debug/app-debug.apk` on the physical test phone, revoke/recreate QR if needed, activate once, confirm Admin UI shows the new device as `isPushCapable=true`, then retry reference approve/deny and online `TOTP` fallback.
 
+Explicit TOTP fallback fix:
+
+- After live push approve/deny proof, online `TOTP` fallback exposed the expected contract gap: the reference session had a push-selected primary challenge, so `verify-totp` against that challenge returned `409`.
+- `ReferenceBackend` now creates a separate `Totp`-only fallback challenge for the same reference session and verifies the submitted code against that fallback challenge id.
+- The in-memory session stores both primary challenge id and fallback `Totp` challenge id, plus fallback challenge request/create timestamps for status latency output.
+- The first terminal reference-session state is immutable; fallback is rejected once the session is no longer waiting.
+- WPF/desktop endpoint shape is unchanged; WPF default scope is aligned to `challenges:read challenges:write`.
+- Verification is green: `ReferenceBackend.Tests 20/20`, `DesktopWpfTest.Tests 11/11`, full `rdb_stand` solution test passes. Live redeploy/proof remains the next gate.
+
+Final gate preflight after combined QR consume implementation:
+
+- Node/OpenSSL confirmed `ghostring` public health on `18443` and `18444`; live readiness is `isReadyForLiveRun=true` with no configuration issues.
+- Playwright/Chromium gets `ERR_CONNECTION_RESET` on the same public TLS ports, while Node/OpenSSL succeeds. For this workstation, use Node/OpenSSL or server-side checks for health/readiness until the browser TLS path is understood.
+- Android MCP currently exposes only `emulator-5554`; the physical Android phone required by the original gate prerequisite is not visible in this session.
+- Fresh debug APK was installed on `emulator-5554` and launched successfully.
+- `POST /api/reference/operations` for canonical pilot user `f1d6afaa-8a5d-4fd3-9f75-0a5c0177df81` returned `202 Accepted`, session `ef6c9c62448a4804957c1558e1c2122b`, status `Waiting`, with challenge creation timestamp `2026-04-29T12:26:58.7912289Z`.
+- Android foreground polling did not surface a pending push; the app still showed an empty pending inbox and the reference session stayed `Waiting`.
+- Next unblock remains fresh combined QR onboarding for the current Android runtime, then retry push approve, push deny and explicit online `TOTP` fallback. This session does not have admin credentials/env to create the live combined QR through Admin UI, and browser MCP cannot drive the Admin UI because of the TLS reset.
+
 ## Productization Direction
 
 The reference backend is now the proving ground for the optional boxed `Integration Gateway`.

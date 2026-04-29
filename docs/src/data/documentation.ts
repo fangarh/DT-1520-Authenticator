@@ -148,11 +148,11 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Device onboarding",
-        detail: "feature:device-onboarding сканирует v1 QR envelope с runtimeBaseUrl и one-time activationPayload; legacy dac payload остается временным fallback.",
+        detail: "feature:device-onboarding сканирует v1 device QR и v2 combined QR с runtimeBaseUrl, one-time activationPayload и optional TOTP provisioning payload; legacy dac payload остается временным fallback.",
       },
       {
         label: "QR activation",
-        detail: "Основной app UI запускает CameraX + ML Kit QR scanner; успешная активация вызывает /api/v1/devices/activate-onboarding через QR runtime URL, затем хранит runtime URL в encrypted device session для refresh/pending/approve/deny после restart.",
+        detail: "Основной app UI запускает CameraX + ML Kit QR scanner; успешная активация вызывает /api/v1/devices/activate-onboarding через QR runtime URL, хранит runtime URL в encrypted device session и затем импортирует optional otpauth URI через encrypted TOTP store.",
       },
       {
         label: "Pilot helper",
@@ -183,7 +183,7 @@ export const sections: DocumentationSection[] = [
       },
       {
         label: "Device onboarding",
-        detail: "Activation payload возвращается только один раз при create, не хранится plaintext, не появляется в list/read path, не содержит trusted tenant/user claims и блокируется через consume, TTL или revoke; QR runtimeBaseUrl является public routing metadata и хранится на Android только в encrypted device session.",
+        detail: "Activation payload возвращается только один раз при create, не хранится plaintext, не появляется в list/read path, не содержит trusted tenant/user claims и блокируется через consume, TTL или revoke; QR runtimeBaseUrl является public routing metadata, а combined QR TOTP secret импортируется только через encrypted TOTP store после успешной device activation.",
       },
     ],
   },
@@ -299,11 +299,11 @@ export const workflows: Workflow[] = [
     audit: "admin_integration_client.* пишет sanitized metadata без client_secret/client_secret_hash.",
   },
   {
-    title: "QR device onboarding",
-    permission: "devices.read + devices.write",
-    path: "admin/src/features/device-onboarding + /api/v1/admin/.../device-onboarding-artifacts",
-    steps: ["List by tenant/user/application", "Create one-time QR artifact", "Show QR only in current UI state", "Discard payload", "Revoke pending artifact"],
-    audit: "admin_device_onboarding.* пишет sanitized metadata без activation payload/code hash.",
+    title: "QR onboarding",
+    permission: "devices.read + devices.write; combined QR also requires enrollments.write",
+    path: "admin/src/features/device-onboarding, admin/src/features/tenant-management + /api/v1/admin/combined-onboarding-packages",
+    steps: ["List device artifacts", "Create one-time device QR artifact", "Issue combined device + TOTP QR from selected tenant", "Show QR only in current UI state", "Discard payload", "Revoke pending device artifact"],
+    audit: "admin_device_onboarding.* и admin_totp_enrollment.* пишут sanitized metadata без activation payload/code hash/TOTP secret material.",
   },
   {
     title: "User devices",
@@ -322,7 +322,7 @@ export const troubleshooting = [
   "Integration client не получает token после rotation/deactivate: проверь статус client-а, назначенные scopes и что внешняя система использует последний one-time secret.",
   "Operator не видит tenant directory: проверь наличие tenants.read/write у admin user через list-admin-users.",
   "Operator не видит Integration clients: проверь наличие integration-clients.read/write у admin user через list-admin-users.",
-  "Operator не видит QR onboarding workspace: проверь devices.read/write и что браузерный flow использует /api/v1/admin/device-onboarding-artifacts.",
+  "Operator не может выпустить combined QR: проверь devices.write + enrollments.write и endpoint /api/v1/admin/combined-onboarding-packages.",
   "SDK callback validation падает: проверь, что backend передает helper-у original HttpRequest.Body bytes до reserialization и использует актуальный callback signing secret.",
   "SDK desktop polling timeout: desktop должен показать non-approval/ retry state и продолжать опрашивать только integrator backend, не DT-1520 напрямую.",
   "Android push не near-real-time при Provider=logging: это polling/debug limitation до production push provider.",

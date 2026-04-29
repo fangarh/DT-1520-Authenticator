@@ -199,6 +199,39 @@ export async function installAdminApiFixture(page: Page, options: AdminApiFixtur
       return;
     }
 
+    if (url.pathname === "/api/v1/admin/combined-onboarding-packages" && request.method() === "POST") {
+      const payload = await request.postDataJSON();
+      const deviceResult = createDeviceOnboardingArtifact(deviceOnboardingArtifacts, payload);
+      if (deviceResult.errorStatus || !deviceResult.artifact) {
+        await route.fulfill(problemResponse(deviceResult.errorStatus ?? 400, deviceResult.errorTitle ?? "Request failed.", deviceResult.errorDetail ?? "Request failed."));
+        return;
+      }
+
+      const artifact = createArtifact(payload.issuer ?? "OTPAuth", payload.label || payload.externalUserId, Date.now().toString(32));
+      enrollment = {
+        enrollmentId: crypto.randomUUID(),
+        tenantId: payload.tenantId,
+        applicationClientId: payload.applicationClientId,
+        externalUserId: payload.externalUserId,
+        label: payload.label || payload.externalUserId,
+        status: "pending",
+        hasPendingReplacement: false,
+        confirmedAtUtc: null,
+        revokedAtUtc: null,
+      };
+      activeArtifact = artifact;
+      replacementArtifact = null;
+      deviceOnboardingArtifacts = deviceResult.artifacts;
+
+      const { activationPayload, ...deviceArtifact } = deviceResult.artifact;
+      await route.fulfill(jsonResponse(201, {
+        deviceArtifact,
+        activationPayload,
+        totpEnrollment: toCommandResponse(enrollment, artifact),
+      }));
+      return;
+    }
+
     if (url.pathname === "/api/v1/admin/enrollments/totp" && request.method() === "POST") {
       const payload = await request.postDataJSON();
       const artifact = createArtifact(payload.issuer ?? "OTPAuth", payload.label || payload.externalUserId, Date.now().toString(32));

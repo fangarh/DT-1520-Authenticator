@@ -85,6 +85,40 @@ class AuthenticatorModuleWiringTest {
         }
     }
 
+    @Test
+    fun combinedOnboardingTotpImportSavesProvisioningUriThroughSecureStore() = runBlocking {
+        val store = FakeSecureTotpSecretStore(linkedMapOf())
+        var refreshCount = 0
+
+        val result = importCombinedTotpProvisioningPayload(
+            payload = "otpauth://totp/OTPAuth:combined-user?secret=JBSWY3DPEHPK3PXP&issuer=OTPAuth",
+            secureStore = store,
+            refreshStoredSecrets = { refreshCount += 1 }
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(true, result.getOrNull())
+        assertEquals(1, refreshCount)
+        assertEquals(
+            listOf(TotpAccountDescriptor(issuer = "OTPAuth", accountName = "combined-user")),
+            store.snapshot().map { it.account }
+        )
+    }
+
+    @Test
+    fun combinedOnboardingTotpImportFailsClosedForInvalidProvisioningPayload() = runBlocking {
+        val store = FakeSecureTotpSecretStore(linkedMapOf())
+
+        val result = importCombinedTotpProvisioningPayload(
+            payload = "otpauth://totp/OTPAuth:combined-user?issuer=OTPAuth",
+            secureStore = store,
+            refreshStoredSecrets = {}
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(store.snapshot().isEmpty())
+    }
+
     private class FakeSecureTotpSecretStore(
         private val secrets: LinkedHashMap<TotpAccountDescriptor, StoredTotpSecret>,
         private val listedAccounts: List<TotpAccountDescriptor> = secrets.keys.toList()
@@ -100,5 +134,7 @@ class AuthenticatorModuleWiringTest {
         override suspend fun delete(account: TotpAccountDescriptor) {
             secrets.remove(account)
         }
+
+        fun snapshot(): List<StoredTotpSecret> = secrets.values.toList()
     }
 }

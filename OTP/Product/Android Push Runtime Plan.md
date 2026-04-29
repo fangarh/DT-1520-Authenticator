@@ -47,6 +47,15 @@ Accepted working guideline
 - Legacy raw `dac_...` QR без runtime URL остается временным compatibility path и по-прежнему требует explicit build-config fallback.
 - Documentation handoff закрыт отдельно: полный live proof `QR -> Android activation -> pending push -> approve/deny` откладывается до финального integrated gate после callback URL policy и tenant-centric admin итераций.
 
+## Final integrated closure update on `2026-04-29`
+
+- `Final Integrated Verification Closure / Iteration 2` добавила Android foreground pending refresh без app restart.
+- Pending push approvals обновляются на foreground `ON_RESUME`, затем polling-ом каждые `4s` пока приложение foregrounded.
+- Polling interval ограничен диапазоном `3-5s`; background service, OS notification path и `FCM` provider wiring не добавлялись.
+- Security posture остается в текущем device runtime boundary: polling использует encrypted device bearer session, не логирует access tokens, refresh tokens, QR payloads или push tokens, а failures остаются sanitized.
+- `Final Integrated Verification Closure / Iteration 4` добавила Android consume path для combined QR: v2 envelope несет `runtimeBaseUrl`, one-time `activationPayload` и optional `totpProvisioningPayload`; app сначала активирует device, затем импортирует `otpauth://` через encrypted `SecureTotpSecretStore`.
+- Partial failure `device activated, TOTP import failed` теперь явный и secret-safe: raw QR material очищается, device session остается, TOTP secret не пишется вне encrypted TOTP storage.
+
 ## Scope текущего трека
 
 Входит:

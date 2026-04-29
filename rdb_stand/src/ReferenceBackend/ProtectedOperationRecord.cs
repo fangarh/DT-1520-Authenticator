@@ -15,6 +15,8 @@ public sealed record ProtectedOperationRecord
 
     public Guid? ChallengeId { get; init; }
 
+    public Guid? TotpChallengeId { get; init; }
+
     public DesktopApprovalSessionStatus Status { get; init; } = DesktopApprovalSessionStatus.Waiting;
 
     public DateTimeOffset? ExpiresAt { get; init; }
@@ -24,6 +26,10 @@ public sealed record ProtectedOperationRecord
     public DateTimeOffset? BackendChallengeRequestedAtUtc { get; init; }
 
     public DateTimeOffset? ChallengeCreatedAtUtc { get; init; }
+
+    public DateTimeOffset? TotpChallengeRequestedAtUtc { get; init; }
+
+    public DateTimeOffset? TotpChallengeCreatedAtUtc { get; init; }
 
     public DateTimeOffset? CallbackReceivedAtUtc { get; init; }
 
@@ -51,11 +57,18 @@ public sealed record ProtectedOperationRecord
                 DesktopSubmittedAtUtc = DesktopSubmittedAtUtc,
                 BackendChallengeRequestedAtUtc = BackendChallengeRequestedAtUtc,
                 ChallengeCreatedAtUtc = ChallengeCreatedAtUtc,
+                TotpChallengeRequestedAtUtc = TotpChallengeRequestedAtUtc,
+                TotpChallengeCreatedAtUtc = TotpChallengeCreatedAtUtc,
                 CallbackReceivedAtUtc = CallbackReceivedAtUtc,
                 TotpSubmittedAtUtc = TotpSubmittedAtUtc,
                 TerminalAtUtc = TerminalAtUtc,
             },
         };
+    }
+
+    public bool IsKnownChallenge(Guid challengeId)
+    {
+        return ChallengeId == challengeId || TotpChallengeId == challengeId;
     }
 
     public static DesktopApprovalSessionStatus MapChallengeStatus(ChallengeStatus status)

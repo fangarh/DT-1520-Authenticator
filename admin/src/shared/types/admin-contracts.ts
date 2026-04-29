@@ -161,6 +161,22 @@ export interface AdminCreateDeviceOnboardingArtifactResponse {
   activationPayload: string;
 }
 
+export interface AdminCreateCombinedOnboardingPackageRequest {
+  tenantId: string;
+  applicationClientId: string;
+  externalUserId: string;
+  platform: AdminDeviceOnboardingPlatform;
+  ttlMinutes: number;
+  issuer?: string;
+  label?: string;
+}
+
+export interface AdminCreateCombinedOnboardingPackageResponse {
+  deviceArtifact: AdminDeviceOnboardingArtifactView;
+  activationPayload: string;
+  totpEnrollment: TotpEnrollmentCommandResponse;
+}
+
 export type AdminIntegrationClientStatus = "active" | "inactive";
 
 export type AdminIntegrationClientScope =

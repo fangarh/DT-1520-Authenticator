@@ -9,7 +9,10 @@ import type {
   AdminTenantDirectoryDetailView,
   AdminUserDeviceView,
 } from "../../../shared/types/admin-contracts";
-import { resolveDeviceOnboardingRuntimeBaseUrl } from "../../device-onboarding/model/deviceOnboardingQrEnvelope";
+import {
+  createCombinedOnboardingQrEnvelopeValue,
+  resolveDeviceOnboardingRuntimeBaseUrl,
+} from "../../device-onboarding/model/deviceOnboardingQrEnvelope";
 import {
   buildReportSummary,
   createUserDraft,
@@ -33,6 +36,8 @@ export function useTenantManagementDeviceRuntime(options: DeviceRuntimeOptions) 
   const tenantId = directory.tenant.tenantId;
   const canReadDevices = session.permissions.includes("devices.read");
   const canWriteDevices = session.permissions.includes("devices.write");
+  const canWriteEnrollments = session.permissions.includes("enrollments.write");
+  const canWriteCombinedOnboarding = canWriteDevices && canWriteEnrollments;
   const canReadDeliveries = session.permissions.includes("webhooks.read");
   const [userDraft, setUserDraft] = useState<TenantUserDraft>(() => createUserDraft(directory));
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
@@ -91,7 +96,9 @@ export function useTenantManagementDeviceRuntime(options: DeviceRuntimeOptions) 
   }
 
   async function createQrArtifact() {
-    if (!canWriteDevices) return showNotice("danger", "Недостаточно прав", "Для выпуска QR нужен permission `devices.write`.");
+    if (!canWriteCombinedOnboarding) {
+      return showNotice("danger", "Недостаточно прав", "Для combined QR нужны permissions `devices.write` и `enrollments.write`.");
+    }
 
     const ttlMinutes = parsePositiveInteger(userDraft.ttlMinutes) ?? 0;
     const externalUserId = userDraft.externalUserId.trim();
@@ -101,23 +108,34 @@ export function useTenantManagementDeviceRuntime(options: DeviceRuntimeOptions) 
     setPendingAction("createQr");
     setOneTimeQrPayload(null);
     try {
-      const response = await adminApi.createDeviceOnboardingArtifact({
+      const response = await adminApi.createCombinedOnboardingPackage({
         tenantId,
         applicationClientId: userDraft.applicationClientId.trim(),
         externalUserId,
         platform: userDraft.platform,
         ttlMinutes,
+        label: externalUserId,
       });
+      const runtimeBaseUrl = resolveDeviceOnboardingRuntimeBaseUrl();
+      const qrEnvelopeValue = createCombinedOnboardingQrEnvelopeValue({
+        activationPayload: response.activationPayload,
+        runtimeBaseUrl,
+        totpProvisioningPayload: response.totpEnrollment.qrCodePayload ?? "",
+      });
+
       startTransition(() => {
-        setIssuedQrArtifacts((current) => [response.artifact, ...current]);
+        setIssuedQrArtifacts((current) => [response.deviceArtifact, ...current]);
         setOneTimeQrPayload({
-          activationCodeId: response.artifact.activationCodeId,
+          activationCodeId: response.deviceArtifact.activationCodeId,
           activationPayload: response.activationPayload,
-          runtimeBaseUrl: resolveDeviceOnboardingRuntimeBaseUrl(),
-          expiresAtUtc: response.artifact.expiresAtUtc,
+          runtimeBaseUrl,
+          expiresAtUtc: response.deviceArtifact.expiresAtUtc,
+          qrEnvelopeValue,
+          mode: "combined",
+          totpEnrollmentId: response.totpEnrollment.enrollmentId,
         });
         setPendingAction(null);
-        showNotice("success", "QR issued", "Activation payload is current-session only and scoped by selected tenant/user context.");
+        showNotice("success", "Combined QR issued", "Device activation and TOTP provisioning material are current-session only.");
       });
     } catch (error) {
       handleApiError(error);
@@ -202,7 +220,7 @@ export function useTenantManagementDeviceRuntime(options: DeviceRuntimeOptions) 
     userDraft, setUserDraft, loadedUserId, devices, selectedDevice,
     selectedDeviceId, setSelectedDeviceId, deviceRevokeArmed, setDeviceRevokeArmed,
     oneTimeQrPayload, setOneTimeQrPayload, runtimeConfiguration, deliveries, recentQrArtifacts, reportSummary,
-    canReadDevices, canWriteDevices, canReadDeliveries,
+    canReadDevices, canWriteDevices, canWriteEnrollments, canWriteCombinedOnboarding, canReadDeliveries,
     resetForDirectory, loadDevices, createQrArtifact, revokeDevice,
     loadRuntimeConfiguration, loadReports,
   };

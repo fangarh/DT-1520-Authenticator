@@ -56,6 +56,30 @@ public sealed class InMemoryProtectedOperationStore : IProtectedOperationStore
         }));
     }
 
+    public Task<ProtectedOperationRecord?> BindTotpFallbackChallengeAsync(
+        string sessionId,
+        ChallengeResponse challenge,
+        DateTimeOffset requestedAtUtc,
+        DateTimeOffset createdAtUtc,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(Update(sessionId, current =>
+        {
+            if (current.TotpChallengeId is not null)
+            {
+                return current;
+            }
+
+            return current with
+            {
+                TotpChallengeId = challenge.Id,
+                TotpChallengeRequestedAtUtc = requestedAtUtc,
+                TotpChallengeCreatedAtUtc = createdAtUtc,
+            };
+        }));
+    }
+
     public Task<ProtectedOperationRecord?> ApplyChallengeStatusAsync(
         string sessionId,
         Guid challengeId,
@@ -67,7 +91,12 @@ public sealed class InMemoryProtectedOperationStore : IProtectedOperationStore
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(Update(sessionId, current =>
         {
-            if (current.ChallengeId != challengeId || current.CommittedAtUtc is not null)
+            if (!current.IsKnownChallenge(challengeId) || current.TerminalAtUtc is not null)
+            {
+                return current;
+            }
+
+            if (totpSubmittedAtUtc is not null && current.TotpChallengeId != challengeId)
             {
                 return current;
             }

@@ -8,6 +8,10 @@ public interface IReferenceAuthenticatorGateway
         ProtectedOperationRecord operation,
         CancellationToken cancellationToken);
 
+    Task<Dt1520AuthenticatorResult<ChallengeResponse>> CreateTotpFallbackChallengeAsync(
+        ProtectedOperationRecord operation,
+        CancellationToken cancellationToken);
+
     Task<Dt1520AuthenticatorResult<ChallengeResponse>> VerifyTotpAsync(
         Guid challengeId,
         string code,

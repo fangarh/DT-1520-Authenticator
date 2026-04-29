@@ -91,8 +91,27 @@ public sealed class ProtectedOperationCoordinator
                 StatusCodes.Status404NotFound);
         }
 
+        if (record.Status != DesktopApprovalSessionStatus.Waiting || record.TerminalAtUtc is not null)
+        {
+            return ReferenceBackendResult<ReferenceApprovalSession>.Failure(
+                "Approval session is not waiting.",
+                StatusCodes.Status409Conflict);
+        }
+
+        var fallbackChallenge = await EnsureTotpFallbackChallengeAsync(record, cancellationToken);
+        if (!fallbackChallenge.IsSuccess || fallbackChallenge.Value?.TotpChallengeId is null)
+        {
+            return ReferenceBackendResult<ReferenceApprovalSession>.Failure(
+                fallbackChallenge.Error?.Title ?? "TOTP fallback challenge could not be created.",
+                fallbackChallenge.Error?.StatusCode ?? StatusCodes.Status502BadGateway,
+                fallbackChallenge.Error?.Detail);
+        }
+
         var submittedAtUtc = _timeProvider.GetUtcNow();
-        var result = await _authenticator.VerifyTotpAsync(record.ChallengeId.Value, request.Code, cancellationToken);
+        var result = await _authenticator.VerifyTotpAsync(
+            fallbackChallenge.Value.TotpChallengeId.Value,
+            request.Code,
+            cancellationToken);
         if (!result.IsSuccess || result.Value is null)
         {
             return FromSdkFailure<ReferenceApprovalSession>(result.Error);
@@ -109,6 +128,34 @@ public sealed class ProtectedOperationCoordinator
         return updated is null
             ? ReferenceBackendResult<ReferenceApprovalSession>.Failure("Approval session was not found.", StatusCodes.Status404NotFound)
             : ReferenceBackendResult<ReferenceApprovalSession>.Success(updated.ToSession());
+    }
+
+    private async Task<ReferenceBackendResult<ProtectedOperationRecord>> EnsureTotpFallbackChallengeAsync(
+        ProtectedOperationRecord record,
+        CancellationToken cancellationToken)
+    {
+        if (record.TotpChallengeId is not null)
+        {
+            return ReferenceBackendResult<ProtectedOperationRecord>.Success(record);
+        }
+
+        var requestedAtUtc = _timeProvider.GetUtcNow();
+        var challenge = await _authenticator.CreateTotpFallbackChallengeAsync(record, cancellationToken);
+        if (!challenge.IsSuccess || challenge.Value is null)
+        {
+            return FromSdkFailure<ProtectedOperationRecord>(challenge.Error);
+        }
+
+        var updated = await _store.BindTotpFallbackChallengeAsync(
+            record.SessionId,
+            challenge.Value,
+            requestedAtUtc,
+            _timeProvider.GetUtcNow(),
+            cancellationToken);
+
+        return updated is null
+            ? ReferenceBackendResult<ProtectedOperationRecord>.Failure("Approval session was not found.", StatusCodes.Status404NotFound)
+            : ReferenceBackendResult<ProtectedOperationRecord>.Success(updated);
     }
 
     public async Task<ReferenceBackendResult<object>> ApplyCallbackAsync(

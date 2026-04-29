@@ -20,14 +20,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import ru.dt1520.security.authenticator.BuildConfig
-import ru.dt1520.security.authenticator.app.deviceonboarding.DeviceOnboardingRuntimeTarget
 import ru.dt1520.security.authenticator.app.deviceonboarding.resolveDefaultDeviceRuntimeBaseUrl
-import ru.dt1520.security.authenticator.app.deviceonboarding.resolveDeviceOnboardingRuntimeTarget
 import ru.dt1520.security.authenticator.app.deviceonboarding.rememberDeviceOnboardingQrScanner
 import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeSessionManager
-import ru.dt1520.security.authenticator.app.deviceruntime.DeviceRuntimeTransportException
 import ru.dt1520.security.authenticator.app.deviceruntime.HttpDeviceRuntimeTransport
+import ru.dt1520.security.authenticator.app.pushapprovals.DEFAULT_PENDING_PUSH_REFRESH_INTERVAL_MILLIS
 import ru.dt1520.security.authenticator.app.pushapprovals.PushApprovalDecisionCoordinator
+import ru.dt1520.security.authenticator.app.pushapprovals.PushPendingRefreshEffect
 import ru.dt1520.security.authenticator.app.pushapprovals.rememberPushApprovalsRuntimeInteractor
 import ru.dt1520.security.authenticator.core.ui.theme.DT1520AuthenticatorTheme
 import ru.dt1520.security.authenticator.feature.deviceonboarding.DeviceOnboardingActivationResult
@@ -63,7 +62,8 @@ internal fun AuthenticatorApp(
         PushApprovalDecisionResult.Success
     },
     currentEpochSecondsProvider: () -> Long = { System.currentTimeMillis() / 1_000 },
-    clockTickDelayMillis: Long = 1_000L
+    clockTickDelayMillis: Long = 1_000L,
+    pendingPushRefreshIntervalMillis: Long = DEFAULT_PENDING_PUSH_REFRESH_INTERVAL_MILLIS
 ) {
     val context = LocalContext.current
     val secureStore = secureStoreOverride ?: remember(context) {
@@ -108,46 +108,6 @@ internal fun AuthenticatorApp(
     )
     val defaultQrScanner = rememberDeviceOnboardingQrScanner()
     val scanDeviceOnboardingQrPayload = onScanDeviceOnboardingQrPayload ?: defaultQrScanner
-    val activateDeviceOnboardingPayload: suspend (DeviceOnboardingPayload) -> DeviceOnboardingActivationResult =
-        onActivateDeviceOnboardingPayload ?: { payload ->
-            val runtimeTarget = resolveDeviceOnboardingRuntimeTarget(
-                payload = payload,
-                configuredBaseUrl = deviceRuntimeBaseUrl
-            )
-            val runtimeManager = deviceRuntimeManagerOverride ?: when (runtimeTarget) {
-                is DeviceOnboardingRuntimeTarget.QrEnvelope -> deviceRuntimeManagerFactory(runtimeTarget.baseUrl)
-                DeviceOnboardingRuntimeTarget.ConfiguredFallback -> defaultDeviceRuntimeManager
-                DeviceOnboardingRuntimeTarget.Missing -> null
-            }
-            val activationRuntimeBaseUrl = when (runtimeTarget) {
-                is DeviceOnboardingRuntimeTarget.QrEnvelope -> runtimeTarget.baseUrl
-                DeviceOnboardingRuntimeTarget.ConfiguredFallback -> deviceRuntimeBaseUrl
-                DeviceOnboardingRuntimeTarget.Missing -> null
-            }
-            if (runtimeManager == null) {
-                DeviceOnboardingActivationResult.Failure(
-                    userMessage = "QR не содержит runtime адрес. Отсканируйте QR, созданный в актуальной админ-панели."
-                )
-            } else {
-                runCatching {
-                    runtimeManager.activateWithOnboardingPayload(
-                        activationPayload = payload.activationPayload,
-                        deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device",
-                        pushToken = devicePushTokenResolver(runtimeManager)
-                    )
-                }.fold(
-                    onSuccess = { deviceId ->
-                        persistedDeviceRuntimeBaseUrl = activationRuntimeBaseUrl ?: persistedDeviceRuntimeBaseUrl
-                        DeviceOnboardingActivationResult.Success(deviceId)
-                    },
-                    onFailure = { exception ->
-                        DeviceOnboardingActivationResult.Failure(
-                            userMessage = exception.toDeviceOnboardingStatusMessage()
-                        )
-                    }
-                )
-            }
-        }
     var storedSecrets by remember {
         mutableStateOf<List<StoredTotpSecret>>(emptyList())
     }
@@ -183,17 +143,41 @@ internal fun AuthenticatorApp(
         )
     }
 
-    LaunchedEffect(secureStore) {
-        refreshStoredSecrets()
-    }
+    val activateDeviceOnboardingPayload: suspend (DeviceOnboardingPayload) -> DeviceOnboardingActivationResult =
+        onActivateDeviceOnboardingPayload ?: { payload ->
+            activateDefaultDeviceOnboardingPayload(
+                payload = payload,
+                configuredBaseUrl = deviceRuntimeBaseUrl,
+                defaultRuntimeManager = defaultDeviceRuntimeManager,
+                runtimeManagerOverride = deviceRuntimeManagerOverride,
+                runtimeManagerFactory = deviceRuntimeManagerFactory,
+                secureStore = secureStore,
+                deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device",
+                devicePushTokenResolver = devicePushTokenResolver,
+                updatePersistedRuntimeBaseUrl = { activationRuntimeBaseUrl ->
+                    persistedDeviceRuntimeBaseUrl = activationRuntimeBaseUrl ?: persistedDeviceRuntimeBaseUrl
+                },
+                refreshStoredSecrets = { refreshStoredSecrets() }
+            )
+        }
 
-    LaunchedEffect(pushApprovalsRuntimeInteractor, pendingPushApprovals) {
+    suspend fun refreshPendingPushApprovals() {
         val pendingLoadResult = pushApprovalsRuntimeInteractor.loadPendingChallenges(
-            fallbackChallenges = pendingPushApprovals
+            fallbackChallenges = runtimePushApprovals
         )
         runtimePushApprovals = pendingLoadResult.challenges
         pushRuntimeStatusMessage = pendingLoadResult.statusMessage
     }
+
+    LaunchedEffect(secureStore) {
+        refreshStoredSecrets()
+    }
+
+    PushPendingRefreshEffect(
+        refreshKey = pushApprovalsRuntimeInteractor,
+        pollingIntervalMillis = pendingPushRefreshIntervalMillis,
+        onRefresh = { refreshPendingPushApprovals() }
+    )
 
     LaunchedEffect(pushApprovalsRuntimeInteractor, pushDecisionHistory) {
         runtimePushDecisionHistory = pushApprovalsRuntimeInteractor.loadDecisionHistory(
@@ -277,15 +261,5 @@ internal fun AuthenticatorApp(
                 )
             }
         }
-    }
-}
-
-private fun Throwable.toDeviceOnboardingStatusMessage(): String {
-    return when (this) {
-        is DeviceRuntimeTransportException ->
-            "Не удалось подключить устройство. Проверьте срок действия QR и соединение."
-
-        else ->
-            "Не удалось подключить устройство. Проверьте QR и повторите попытку."
     }
 }

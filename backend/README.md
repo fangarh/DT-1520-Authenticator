@@ -294,13 +294,16 @@ Runtime admin API now has the backend contract for QR-based Android device onboa
 
 - `GET /api/v1/admin/tenants/{tenantId}/device-onboarding-artifacts` requires `devices.read`
 - `POST /api/v1/admin/device-onboarding-artifacts` requires `devices.write` and `X-CSRF-TOKEN`
+- `POST /api/v1/admin/combined-onboarding-packages` requires `devices.write`, `enrollments.write` and `X-CSRF-TOKEN`; it creates one device onboarding artifact plus one pending `TOTP` enrollment for the selected tenant/application/external user
 - `POST /api/v1/admin/tenants/{tenantId}/device-onboarding-artifacts/{activationCodeId}/revoke` requires `devices.write` and `X-CSRF-TOKEN`
 - `POST /api/v1/devices/activate-onboarding` is the mobile-facing QR consume endpoint and does not require an integration bearer token
 
 Security behavior:
 
 - create generates the activation payload server-side and returns plaintext only once in the `201 Created` response
+- combined package create returns plaintext activation payload and `TOTP` provisioning payload only in the `201 Created` response
 - list responses never include activation payloads or hashes
+- current enrollment read responses never include `TOTP` `secretUri` or `qrCodePayload`
 - operator-provided activation payloads are rejected
 - mobile activation derives tenant/application/user binding from the server-side artifact, not from QR-provided claims
 - artifacts are one-time: activation consumes them atomically, `expires_utc` bounds lifetime, and `revoked_utc` blocks future activation

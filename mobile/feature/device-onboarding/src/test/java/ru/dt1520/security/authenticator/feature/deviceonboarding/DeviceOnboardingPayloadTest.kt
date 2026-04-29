@@ -24,6 +24,31 @@ class DeviceOnboardingPayloadTest {
         )
         assertEquals(payload.activationPayload, payload.value)
         assertEquals("https://admin.ghostring.ru:18443", payload.runtimeBaseUrl)
+        assertNull(payload.totpProvisioningPayload)
+    }
+
+    @Test
+    fun parseAcceptsVersionTwoCombinedQrEnvelope() {
+        val payload = DeviceOnboardingPayload.parse(
+            """
+            {
+              "v": 2,
+              "runtimeBaseUrl": "https://admin.ghostring.ru:18443",
+              "activationPayload": "dac_0123456789abcdef0123456789abcdef.secret_PART-123",
+              "totpProvisioningPayload": "otpauth://totp/OTPAuth:user?secret=JBSWY3DPEHPK3PXP&issuer=OTPAuth"
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(
+            "dac_0123456789abcdef0123456789abcdef.secret_PART-123",
+            payload.activationPayload
+        )
+        assertEquals("https://admin.ghostring.ru:18443", payload.runtimeBaseUrl)
+        assertEquals(
+            "otpauth://totp/OTPAuth:user?secret=JBSWY3DPEHPK3PXP&issuer=OTPAuth",
+            payload.totpProvisioningPayload
+        )
     }
 
     @Test
@@ -114,6 +139,33 @@ class DeviceOnboardingPayloadTest {
             {
               "v": 1,
               "runtimeBaseUrl": "https://admin.ghostring.ru:18443"
+            }
+            """.trimIndent()
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun parseRejectsCombinedEnvelopeWithoutTotpProvisioningPayload() {
+        DeviceOnboardingPayload.parse(
+            """
+            {
+              "v": 2,
+              "runtimeBaseUrl": "https://admin.ghostring.ru:18443",
+              "activationPayload": "dac_0123456789abcdef0123456789abcdef.secret_PART-123"
+            }
+            """.trimIndent()
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun parseRejectsCombinedEnvelopeWithNonTotpProvisioningPayload() {
+        DeviceOnboardingPayload.parse(
+            """
+            {
+              "v": 2,
+              "runtimeBaseUrl": "https://admin.ghostring.ru:18443",
+              "activationPayload": "dac_0123456789abcdef0123456789abcdef.secret_PART-123",
+              "totpProvisioningPayload": "https://example.test/not-provisioning"
             }
             """.trimIndent()
         )

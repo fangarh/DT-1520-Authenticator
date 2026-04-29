@@ -19,6 +19,13 @@ public interface IProtectedOperationStore
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken);
 
+    Task<ProtectedOperationRecord?> BindTotpFallbackChallengeAsync(
+        string sessionId,
+        ChallengeResponse challenge,
+        DateTimeOffset requestedAtUtc,
+        DateTimeOffset createdAtUtc,
+        CancellationToken cancellationToken);
+
     Task<ProtectedOperationRecord?> ApplyChallengeStatusAsync(
         string sessionId,
         Guid challengeId,

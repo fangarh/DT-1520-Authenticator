@@ -6,6 +6,13 @@ export interface DeviceOnboardingQrEnvelope {
   activationPayload: string;
 }
 
+export interface CombinedOnboardingQrEnvelope {
+  v: 2;
+  runtimeBaseUrl: string;
+  activationPayload: string;
+  totpProvisioningPayload: string;
+}
+
 interface RuntimeBaseUrlOptions {
   configuredApiBaseUrl?: string;
   currentOrigin?: string;
@@ -14,6 +21,10 @@ interface RuntimeBaseUrlOptions {
 interface QrEnvelopeOptions {
   activationPayload: string;
   runtimeBaseUrl: string;
+}
+
+interface CombinedQrEnvelopeOptions extends QrEnvelopeOptions {
+  totpProvisioningPayload: string;
 }
 
 export function resolveDeviceOnboardingRuntimeBaseUrl(options: RuntimeBaseUrlOptions = {}): string {
@@ -43,6 +54,27 @@ export function createDeviceOnboardingQrEnvelopeValue(options: QrEnvelopeOptions
     v: 1,
     runtimeBaseUrl: normalizeRuntimeBaseUrl(options.runtimeBaseUrl),
     activationPayload,
+  };
+
+  return JSON.stringify(envelope);
+}
+
+export function createCombinedOnboardingQrEnvelopeValue(options: CombinedQrEnvelopeOptions): string {
+  const activationPayload = options.activationPayload.trim();
+  const totpProvisioningPayload = options.totpProvisioningPayload.trim();
+  if (!activationPayload) {
+    throw new Error("Device onboarding activation payload is empty.");
+  }
+
+  if (!totpProvisioningPayload) {
+    throw new Error("TOTP provisioning payload is empty.");
+  }
+
+  const envelope: CombinedOnboardingQrEnvelope = {
+    v: 2,
+    runtimeBaseUrl: normalizeRuntimeBaseUrl(options.runtimeBaseUrl),
+    activationPayload,
+    totpProvisioningPayload,
   };
 
   return JSON.stringify(envelope);

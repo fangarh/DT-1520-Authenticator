@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  createCombinedOnboardingQrEnvelopeValue,
   createDeviceOnboardingQrEnvelopeValue,
   resolveDeviceOnboardingRuntimeBaseUrl,
+  type CombinedOnboardingQrEnvelope,
   type DeviceOnboardingQrEnvelope,
 } from "./deviceOnboardingQrEnvelope";
 
@@ -45,5 +47,23 @@ describe("device onboarding QR envelope", () => {
       runtimeBaseUrl: "https://operator:secret@admin.example.test",
       activationPayload: "dac_11111111-1111-1111-1111-111111111111.secret",
     })).toThrow(/must not include credentials/i);
+  });
+
+  it("serializes combined onboarding envelopes without trusted tenant or user claims", () => {
+    const value = createCombinedOnboardingQrEnvelopeValue({
+      runtimeBaseUrl: "https://admin.example.test/api",
+      activationPayload: "dac_payload",
+      totpProvisioningPayload: "otpauth://totp/OTPAuth:user?secret=ABC&issuer=OTPAuth",
+    });
+
+    expect(JSON.parse(value) as CombinedOnboardingQrEnvelope).toEqual({
+      v: 2,
+      runtimeBaseUrl: "https://admin.example.test/api",
+      activationPayload: "dac_payload",
+      totpProvisioningPayload: "otpauth://totp/OTPAuth:user?secret=ABC&issuer=OTPAuth",
+    });
+    expect(value).not.toContain("tenantId");
+    expect(value).not.toContain("externalUserId");
+    expect(value).not.toContain("applicationClientId");
   });
 });

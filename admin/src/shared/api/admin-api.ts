@@ -3,6 +3,8 @@ import { isProblemDetails } from "../problem/problem-details";
 import type {
   AdminCreateDeviceOnboardingArtifactRequest,
   AdminCreateDeviceOnboardingArtifactResponse,
+  AdminCreateCombinedOnboardingPackageRequest,
+  AdminCreateCombinedOnboardingPackageResponse,
   AdminDeliveryStatusListFilters,
   AdminDeliveryStatusView,
   AdminDeviceOnboardingArtifactView,
@@ -148,6 +150,15 @@ class AdminApiClient {
   ): Promise<AdminCreateDeviceOnboardingArtifactResponse> {
     return this.postJson<AdminCreateDeviceOnboardingArtifactResponse>(
       "/api/v1/admin/device-onboarding-artifacts",
+      request,
+    );
+  }
+
+  async createCombinedOnboardingPackage(
+    request: AdminCreateCombinedOnboardingPackageRequest,
+  ): Promise<AdminCreateCombinedOnboardingPackageResponse> {
+    return this.postJson<AdminCreateCombinedOnboardingPackageResponse>(
+      "/api/v1/admin/combined-onboarding-packages",
       request,
     );
   }

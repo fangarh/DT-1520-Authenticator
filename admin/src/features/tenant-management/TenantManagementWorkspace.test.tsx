@@ -19,6 +19,7 @@ vi.mock("../../shared/api/admin-api", () => ({
     reactivateIntegrationClient: vi.fn(),
     listUserDevices: vi.fn(),
     createDeviceOnboardingArtifact: vi.fn(),
+    createCombinedOnboardingPackage: vi.fn(),
     listDeviceOnboardingArtifacts: vi.fn(),
     revokeUserDevice: vi.fn(),
     getRuntimeConfiguration: vi.fn(),
@@ -34,6 +35,7 @@ const session: AdminSession = {
     "integration-clients.write",
     "devices.read",
     "devices.write",
+    "enrollments.write",
     "webhooks.read",
   ],
 };
@@ -99,8 +101,8 @@ describe("TenantManagementWorkspace", () => {
         blockedAtUtc: null,
       },
     ]);
-    vi.mocked(adminApi.createDeviceOnboardingArtifact).mockResolvedValue({
-      artifact: {
+    vi.mocked(adminApi.createCombinedOnboardingPackage).mockResolvedValue({
+      deviceArtifact: {
         activationCodeId: "activation-1",
         tenantId: "tenant-1",
         applicationClientId: "app-1",
@@ -113,6 +115,15 @@ describe("TenantManagementWorkspace", () => {
         createdAtUtc: "2026-04-28T10:00:00Z",
       },
       activationPayload: "dac_activation-1.secret",
+      totpEnrollment: {
+        enrollmentId: "totp-enrollment-1",
+        status: "pending",
+        hasPendingReplacement: false,
+        confirmedAtUtc: null,
+        revokedAtUtc: null,
+        secretUri: "otpauth://totp/OTPAuth:user-1?secret=SECRET&issuer=OTPAuth",
+        qrCodePayload: "otpauth://totp/OTPAuth:user-1?secret=SECRET&issuer=OTPAuth",
+      },
     });
     vi.mocked(adminApi.getRuntimeConfiguration).mockResolvedValue({
       callbackUrlPolicy: {
@@ -212,16 +223,19 @@ describe("TenantManagementWorkspace", () => {
     await waitFor(() => expect(adminApi.listUserDevices).toHaveBeenCalledWith("tenant-1", "user-1"));
     expect(await screen.findByText("device-1")).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Issue QR for selected user" }));
+    await user.click(screen.getByRole("button", { name: "Issue combined QR for selected user" }));
 
-    await waitFor(() => expect(adminApi.createDeviceOnboardingArtifact).toHaveBeenCalledWith({
+    await waitFor(() => expect(adminApi.createCombinedOnboardingPackage).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       applicationClientId: "app-1",
       externalUserId: "user-1",
       platform: "android",
       ttlMinutes: 15,
+      label: "user-1",
     }));
-    expect(await screen.findByText("dac_activation-1.secret")).toBeTruthy();
+    expect(await screen.findByLabelText("One-time combined onboarding QR")).toBeTruthy();
+    expect(await screen.findByText("TOTP enrollment: totp-enrollment-1")).toBeTruthy();
+    expect(screen.queryByText(/SECRET/)).toBeNull();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
   });

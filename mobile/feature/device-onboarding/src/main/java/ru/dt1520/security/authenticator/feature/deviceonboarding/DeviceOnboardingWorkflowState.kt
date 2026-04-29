@@ -11,7 +11,15 @@ data class DeviceOnboardingWorkflowState(
 )
 
 sealed interface DeviceOnboardingActivationResult {
-    data class Success(val deviceId: UUID) : DeviceOnboardingActivationResult
+    data class Success(
+        val deviceId: UUID,
+        val totpImported: Boolean = false
+    ) : DeviceOnboardingActivationResult
+
+    data class PartialSuccess(
+        val deviceId: UUID,
+        val userMessage: String
+    ) : DeviceOnboardingActivationResult
 
     data class Failure(val userMessage: String) : DeviceOnboardingActivationResult
 }
@@ -52,7 +60,19 @@ object DeviceOnboardingWorkflow {
                 draftPayload = "",
                 acceptedPayload = null,
                 errorMessage = null,
-                successMessage = "Устройство подключено. Push-запросы будут появляться в этом приложении.",
+                successMessage = if (result.totpImported) {
+                    "Устройство подключено, TOTP-код сохранен в защищенное хранилище."
+                } else {
+                    "Устройство подключено. Push-запросы будут появляться в этом приложении."
+                },
+                isActivating = false
+            )
+
+            is DeviceOnboardingActivationResult.PartialSuccess -> state.copy(
+                draftPayload = "",
+                acceptedPayload = null,
+                errorMessage = result.userMessage,
+                successMessage = "Устройство подключено. TOTP-код не был сохранен.",
                 isActivating = false
             )
 

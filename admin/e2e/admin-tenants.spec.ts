@@ -69,8 +69,10 @@ test("operator can manage selected tenant clients, user devices, runtime and rep
   await managementPanel.getByLabel("External User ID").fill("user-device");
   await managementPanel.getByRole("button", { name: "Load user devices" }).click();
   await expect(managementPanel.getByText("11111111-1111-1111-1111-111111111111")).toBeVisible();
-  await managementPanel.getByRole("button", { name: "Issue QR for selected user" }).click();
-  await expect(managementPanel.getByText(/dac_.*fixture-secret/)).toBeVisible();
+  await managementPanel.getByRole("button", { name: "Issue combined QR for selected user" }).click();
+  await expect(managementPanel.getByLabel("One-time combined onboarding QR")).toBeVisible();
+  await expect(managementPanel.getByText(/TOTP enrollment:/)).toBeVisible();
+  await expect(managementPanel.getByText(/dac_.*fixture-secret/)).toHaveCount(0);
   await managementPanel.getByRole("button", { name: "Discard payload" }).click();
   await expect(managementPanel.getByText(/dac_.*fixture-secret/)).toHaveCount(0);
 

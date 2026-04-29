@@ -45,6 +45,10 @@ public sealed record ReferenceLatencyTimestamps
 
     public DateTimeOffset? ChallengeCreatedAtUtc { get; init; }
 
+    public DateTimeOffset? TotpChallengeRequestedAtUtc { get; init; }
+
+    public DateTimeOffset? TotpChallengeCreatedAtUtc { get; init; }
+
     public DateTimeOffset? CallbackReceivedAtUtc { get; init; }
 
     public DateTimeOffset? TotpSubmittedAtUtc { get; init; }

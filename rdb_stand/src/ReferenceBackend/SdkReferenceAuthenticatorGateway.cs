@@ -17,7 +17,41 @@ public sealed class SdkReferenceAuthenticatorGateway(
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        return _client.CreateChallengeAsync(new CreateChallengeRequest
+        return _client.CreateChallengeAsync(BuildCreateChallengeRequest(
+            operation,
+            [ChallengeFactorType.Push, ChallengeFactorType.Totp],
+            operation.SessionId), cancellationToken);
+    }
+
+    public Task<Dt1520AuthenticatorResult<ChallengeResponse>> CreateTotpFallbackChallengeAsync(
+        ProtectedOperationRecord operation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        return _client.CreateChallengeAsync(BuildCreateChallengeRequest(
+            operation,
+            [ChallengeFactorType.Totp],
+            $"{operation.SessionId}:totp-fallback"), cancellationToken);
+    }
+
+    public Task<Dt1520AuthenticatorResult<ChallengeResponse>> VerifyTotpAsync(
+        Guid challengeId,
+        string code,
+        CancellationToken cancellationToken)
+    {
+        return _client.VerifyTotpAsync(
+            challengeId,
+            new VerifyTotpRequest { Code = code },
+            cancellationToken);
+    }
+
+    private CreateChallengeRequest BuildCreateChallengeRequest(
+        ProtectedOperationRecord operation,
+        IReadOnlyCollection<ChallengeFactorType> preferredFactors,
+        string idempotencyKey)
+    {
+        return new CreateChallengeRequest
         {
             TenantId = _options.TenantId,
             ApplicationClientId = _options.ApplicationClientId,
@@ -31,24 +65,13 @@ public sealed class SdkReferenceAuthenticatorGateway(
                 Type = ChallengeOperationType.StepUp,
                 DisplayName = operation.DisplayName,
             },
-            PreferredFactors = [ChallengeFactorType.Push, ChallengeFactorType.Totp],
+            PreferredFactors = preferredFactors,
             Callback = new ChallengeCallbackRegistration
             {
                 Url = _options.CallbackUrl!,
             },
             CorrelationId = operation.SessionId,
-            IdempotencyKey = operation.SessionId,
-        }, cancellationToken);
-    }
-
-    public Task<Dt1520AuthenticatorResult<ChallengeResponse>> VerifyTotpAsync(
-        Guid challengeId,
-        string code,
-        CancellationToken cancellationToken)
-    {
-        return _client.VerifyTotpAsync(
-            challengeId,
-            new VerifyTotpRequest { Code = code },
-            cancellationToken);
+            IdempotencyKey = idempotencyKey,
+        };
     }
 }

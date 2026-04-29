@@ -157,6 +157,59 @@ describe("adminApi", () => {
     });
   });
 
+  it("sends combined onboarding create command with csrf token", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ requestToken: "csrf-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        deviceArtifact: {
+          activationCodeId: "activation-code-id",
+          tenantId: "tenant-id",
+          applicationClientId: "application-client-id",
+          externalUserId: "user-id",
+          platform: "android",
+          status: "pending",
+          expiresAtUtc: "2026-04-27T10:15:00Z",
+          createdAtUtc: "2026-04-27T10:00:00Z",
+        },
+        activationPayload: "one-time-payload",
+        totpEnrollment: {
+          enrollmentId: "enrollment-id",
+          status: "pending",
+          hasPendingReplacement: false,
+          qrCodePayload: "otpauth://totp/OTPAuth:user?secret=ABC",
+        },
+      }), { status: 201 }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await adminApi.createCombinedOnboardingPackage({
+      tenantId: "tenant-id",
+      applicationClientId: "application-client-id",
+      externalUserId: "user-id",
+      platform: "android",
+      ttlMinutes: 15,
+      label: "user-id",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/admin/combined-onboarding-packages");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": "csrf-token",
+      },
+      body: JSON.stringify({
+        tenantId: "tenant-id",
+        applicationClientId: "application-client-id",
+        externalUserId: "user-id",
+        platform: "android",
+        ttlMinutes: 15,
+        label: "user-id",
+      }),
+    });
+  });
+
   it("encodes device onboarding revoke path and uses csrf token", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({ requestToken: "csrf-token" }), { status: 200 }))

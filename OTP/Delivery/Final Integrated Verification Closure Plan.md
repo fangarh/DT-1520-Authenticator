@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned.
+In progress. Iteration 1 is implemented in code and covered by `rdb_stand` tests; live redeploy/proof is still pending.
 
 This note captures the continuation after the first server-owned `ReferenceBackend` live proof on `ghostring`.
 
@@ -13,7 +13,7 @@ Current live facts:
 - Fresh debug Android activation creates an `Active` push-capable device.
 - Desktop/WPF approve and deny through `ReferenceBackend` work.
 - Android currently needs app restart or foreground reload to see new pending push items.
-- Online `TOTP` fallback currently returns `409` when attempted against a push-selected challenge.
+- Online `TOTP` fallback returned `409` when attempted against a push-selected challenge; code now creates a separate `Totp` fallback challenge, with live proof pending redeploy.
 
 The remaining closure is not another gateway. It is a focused hardening pass over:
 
@@ -149,6 +149,24 @@ Security review:
 - no TOTP code persisted in WPF settings, logs or reference session state;
 - fallback cannot approve a session if the TOTP challenge belongs to another session/correlation.
 
+Iteration 1 result on `2026-04-29`:
+
+- `ReferenceBackend` now keeps the primary push-preferred challenge id and a separate fallback `Totp` challenge id on the reference session.
+- `POST /api/reference/operations/{sessionId}/totp` lazily creates a `Totp`-only challenge with the same session correlation and verifies the submitted code against that fallback challenge id, not against the push-selected challenge.
+- The original push challenge is not cancelled; the first terminal reference-session state is immutable, so later callbacks or fallback submissions cannot overwrite approved/denied/expired/failed outcomes.
+- WPF command shape is unchanged. The demo model now displays fallback challenge request/create timestamps and defaults to least-privilege scope `challenges:read challenges:write`.
+- Security review: Desktop still does not hold DT-1520 integration credentials; `TOTP` code remains transient UI input and is not stored in settings, logs or reference session records; fallback status application requires the stored fallback challenge id, so a code cannot approve through an unrelated challenge id.
+
+Verification:
+
+- `dotnet test .\rdb_stand\tests\ReferenceBackend.Tests\ReferenceBackend.Tests.csproj -maxcpucount:1` -> `18/18` passed outside sandbox after sandbox `Access denied` on `lib/artifacts/obj`; after terminal-immutability hardening the full solution rerun included `ReferenceBackend.Tests 20/20`.
+- `dotnet test .\rdb_stand\tests\DesktopWpfTest.Tests\DesktopWpfTest.Tests.csproj -maxcpucount:1` -> `11/11` passed after stopping only stale blocking `DesktopWpfTest` PID `49336`.
+- `dotnet test .\rdb_stand\ReferenceDesktopBackendStand.slnx -maxcpucount:1` -> `ReferenceBackend.Tests 20/20`, `DesktopWpfTest.Tests 11/11` passed.
+
+Next continuation point:
+
+- Iteration 2: Android foreground pending refresh without app restart.
+
 ### Iteration 2. Android Pending Refresh Without Restart
 
 Goal: make pending push visible without app restart in the logging-provider MVP contour.
@@ -186,6 +204,23 @@ Security review:
 - access/refresh tokens remain encrypted and are not logged;
 - network failures show sanitized copy and do not leak backend problem details.
 
+Iteration 2 result on `2026-04-29`:
+
+- `mobile/app` now refreshes pending push approvals on foreground `ON_RESUME` and then polls while the app remains foregrounded.
+- Polling interval is conservative and bounded to `3-5s`; the default is `4s`.
+- The implementation is app-foreground only: no background service, no OS notification path and no provider-specific push wiring were introduced.
+- Security review: polling reuses the existing encrypted device bearer session path; access tokens, refresh tokens, QR payloads and push tokens are not logged; transport/session failures continue to surface only sanitized copy.
+
+Verification:
+
+- `:app:testDebugUnitTest` passed outside sandbox after `%USERPROFILE%\.gradle` wrapper lock `Access denied` in sandbox.
+- `:app:assembleDebug` passed outside sandbox after the same Gradle lock condition.
+- Fresh `app-debug.apk` was installed and launched on `emulator-5554` through Android MCP; screenshot confirmed foreground `Ожидающие push-запросы` and `Device onboarding` UI.
+
+Next continuation point:
+
+- Iteration 3: Combined Onboarding Backend/Admin Contract.
+
 ### Iteration 3. Combined Onboarding Backend/Admin Contract
 
 Goal: let an operator issue one QR that prepares both push device and TOTP.
@@ -221,6 +256,25 @@ Security review:
 - no trusted tenant/user/application claims in QR;
 - one-time payloads cleared from React state on discard/reload/navigation;
 - audit remains sanitized and excludes TOTP secret, activation payload, push token and callback signing material.
+
+Iteration 3 result on `2026-04-29`:
+
+- Backend added `POST /api/v1/admin/combined-onboarding-packages` as an admin cookie + CSRF command requiring both `devices.write` and `enrollments.write`.
+- The combined command reuses the existing admin `TOTP` enrollment start handler and device onboarding artifact handler; it does not duplicate `TOTP` secret generation or confirmation logic.
+- The create response returns a one-time device activation payload and one-time `TOTP` provisioning payload only in the `201 Created` response; existing list/current read models remain sanitized and do not return activation payloads, hashes, `secretUri` or `qrCodePayload`.
+- Admin tenant management now issues a v2 combined QR envelope `{ v, runtimeBaseUrl, activationPayload, totpProvisioningPayload }` from selected tenant/application/user context and displays the QR only in current React state.
+- Security review: the QR envelope carries no trusted `tenantId`, `applicationClientId` or `externalUserId`; TOTP provisioning material is not rendered as raw text in tenant management; discard/reload/navigation clear current-session material; audit remains on existing sanitized device/TOTP events.
+
+Verification:
+
+- targeted backend admin API tests: `19/19` passed.
+- targeted admin unit/component tests: `26/26` passed.
+- `admin npm run build` passed.
+- Playwright tenant regression against production preview: `admin-tenants.spec.ts` `4/4` passed. The default Vite dev-server path hit an environment `esbuild service is no longer running` overlay, so visual verification used the already-built production preview.
+
+Next continuation point:
+
+- Iteration 4: Android combined QR consume flow.
 
 ### Iteration 4. Android Combined QR Consume Flow
 
@@ -259,6 +313,25 @@ Security review:
 - TOTP secret is stored only through encrypted TOTP store;
 - device tokens remain separate from TOTP storage.
 
+Iteration 4 result on `2026-04-29`:
+
+- Android `:feature:device-onboarding` now accepts v2 combined QR envelopes `{ v, runtimeBaseUrl, activationPayload, totpProvisioningPayload }` while preserving v1 device-only envelopes and legacy raw `dac_...` compatibility.
+- `mobile/app` activates the device first through the QR runtime URL, then imports the optional `otpauth://` TOTP provisioning payload through the existing encrypted TOTP store.
+- The activation/import order avoids the bad partial state where TOTP is stored after failed device activation. If device activation succeeds but TOTP import fails, the raw QR material is cleared and the UI shows an explicit partial-success state.
+- `AuthenticatorApp` activation logic was split into `DeviceOnboardingActivation.kt` to keep the composition root below the local file-size limit and preserve single-responsibility boundaries.
+- Security review: QR payloads and TOTP secrets are not logged; credential-bearing runtime URLs remain rejected; TOTP storage stays inside `SecureTotpSecretStore`; device bearer/session storage remains separate from TOTP storage.
+
+Verification:
+
+- `:feature:device-onboarding:testDebugUnitTest :app:testDebugUnitTest` passed outside sandbox after sandbox `%USERPROFILE%\.gradle` wrapper lock `Access denied`.
+- `:app:assembleDebug` passed outside sandbox.
+- Fresh `app-debug.apk` installed and launched on `emulator-5554` through Android MCP; screenshot confirmed the app foreground with pending push, device onboarding and provisioning sections.
+- Docs content sync passed `docs npm test` and `docs npm run build`.
+
+Next continuation point:
+
+- Iteration 5: Final Integrated Live Gate.
+
 ### Iteration 5. Final Integrated Live Gate
 
 Goal: prove the complete server-owned contour.
@@ -290,6 +363,21 @@ Verification output:
 - device/artifact sanitized state;
 - session ids and terminal statuses;
 - no secrets, access/refresh tokens, callback signing secrets, raw QR payloads or real push provider tokens in logs/docs.
+
+Iteration 5 live preflight on `2026-04-29`:
+
+- Public `ghostring` health remains green through Node/OpenSSL: `https://admin.ghostring.ru:18443/health/api` returned `200`, `https://admin.ghostring.ru:18444/health` returned `200`, and `https://admin.ghostring.ru:18444/api/reference/live-readiness` returned `isReadyForLiveRun=true` with no configuration issues.
+- Playwright/Chromium in this workspace gets `ERR_CONNECTION_RESET` for both public TLS ports `18443` and `18444`; Node/OpenSSL succeeds, so browser MCP cannot currently be used as the live Admin UI driver for this contour.
+- Android MCP sees only `emulator-5554`; no physical Android device is available through MCP in this session.
+- Fresh `mobile/app/build/outputs/apk/debug/app-debug.apk` was installed and launched on `emulator-5554`; the app shows the pending push, device onboarding and provisioning sections.
+- A live `POST https://admin.ghostring.ru:18444/api/reference/operations` for the canonical pilot `externalUserId=f1d6afaa-8a5d-4fd3-9f75-0a5c0177df81` returned `202 Accepted`, session `ef6c9c62448a4804957c1558e1c2122b`, status `Waiting`, `challengeCreatedAtUtc=2026-04-29T12:26:58.7912289Z`.
+- After the foreground polling window, Android still showed an empty pending inbox and the reference session stayed `Waiting` with no callback or terminal timestamp.
+- Active blocker: the current emulator/app needs fresh combined QR onboarding against the live runtime before the gate can continue to approve, deny and explicit online `TOTP` fallback checks. The current session environment has no admin password/env and no browser MCP path to create the combined QR through Admin UI.
+
+Security review for this preflight:
+
+- No admin password, access/refresh token, callback signing secret, raw QR payload, TOTP secret, activation payload or real push provider token was printed or stored in the vault.
+- The live probe used only the public ReferenceBackend operation API and sanitized status fields.
 
 ### Iteration 6. Documentation Closure
 

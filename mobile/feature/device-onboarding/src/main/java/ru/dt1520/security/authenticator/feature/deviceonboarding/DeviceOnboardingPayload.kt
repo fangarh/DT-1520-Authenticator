@@ -6,7 +6,8 @@ import org.json.JSONObject
 
 class DeviceOnboardingPayload private constructor(
     val activationPayload: String,
-    val runtimeBaseUrl: String?
+    val runtimeBaseUrl: String?,
+    val totpProvisioningPayload: String? = null
 ) {
     val value: String
         get() = activationPayload
@@ -14,8 +15,10 @@ class DeviceOnboardingPayload private constructor(
     companion object {
         private const val Prefix = "dac_"
         private const val MaxActivationPayloadLength = 256
-        private const val MaxQrPayloadLength = 2048
-        private const val EnvelopeVersion = 1
+        private const val MaxQrPayloadLength = 4096
+        private const val DeviceEnvelopeVersion = 1
+        private const val CombinedEnvelopeVersion = 2
+        private const val MaxTotpProvisioningPayloadLength = 2048
         private val allowedSecretPattern = Regex("^[A-Za-z0-9_+/=-]+$")
 
         fun parse(rawValue: String?): DeviceOnboardingPayload {
@@ -31,7 +34,8 @@ class DeviceOnboardingPayload private constructor(
             return if (value.startsWith(Prefix)) {
                 DeviceOnboardingPayload(
                     activationPayload = parseActivationPayload(value),
-                    runtimeBaseUrl = null
+                    runtimeBaseUrl = null,
+                    totpProvisioningPayload = null
                 )
             } else {
                 parseEnvelope(value)
@@ -49,16 +53,23 @@ class DeviceOnboardingPayload private constructor(
                 "QR envelope has unsupported format."
             }
             val version = json.opt("v")
-            require(version is Number && version.toInt() == EnvelopeVersion) {
+            require(version is Number && version.toInt() in setOf(DeviceEnvelopeVersion, CombinedEnvelopeVersion)) {
                 "QR envelope has unsupported format."
             }
 
             val activationPayload = requiredString(json, "activationPayload")
             val runtimeBaseUrl = requiredString(json, "runtimeBaseUrl")
+            val totpProvisioningPayload = when (version.toInt()) {
+                CombinedEnvelopeVersion -> parseTotpProvisioningPayload(
+                    requiredString(json, "totpProvisioningPayload")
+                )
+                else -> null
+            }
 
             return DeviceOnboardingPayload(
                 activationPayload = parseActivationPayload(activationPayload),
-                runtimeBaseUrl = validateRuntimeBaseUrl(runtimeBaseUrl)
+                runtimeBaseUrl = validateRuntimeBaseUrl(runtimeBaseUrl),
+                totpProvisioningPayload = totpProvisioningPayload
             )
         }
 
@@ -83,6 +94,17 @@ class DeviceOnboardingPayload private constructor(
             val secretPart = value.substring(separatorIndex + 1)
             require(secretPart.isNotBlank() && allowedSecretPattern.matches(secretPart)) {
                 "Activation payload has unsupported format."
+            }
+
+            return value
+        }
+
+        private fun parseTotpProvisioningPayload(value: String): String {
+            require(value.length <= MaxTotpProvisioningPayloadLength) {
+                "TOTP provisioning payload is too long."
+            }
+            require(value.startsWith("otpauth://totp/", ignoreCase = true)) {
+                "TOTP provisioning payload has unsupported format."
             }
 
             return value

@@ -65,8 +65,9 @@ The backend currently:
 - validate callbacks through original request body bytes and `X-OTPAuth-Signature`;
 - expose a desktop status endpoint that returns a `DesktopApprovalSession`-compatible JSON shape;
 - commit the protected operation exactly once only after an approved challenge result;
-- expose an online TOTP fallback endpoint that calls `VerifyTotpAsync`;
-- record baseline latency timestamps for desktop submit, backend challenge request, challenge created, callback received, TOTP submitted and terminal decision.
+- keep the first terminal reference-session state immutable;
+- expose an online TOTP fallback endpoint that creates a separate `Totp`-only challenge for the same reference session and then calls `VerifyTotpAsync` for that fallback challenge;
+- record baseline latency timestamps for desktop submit, backend challenge request, challenge created, fallback TOTP challenge request/create, callback received, TOTP submitted and terminal decision.
 
 Runtime configuration is split between backend-owned `Dt1520Authenticator` SDK settings and reference-stand settings:
 
@@ -95,7 +96,7 @@ Do not commit `appsettings.Development.json`, `appsettings.Local.json`, `.env` f
 The reference backend must be reachable by DT-1520 for signed challenge callbacks. For a local run this usually means:
 
 - run `ReferenceBackend` on `127.0.0.1`;
-- expose it through a temporary HTTPS tunnel or a controlled reverse proxy;
+- expose it through a controlled reverse proxy for the target contour;
 - set `ReferenceBackend:CallbackUrl` to the callback URL ending in `/api/reference/callbacks/dt1520`;
 - keep `ReferenceBackend:CallbackUrlPolicyMode=PublicInternet` for public live runs; use `PrivateNetwork` for closed HTTPS contours and `LocalDevelopment` only for local HTTP callback tests;
 - keep `Dt1520Authenticator:ClientSecret` and `Dt1520Authenticator:CallbackSigningSecret` in environment variables or a local untracked settings file.
@@ -156,8 +157,8 @@ Live run checklist:
 2. Use Admin UI QR device onboarding to activate an Android device for the target `externalUserId`.
 3. Start `ReferenceBackend` with backend-only DT-1520 credentials, callback URL and explicit callback URL policy.
 4. Start `DesktopShell`, enter the same `externalUserId`, then approve or deny the pending push in Android.
-5. Repeat once with TOTP fallback: press Enter in `DesktopShell`, enter the Android-generated TOTP code, and confirm centralized verify succeeds.
-6. Capture latency timestamps from the status response for desktop submit, backend challenge request, challenge creation, callback/TOTP submission and terminal state.
+5. Repeat once with TOTP fallback: press Enter in `DesktopShell`, enter the Android-generated TOTP code, and confirm centralized verify succeeds against a separate `Totp` fallback challenge.
+6. Capture latency timestamps from the status response for desktop submit, backend challenge request, challenge creation, fallback TOTP challenge creation, callback/TOTP submission and terminal state.
 
 ## Desktop Scope
 

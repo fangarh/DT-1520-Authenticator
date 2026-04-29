@@ -56,6 +56,9 @@ export interface TenantOneTimeQrPayload {
   activationPayload: string;
   runtimeBaseUrl: string;
   expiresAtUtc: string;
+  qrEnvelopeValue: string;
+  mode: "device" | "combined";
+  totpEnrollmentId?: string;
 }
 
 export interface TenantReportSummary {

@@ -1,3 +1,4 @@
+import { QRCodeSVG } from "qrcode.react";
 import type { AdminDeviceOnboardingPlatform, AdminTenantDirectoryDetailView } from "../../shared/types/admin-contracts";
 import { formatUtcInstant } from "../../shared/time/formatUtcInstant";
 import { Button } from "../../shared/ui/Button";
@@ -125,20 +126,31 @@ export function TenantManagementUsersDevicesTab({ directory, workspace }: Tenant
             />
           </label>
 
-          <Button onClick={() => void workspace.createQrArtifact()} disabled={!workspace.canWriteDevices || workspace.pendingAction === "createQr"} stretch>
-            {workspace.pendingAction === "createQr" ? "Issuing..." : "Issue QR for selected user"}
+          <Button onClick={() => void workspace.createQrArtifact()} disabled={!workspace.canWriteCombinedOnboarding || workspace.pendingAction === "createQr"} stretch>
+            {workspace.pendingAction === "createQr" ? "Issuing..." : "Issue combined QR for selected user"}
           </Button>
         </div>
 
         {workspace.oneTimeQrPayload ? (
           <div className={styles.secretBox} aria-live="polite">
-            <strong>One-time QR activation payload</strong>
+            <strong>One-time combined onboarding QR</strong>
+            <QRCodeSVG
+              value={workspace.oneTimeQrPayload.qrEnvelopeValue}
+              size={164}
+              level="M"
+              title="One-time combined onboarding QR"
+              role="img"
+              aria-label="One-time combined onboarding QR"
+            />
             <span>Runtime: {workspace.oneTimeQrPayload.runtimeBaseUrl}</span>
             <span>Expires: {formatUtcInstant(workspace.oneTimeQrPayload.expiresAtUtc)}</span>
-            <code className={styles.secretValue}>{workspace.oneTimeQrPayload.activationPayload}</code>
+            <span>Activation: {workspace.oneTimeQrPayload.activationCodeId}</span>
+            {workspace.oneTimeQrPayload.totpEnrollmentId ? (
+              <span>TOTP enrollment: {workspace.oneTimeQrPayload.totpEnrollmentId}</span>
+            ) : null}
             <div className={styles.actions}>
               <Button kind="secondary" onClick={() => void workspace.copyQrPayload()} disabled={workspace.pendingAction === "copy"}>
-                Copy payload
+                Copy QR payload
               </Button>
               <Button kind="danger" onClick={workspace.discardSecrets}>Discard payload</Button>
             </div>

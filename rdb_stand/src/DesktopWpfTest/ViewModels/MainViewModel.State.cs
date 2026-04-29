@@ -17,7 +17,7 @@ public sealed partial class MainViewModel
     private string _clientSecret = string.Empty;
     private string _callbackSigningSecret = string.Empty;
     private string _callbackUrl = string.Empty;
-    private string _scope = "challenges:read challenges:write devices:read";
+    private string _scope = "challenges:read challenges:write";
     private string _totpCode = string.Empty;
     private string _sessionId = string.Empty;
     private string _pollingPath = string.Empty;
@@ -208,6 +208,8 @@ public sealed partial class MainViewModel
             Format("desktop", latency.DesktopSubmittedAtUtc),
             Format("challenge-request", latency.BackendChallengeRequestedAtUtc),
             Format("challenge-created", latency.ChallengeCreatedAtUtc),
+            Format("totp-challenge-request", latency.TotpChallengeRequestedAtUtc),
+            Format("totp-challenge-created", latency.TotpChallengeCreatedAtUtc),
             Format("callback", latency.CallbackReceivedAtUtc),
             Format("totp", latency.TotpSubmittedAtUtc),
             Format("terminal", latency.TerminalAtUtc),

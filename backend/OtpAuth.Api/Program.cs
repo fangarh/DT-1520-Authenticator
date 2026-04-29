@@ -213,6 +213,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AdminAuthenticationDefaults.DevicesWritePolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.DevicesWrite));
+    options.AddPolicy(AdminAuthenticationDefaults.CombinedOnboardingWritePolicy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.DevicesWrite)
+            .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.EnrollmentsWrite));
     options.AddPolicy(AdminAuthenticationDefaults.EnrollmentsReadPolicy, policy =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(AdminClaimTypes.Permission, AdminPermissions.EnrollmentsRead));
@@ -261,6 +265,7 @@ builder.Services.AddSingleton<AdminRevokeUserDeviceHandler>();
 builder.Services.AddSingleton<AdminListDeviceOnboardingArtifactsHandler>();
 builder.Services.AddSingleton<AdminCreateDeviceOnboardingArtifactHandler>();
 builder.Services.AddSingleton<AdminRevokeDeviceOnboardingArtifactHandler>();
+builder.Services.AddSingleton<AdminCreateCombinedOnboardingPackageHandler>();
 builder.Services.AddSingleton<AdminListDeliveryStatusesHandler>();
 builder.Services.AddSingleton<AdminListIntegrationClientsHandler>();
 builder.Services.AddSingleton<AdminCreateIntegrationClientHandler>();
@@ -337,6 +342,7 @@ app.UseAuthorization();
 app.MapAdminAuthEndpoints();
 app.MapAdminDeviceEndpoints();
 app.MapAdminDeviceOnboardingEndpoints();
+app.MapAdminCombinedOnboardingEndpoints();
 app.MapAdminEnrollmentReadEndpoints();
 app.MapAdminEnrollmentCommandEndpoints();
 app.MapAdminDeliveryStatusEndpoints();

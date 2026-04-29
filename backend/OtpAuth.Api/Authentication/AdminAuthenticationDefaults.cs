@@ -7,6 +7,7 @@ public static class AdminAuthenticationDefaults
     public const string AuthenticatedPolicy = "AdminAuthenticated";
     public const string DevicesReadPolicy = "AdminDevicesRead";
     public const string DevicesWritePolicy = "AdminDevicesWrite";
+    public const string CombinedOnboardingWritePolicy = "AdminCombinedOnboardingWrite";
     public const string EnrollmentsReadPolicy = "AdminEnrollmentsRead";
     public const string EnrollmentsWritePolicy = "AdminEnrollmentsWrite";
     public const string IntegrationClientsReadPolicy = "AdminIntegrationClientsRead";
