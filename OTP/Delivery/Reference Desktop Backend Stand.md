@@ -185,7 +185,15 @@ The live end-to-end flow is therefore blocked on deploying the server-owned `ref
 - Fix added in `lib/src/Dt1520.Authenticator.Client/Dt1520AuthenticatorHttpPipeline.cs`: only absolute `http/https` URIs are accepted as absolute request targets; rooted API paths are combined with the validated base URL. Regression coverage added in `lib/tests/Dt1520.Authenticator.Client.Tests/ClientHttpFoundationTests.cs`.
 - Verification after fix: `dotnet test .\lib\Dt1520.Authenticator.slnx --no-build -maxcpucount:1` green (`88/88`), `dotnet build .\rdb_stand\ReferenceDesktopBackendStand.slnx --no-restore -maxcpucount:1` green, `dotnet test .\rdb_stand\ReferenceDesktopBackendStand.slnx --no-build -maxcpucount:1` green (`28/28`).
 
-Next live step: redeploy `reference-backend` with the SDK URI guard fix, then retry `POST /api/reference/operations` for the target `externalUserId`, Android pending approve/deny terminal flow and online `TOTP` fallback through `https://admin.ghostring.ru:18444/`.
+Redeploy result with SDK URI guard fix:
+
+- `reference-backend` redeployed from commit `cb259f5` as image `sha256:5a2acf76161e...`; public `https://admin.ghostring.ru:18444/health` returns `{"status":"healthy"}`.
+- Live readiness is ready: `isReadyForLiveRun=true`, `configurationIssues=[]`, callback policy `PublicInternet`, `allowInsecureCallbackHttp=false`.
+- Effective server-owned contour stayed aligned: callback URL `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`, internal DT-1520 base URL `http://api:8080/`, scope `challenges:read challenges:write`.
+- Compose recreated only `reference-backend`; `api`, `worker`, `admin` and `redis` container IDs stayed unchanged. `api` build layers were evaluated from cache by Compose because it is a dependency, but the running `api` container was not recreated.
+- Operational caveat: `/opt/dt-1520-authenticator/runtime.env` currently lacks `REFERENCE_BACKEND_*` interpolation variables, so this redeploy preserved the effective reference-backend env from the previous running container without printing values. Persisting those variables into the server env file remains a reproducibility cleanup before the next unattended compose run.
+
+Next live step: retry `POST /api/reference/operations` for the target `externalUserId`, Android pending approve/deny terminal flow and online `TOTP` fallback through `https://admin.ghostring.ru:18444/`.
 
 ## Productization Direction
 
