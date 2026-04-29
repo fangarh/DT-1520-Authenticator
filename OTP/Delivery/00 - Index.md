@@ -27,6 +27,8 @@
 - [[Official Dotnet Integration SDK]]
 - [[Official Dotnet Integration SDK Context Reset Prompt]]
 - [[Reference Desktop Backend Stand]]
+- [[Final Integrated Verification Closure Plan]]
+- [[Final Integrated Verification Context Reset Prompt]]
 - [[Optional Boxed Integration Gateway]]
 - [[Documentation Handoff Plan]]
 - [[Documentation Session Starter Prompt]]

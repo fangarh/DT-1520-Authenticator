@@ -193,7 +193,20 @@ Redeploy result with SDK URI guard fix:
 - Compose recreated only `reference-backend`; `api`, `worker`, `admin` and `redis` container IDs stayed unchanged. `api` build layers were evaluated from cache by Compose because it is a dependency, but the running `api` container was not recreated.
 - Operational caveat: `/opt/dt-1520-authenticator/runtime.env` currently lacks `REFERENCE_BACKEND_*` interpolation variables, so this redeploy preserved the effective reference-backend env from the previous running container without printing values. Persisting those variables into the server env file remains a reproducibility cleanup before the next unattended compose run.
 
-Next live step: retry `POST /api/reference/operations` for the target `externalUserId`, Android pending approve/deny terminal flow and online `TOTP` fallback through `https://admin.ghostring.ru:18444/`.
+Post-redeploy live retry:
+
+- Local retry through `https://admin.ghostring.ru:18444/` confirmed the SDK URI guard fix: `POST /api/reference/operations` returned `202 Accepted` and created a `Waiting` reference session.
+- Android MCP on `emulator-5554` still showed an empty pending inbox after foreground restart; the reference session stayed `Waiting` with no callback/terminal timestamp.
+
+The active blocker moved from ReferenceBackend/SDK transport to Android device activation or push routing for the target `externalUserId`. Next step is to confirm or redo QR onboarding for the current emulator against the live runtime URL, then create a fresh reference operation and verify Android pending approve/deny plus online `TOTP` fallback.
+
+Push-capable activation fix:
+
+- Live server diagnostics showed the successfully activated phone device is `Active` but `isPushCapable=false`, so `CreateChallenge` correctly cannot bind a push challenge to that device and the reference session remains `Waiting`.
+- Android debug builds now resolve a stable non-secret development push token from the encrypted local installation id during QR activation and pass it to `/api/v1/devices/activate-onboarding`.
+- Release builds still send no synthetic push token; production FCM token wiring remains a separate productization task.
+- Verification: `mobile :app:testDebugUnitTest :app:assembleDebug` passed outside sandbox with Android Studio JBR after `%USERPROFILE%\.gradle` lock `Access denied`; MCP installed the fresh debug APK on `emulator-5554` and launched `MainActivity`.
+- Next live step: install the fresh `mobile/app/build/outputs/apk/debug/app-debug.apk` on the physical test phone, revoke/recreate QR if needed, activate once, confirm Admin UI shows the new device as `isPushCapable=true`, then retry reference approve/deny and online `TOTP` fallback.
 
 ## Productization Direction
 

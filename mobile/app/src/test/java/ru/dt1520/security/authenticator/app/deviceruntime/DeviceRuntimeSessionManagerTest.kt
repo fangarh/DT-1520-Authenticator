@@ -56,11 +56,16 @@ class DeviceRuntimeSessionManagerTest {
 
         val deviceId = manager.activateWithOnboardingPayload(
             activationPayload = "dac_0123456789abcdef0123456789abcdef.secret",
-            deviceName = "Pixel 10 Pro"
+            deviceName = "Pixel 10 Pro",
+            pushToken = "dt1520-debug-android-installation-generated"
         )
 
         assertEquals(DEVICE_ID, deviceId)
         assertEquals("installation-generated", transport.lastOnboardingActivationCommand?.installationId)
+        assertEquals(
+            "dt1520-debug-android-installation-generated",
+            transport.lastOnboardingActivationCommand?.pushToken
+        )
         assertEquals(null, transport.lastIntegrationAuthorization)
         assertEquals("access-1", store.session?.accessToken)
         assertEquals("refresh-1", store.session?.refreshToken)

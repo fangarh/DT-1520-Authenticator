@@ -1,0 +1,338 @@
+# Final Integrated Verification Closure Plan
+
+## Status
+
+Planned.
+
+This note captures the continuation after the first server-owned `ReferenceBackend` live proof on `ghostring`.
+
+Current live facts:
+
+- `ReferenceBackend` is public on `https://admin.ghostring.ru:18444/`.
+- Device QR activation works through `https://admin.ghostring.ru:18443/`.
+- Fresh debug Android activation creates an `Active` push-capable device.
+- Desktop/WPF approve and deny through `ReferenceBackend` work.
+- Android currently needs app restart or foreground reload to see new pending push items.
+- Online `TOTP` fallback currently returns `409` when attempted against a push-selected challenge.
+
+The remaining closure is not another gateway. It is a focused hardening pass over:
+
+- explicit `TOTP` fallback challenge flow in `ReferenceBackend`;
+- combined operator QR for device activation plus `TOTP` enrollment;
+- Android foreground refresh without app restart;
+- final live proof for push approve, push deny and online `TOTP` fallback.
+
+## Problem Statement
+
+### Push proof limitation
+
+`PushDelivery:Provider=logging` does not deliver a real OS push notification. Android reads pending challenges from:
+
+- initial app load;
+- foreground/resume-triggered runtime load.
+
+It does not yet run a foreground polling loop. A newly created challenge can therefore stay invisible until the user restarts or reopens the app.
+
+### TOTP fallback contract gap
+
+`ReferenceBackend` starts a protected operation with preferred factors `[Push, Totp]`.
+
+When a push-capable active device exists, `DT-1520` selects `Push`. Calling `verify-totp` for that challenge returns `409 Conflict` because the challenge factor is not `Totp`.
+
+Fallback must not verify a TOTP code against a push challenge. It needs a separate explicit `Totp` challenge for the same protected operation, or a start mode that requests `Totp` directly.
+
+### Onboarding gap
+
+Device onboarding QR activates only the device runtime session. It does not enroll or import a `TOTP` secret into Android.
+
+For a user to have both push and offline code display after one operator action, the operator QR needs to represent a combined onboarding package:
+
+- one opaque device activation payload;
+- one TOTP enrollment/provisioning payload;
+- one public runtime URL.
+
+The QR must still avoid trusted tenant/user/application claims.
+
+## Target Flow
+
+### Combined user onboarding
+
+1. Operator selects tenant, application and external user in Admin UI.
+2. Admin creates a combined onboarding package.
+3. QR envelope contains public `runtimeBaseUrl` plus opaque one-time payloads only.
+4. Android scans the QR.
+5. Android activates the device through `/api/v1/devices/activate-onboarding`.
+6. Android imports or confirms the TOTP enrollment.
+7. Android stores the runtime URL in encrypted device session storage.
+8. Android shows both pending push approvals and TOTP codes.
+
+### Desktop protected operation
+
+Primary path:
+
+1. Desktop starts operation through `ReferenceBackend`.
+2. `ReferenceBackend` creates a push-preferred challenge.
+3. Android shows pending approval without app restart.
+4. Approve or deny terminal callback updates the reference session.
+
+Fallback path:
+
+1. Desktop user chooses `TOTP` fallback.
+2. `ReferenceBackend` creates a separate `Totp` challenge bound to the same reference session.
+3. Desktop submits the current Android-generated TOTP code.
+4. `ReferenceBackend` verifies the `Totp` challenge.
+5. The reference session becomes terminal `Approved` only after successful verification.
+
+## Iterations
+
+### Iteration 0. Contract Preflight
+
+Goal: confirm existing backend/admin/mobile contracts before code changes.
+
+Scope:
+
+- read `ReferenceBackend` operation lifecycle and in-memory store;
+- read backend challenge create/verify factor behavior;
+- read Admin TOTP enrollment command surfaces;
+- read Android provisioning/TOTP import surfaces;
+- confirm whether current TOTP enrollment QR is admin-generated, mobile-consumed and one-time enough for combined flow.
+
+DoD:
+
+- no production code changes unless a blocking mismatch is found;
+- plan note updated if existing contracts force an iteration split change.
+
+Verification:
+
+- targeted source inspection;
+- no broad test run required unless code changes.
+
+Security review:
+
+- confirm no proposed QR envelope trusts client-visible tenant/user/application claims;
+- confirm TOTP secret is still only displayed/imported through the established provisioning contract.
+
+### Iteration 1. ReferenceBackend Explicit TOTP Fallback
+
+Goal: fix `409` by creating/verifying a real `Totp` challenge for fallback.
+
+Scope:
+
+- add explicit fallback command in `ReferenceBackend`;
+- store both primary push challenge id and fallback TOTP challenge id in the reference session;
+- when fallback is requested, create challenge with preferred factor `Totp` only;
+- verify TOTP against the fallback challenge id;
+- keep TOTP code transient and never persisted;
+- keep Desktop/WPF UX able to start fallback from a waiting push session.
+
+Out of scope:
+
+- cancelling the original push challenge unless backend already has a safe cancellation model;
+- changing SDK public API unless the current typed client cannot express `Totp`-only create.
+
+Expected files:
+
+- `rdb_stand/src/ReferenceBackend/*`
+- `rdb_stand/tests/ReferenceBackend.Tests/*`
+- `rdb_stand/src/DesktopWpfTest/*` if UI command shape changes
+- `rdb_stand/tests/DesktopWpfTest.Tests/*`
+
+Verification:
+
+- targeted `ReferenceBackend.Tests`;
+- targeted `DesktopWpfTest.Tests` if touched;
+- `dotnet test .\rdb_stand\ReferenceDesktopBackendStand.slnx --no-build -maxcpucount:1` when practical.
+
+Security review:
+
+- no integration secret in Desktop;
+- no TOTP code persisted in WPF settings, logs or reference session state;
+- fallback cannot approve a session if the TOTP challenge belongs to another session/correlation.
+
+### Iteration 2. Android Pending Refresh Without Restart
+
+Goal: make pending push visible without app restart in the logging-provider MVP contour.
+
+Scope:
+
+- add foreground polling while the push approvals section/app is active;
+- add refresh-on-resume;
+- optionally add a manual refresh button if it fits existing UI;
+- keep polling interval conservative, initially `3-5s`;
+- avoid background service or OS notification work in this iteration.
+
+Out of scope:
+
+- FCM provider wiring;
+- background polling when app is not foregrounded.
+
+Expected files:
+
+- `mobile/app/src/main/.../AuthenticatorApp.kt`
+- `mobile/app/src/main/.../pushapprovals/*`
+- `mobile/app/src/test/.../pushapprovals/*`
+- possible `mobile/feature/push-approvals/*` only if UI state needs a new command.
+
+Verification:
+
+- `:app:testDebugUnitTest`;
+- `:app:assembleDebug`;
+- Android MCP install/start smoke;
+- live check that a newly created ReferenceBackend push appears without app restart while app is foregrounded.
+
+Security review:
+
+- polling uses existing device bearer session only;
+- access/refresh tokens remain encrypted and are not logged;
+- network failures show sanitized copy and do not leak backend problem details.
+
+### Iteration 3. Combined Onboarding Backend/Admin Contract
+
+Goal: let an operator issue one QR that prepares both push device and TOTP.
+
+Preferred contract:
+
+- Admin creates a combined onboarding package for selected tenant/application/external user.
+- Backend creates:
+  - a device onboarding artifact;
+  - a pending TOTP enrollment or provisioning artifact.
+- Admin response returns one-time plaintext payloads only in the create response.
+- List/detail paths remain sanitized and do not return raw activation payloads or TOTP secret material.
+
+Open design point:
+
+- Prefer reusing existing TOTP enrollment/provisioning contract. Do not duplicate TOTP secret generation or confirmation logic unless the existing flow cannot support mobile import from a combined QR.
+
+Expected files:
+
+- backend admin application contracts/handlers/stores if a new combined endpoint is needed;
+- `backend/OtpAuth.Api/Endpoints/*`;
+- admin API client and tenant management QR panel.
+
+Verification:
+
+- targeted backend handler/API tests;
+- targeted admin API model/component tests;
+- targeted Playwright for QR create/discard/non-persistence.
+
+Security review:
+
+- QR contains opaque payloads and public runtime URL only;
+- no trusted tenant/user/application claims in QR;
+- one-time payloads cleared from React state on discard/reload/navigation;
+- audit remains sanitized and excludes TOTP secret, activation payload, push token and callback signing material.
+
+### Iteration 4. Android Combined QR Consume Flow
+
+Goal: after one scan, Android activates device and imports/confirms TOTP.
+
+Scope:
+
+- extend QR payload parser to accept combined envelope version;
+- keep legacy device-only QR supported during migration;
+- activate device through QR runtime URL;
+- import or confirm TOTP enrollment through existing provisioning/TOTP storage boundary;
+- present partial failure states clearly:
+  - device activated but TOTP failed;
+  - TOTP imported but device activation failed should normally be avoided by ordering;
+  - expired/consumed/revoked payload generic failure.
+
+Expected files:
+
+- `mobile/feature/device-onboarding/*`
+- `mobile/app/src/main/.../deviceonboarding/*`
+- `mobile/app/src/main/.../AuthenticatorApp.kt`
+- `mobile/security/storage/*` only if TOTP persistence contract changes.
+
+Verification:
+
+- `:feature:device-onboarding:testDebugUnitTest`;
+- `:app:testDebugUnitTest`;
+- `:app:assembleDebug`;
+- Android MCP install/start smoke;
+- live scan of combined QR on test device.
+
+Security review:
+
+- QR payload and TOTP secret are not logged;
+- credential-bearing URLs remain rejected;
+- TOTP secret is stored only through encrypted TOTP store;
+- device tokens remain separate from TOTP storage.
+
+### Iteration 5. Final Integrated Live Gate
+
+Goal: prove the complete server-owned contour.
+
+Prerequisites:
+
+- `ReferenceBackend` healthy at `https://admin.ghostring.ru:18444/`;
+- Admin/API healthy at `https://admin.ghostring.ru:18443/`;
+- no third-party tunnels;
+- target client scope remains `challenges:read challenges:write`;
+- physical Android has a fresh APK with combined QR and polling changes.
+
+Live checks:
+
+1. Create combined onboarding QR in Admin UI.
+2. Scan once on Android.
+3. Confirm artifact consumption and active push-capable device.
+4. Confirm TOTP code appears on Android.
+5. Start Desktop/WPF operation for the same `externalUserId`.
+6. Confirm pending push appears without app restart.
+7. Approve terminal flow.
+8. Start another operation and deny terminal flow.
+9. Start another operation and complete explicit TOTP fallback.
+10. Record timestamps and residual latency.
+
+Verification output:
+
+- health/readiness snapshots;
+- device/artifact sanitized state;
+- session ids and terminal statuses;
+- no secrets, access/refresh tokens, callback signing secrets, raw QR payloads or real push provider tokens in logs/docs.
+
+### Iteration 6. Documentation Closure
+
+Goal: make the final behavior operator-ready.
+
+Scope:
+
+- update `Reference Desktop Backend Stand`;
+- update `mobile/README.md`;
+- update docs app if user-facing setup flow changed;
+- update `Current State`, `Implementation Map`, session note;
+- add ADR only if combined onboarding package becomes a long-lived architectural decision beyond the MVP reference gate.
+
+Verification:
+
+- docs tests/build if docs app changes;
+- no broad rerun if only vault markdown changes.
+
+## Recommended Implementation Order
+
+1. Iteration 1: ReferenceBackend explicit `TOTP` fallback.
+2. Iteration 2: Android foreground pending refresh.
+3. Iteration 3: combined onboarding backend/admin contract.
+4. Iteration 4: Android combined QR consume flow.
+5. Iteration 5: live gate.
+6. Iteration 6: docs closure.
+
+Reasoning:
+
+- Iteration 1 closes the `409` root cause without waiting on QR changes.
+- Iteration 2 removes the current restart requirement and improves push proof immediately.
+- Iterations 3-4 are wider contract work and should happen after the current proof mechanics are stable.
+
+## Context Reset
+
+Use [[Final Integrated Verification Context Reset Prompt]] after clearing context.
+
+## Related Notes
+
+- [[Reference Desktop Backend Stand]]
+- [[QR Device Onboarding Runtime URL Follow-Up]]
+- [[QR Device Onboarding Follow-Up]]
+- [[Push Delivery Latency Follow-Up]]
+- [[Optional Boxed Integration Gateway]]
+- [[../Decisions/ADR-035 - Official Dotnet Integration SDK and Reference Stand]]
+- [[../Decisions/ADR-036 - Optional Boxed Integration Gateway and Access Connector Boundary]]

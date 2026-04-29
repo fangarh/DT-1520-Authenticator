@@ -61,4 +61,6 @@ Runtime URL parsing is fail-closed: only `https` URLs with a non-empty host and 
 If a legacy raw payload is used without a configured runtime URL, activation fails with a generic user-facing message that the QR does not contain a runtime address.
 Productized QR onboarding no longer requires building the APK with `-PdeviceRuntimeBaseUrl`; that flag remains only a temporary compatibility path for legacy raw `dac_...` payloads and debug tooling.
 
+Debug builds send a stable non-secret development push token during QR activation, derived from the local installation id. This keeps `isPushCapable=true` for live reference-stand polling/push proof before production FCM token wiring exists. Release builds do not send this synthetic token.
+
 `mobile/app/src/debug/PilotDeviceActivationActivity.kt` remains debug-only pilot tooling and is not part of production onboarding handoff.

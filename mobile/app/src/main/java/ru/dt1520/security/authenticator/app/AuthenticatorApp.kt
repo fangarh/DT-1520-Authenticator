@@ -50,6 +50,8 @@ internal fun AuthenticatorApp(
     deviceRuntimeManagerOverride: DeviceRuntimeSessionManager? = null,
     pushApprovalDecisionCoordinatorOverride: PushApprovalDecisionCoordinator? = null,
     deviceRuntimeBaseUrl: String? = BuildConfig.DEVICE_RUNTIME_BASE_URL.takeIf { it.isNotBlank() },
+    devicePushTokenResolver: suspend (DeviceRuntimeSessionManager) -> String? =
+        ::resolveDevicePushTokenForCurrentBuild,
     pendingPushApprovals: List<PendingPushApproval> = emptyList(),
     pushDecisionHistory: List<PushDecisionHistoryEntry> = emptyList(),
     onScanDeviceOnboardingQrPayload: (suspend () -> String?)? = null,
@@ -130,7 +132,8 @@ internal fun AuthenticatorApp(
                 runCatching {
                     runtimeManager.activateWithOnboardingPayload(
                         activationPayload = payload.activationPayload,
-                        deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device"
+                        deviceName = android.os.Build.MODEL.takeIf(String::isNotBlank) ?: "Android device",
+                        pushToken = devicePushTokenResolver(runtimeManager)
                     )
                 }.fold(
                     onSuccess = { deviceId ->
