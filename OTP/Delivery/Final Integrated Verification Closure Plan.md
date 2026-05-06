@@ -379,6 +379,22 @@ Security review for this preflight:
 - No admin password, access/refresh token, callback signing secret, raw QR payload, TOTP secret, activation payload or real push provider token was printed or stored in the vault.
 - The live probe used only the public ReferenceBackend operation API and sanitized status fields.
 
+Server update report on `2026-04-29`:
+
+- `ghostring` was fully updated to commit `634fdfc`.
+- Compose config validation passed; images were rebuilt for `bootstrap`, `api`, `worker`, `admin` and `reference-backend`.
+- Migrations completed successfully; the known `libgssapi_krb5.so.2` warning did not block completion.
+- Runtime services were recreated: `redis`, `api`, `worker`, `admin`, `reference-backend`.
+- Public checks remain green: `18443/health/api=200`, `18444/health=200`, `18444/api/reference/live-readiness=200`, `isReadyForLiveRun=true`, `configurationIssues=[]`.
+- `ReferenceBackend` alignment is correct: internal DT-1520 base URL `http://api:8080/`, scope `challenges:read challenges:write`, callback URL `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`, policy `PublicInternet`, `AllowInsecureCallbackHttp=false`.
+- No deployment blocker remains on the server side. The active gate blocker is now local/operator-side QR issuance and Android activation.
+
+Operator live update:
+
+- After retrying the correct flow on a waiting reference session, operator reported `TOTP fallback submitted`.
+- Follow-up status was confirmed as `Approved`; explicit online `TOTP` fallback proof is closed at terminal-state level.
+- Remaining live gate checks, if not already repeated after the latest full server update and fresh combined onboarding, are push `approve`, push `deny` and timestamp/latency capture for the final report.
+
 ### Iteration 6. Documentation Closure
 
 Goal: make the final behavior operator-ready.

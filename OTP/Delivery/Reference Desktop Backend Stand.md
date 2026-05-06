@@ -227,6 +227,15 @@ Final gate preflight after combined QR consume implementation:
 - Android foreground polling did not surface a pending push; the app still showed an empty pending inbox and the reference session stayed `Waiting`.
 - Next unblock remains fresh combined QR onboarding for the current Android runtime, then retry push approve, push deny and explicit online `TOTP` fallback. This session does not have admin credentials/env to create the live combined QR through Admin UI, and browser MCP cannot drive the Admin UI because of the TLS reset.
 
+Server update after preflight:
+
+- `ghostring` runtime is updated to commit `634fdfc`.
+- Images were rebuilt and services `redis`, `api`, `worker`, `admin` and `reference-backend` were recreated.
+- Migrations completed successfully.
+- `ReferenceBackend` remains ready with internal DT-1520 base URL `http://api:8080/`, scope `challenges:read challenges:write`, callback URL `https://admin.ghostring.ru:18444/api/reference/callbacks/dt1520`, `PublicInternet` callback policy and `AllowInsecureCallbackHttp=false`.
+- Server-side deployment is no longer blocking the final gate.
+- Operator confirmed explicit online `TOTP` fallback reached terminal `Approved` after submitting fallback on a waiting reference session. This closes the fallback contract proof; final gate still needs the latest push approve/deny status and latency capture if those were not repeated after the full server update.
+
 ## Productization Direction
 
 The reference backend is now the proving ground for the optional boxed `Integration Gateway`.
